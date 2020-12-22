@@ -171,8 +171,8 @@ T2 .= T;                                                 # Assign also T2 to get
 # Time loop
 dt = min(dx^2,dy^2,dz^2)*cp_min/lam/8.1;                 # Time step for the 3D Heat diffusion
 for it = 1:nt
-	@parallel diffusion3D_step!(T2, T, Ci, lam, dt, dx, dy, dz);
-	update_halo!(T2);
+    @parallel diffusion3D_step!(T2, T, Ci, lam, dt, dx, dy, dz);
+    update_halo!(T2);
     T, T2 = T2, T;
 end
 
@@ -210,8 +210,8 @@ T  .= Data.Array([100*exp(-((x_g(ix,dx,T)-lx/2)/2)^2-((y_g(iy,dy,T)-ly/2)/2)^2-(
 # Time loop
 #(...)
 for it = 1:nt
-	  #(...)
-	  update_halo!(T2);
+    #(...)
+    update_halo!(T2);
     #(...)
 end
 
