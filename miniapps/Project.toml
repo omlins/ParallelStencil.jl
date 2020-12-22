@@ -1,0 +1,4 @@
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
