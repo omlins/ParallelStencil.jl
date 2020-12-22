@@ -1,6 +1,6 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
-authors = ["Samuel Omlin", "Swiss National Supercomputing Centre"]
+authors = ["Samuel Omlin", "Ludovic Räss"]
 version = "0.4.4"
 
 [compat]
