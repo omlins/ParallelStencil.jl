@@ -1,10 +1,12 @@
 # ParallelStencil.jl
 
-ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C can be achieved \[[1][JuliaCon20a]\]:
+ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C can be achieved, which is typically a large improvement over the performance reached when using only [CUDA.jl Array programming]. For example, a 2-D shallow ice solver presented at JuliaCon 2020 \[[1][JuliaCon20a]\] achieved a nearly 20 times better performance than a corresponding [CUDA.jl Array programming] implementation; in absolute terms, it reached 70% of the theoretical upper performance bound of the used Nvidia P100 GPU, as defined by the effective throughput metric, `T_eff` (note that `T_eff` is very different from common throughput metrics, see section [Performance metric](#performance-metric)). The GPU performance of the solver is reported in green, the CPU performance in blue:
 
-![Performance ParallelStencil vs CUDA C](docs/images/fig_Teff_HM3D_Julia_vs_CUDA_C.png)
+![Performance ParallelStencil Teff](docs/images/perf_ps2.png)
 
-ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with as simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance Multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\].
+ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with as simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
+
+![Parallel efficiency of ParallelStencil with CUDA C backend](docs/images/par_eff_c_julia2.png)
 
 A particularity of ParallelStencil is that it enables writing a single high-level Julia code that can be deployed both on a CPU or a GPU. In conjuction with [ImplicitGlobalGrid.jl] the same Julia code can even run on a single CPU thread or on thousands of GPUs/CPUs.
 
@@ -12,11 +14,13 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [Parallelization with one macro call](#parallelization-with-one-macro-call)
 * [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
 * [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
-* [50-lines Multi-GPU/CPU example](#50-lines-multi-gpucpu-example)
+* [50-lines multi-XPU example](#50-lines-multi-xpu-example)
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
+* [Concise single/multi-XPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
 * [Installation](#installation)
+* [Questions, comments and discussions](#questions-comments-and-discussions)
 * [References](#references)
 
 ## Parallelization with one macro call
@@ -118,8 +122,8 @@ diffusion3D()
 
 The corresponding file can be found [here](/examples/diffusion3D_novis_noperf.jl).
 
-## 50-lines Multi-GPU/CPU example
-This concise Multi-GPU/CPU 3-D heat diffusion solver uses ParallelStencil in conjunction with [ImplicitGlobalGrid.jl] and can be readily deployed on on a single CPU thread or on thousands of GPUs/CPUs. Again, a simple boolean `USE_GPU` defines whether it runs on GPU(s) or CPU(s) ([JULIA_NUM_THREADS] defines how many cores are used in the latter case). The solver can be run with any number of processes. [ImplicitGlobalGrid.jl] creates automatically an implicit global computational grid based on the number of processes the solver is run with (and based on the process topology, which can be explicitly chosen by the user or automatically determined). Please refer to the documentation of [ImplicitGlobalGrid.jl] for more information.
+## 50-lines multi-XPU example
+This concise multi-XPU 3-D heat diffusion solver uses ParallelStencil in conjunction with [ImplicitGlobalGrid.jl] and can be readily deployed on on a single CPU thread or on thousands of GPUs/CPUs. Again, a simple boolean `USE_GPU` defines whether it runs on GPU(s) or CPU(s) ([JULIA_NUM_THREADS] defines how many cores are used in the latter case). The solver can be run with any number of processes. [ImplicitGlobalGrid.jl] creates automatically an implicit global computational grid based on the number of processes the solver is run with (and based on the process topology, which can be explicitly chosen by the user or automatically determined). Please refer to the documentation of [ImplicitGlobalGrid.jl] for more information.
 
 ```julia
 const USE_GPU = true
@@ -179,7 +183,7 @@ diffusion3D()
 ```
 The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_novis_noperf.jl).
 
-Thanks to [ImplicitGlobalGrid.jl], only a few function calls had to be added in order to turn the previous single GPU/CPU solver into a Multi-GPU/CPU solver (omitted unmodified lines are represented with `#(...)`):
+Thanks to [ImplicitGlobalGrid.jl], only a few function calls had to be added in order to turn the previous single GPU/CPU solver into a multi-XPU solver (omitted unmodified lines are represented with `#(...)`):
 ```julia
 #(...)
 using ImplicitGlobalGrid
@@ -222,7 +226,7 @@ Here is the resulting movie when running the application on 8 GPUs, solving 3-D 
 ![3-D heat diffusion](examples/movies/diffusion3D_8gpus.gif)
 
 ## Seamless interoperability with communication packages and hiding communication
-The previous Multi-GPU/CPU example shows that ParallelStencil is seamlessly interoperability with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
+The previous multi-XPU example shows that ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
 
 Moreover, ParallelStencil enables hiding communication behind computation with as simple call to `@hide_communication`. In the following example, the communication performed by `update_halo!` (from the package [ImplicitGlobalGrid.jl]) is hidden behind the computations done with by `@parallel diffusion3D_step!`:
 ```julia
@@ -231,7 +235,9 @@ Moreover, ParallelStencil enables hiding communication behind computation with a
     update_halo!(T2);
 end
 ```
-This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs \[[1][JuliaCon20a], [2][JuliaCon20b]\]. Type `?@hide_communication` in the [Julia REPL] to obtain an explanation of the arguments.
+This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs \[[1][JuliaCon20a], [2][JuliaCon20b]\]. Type `?@hide_communication` in the [Julia REPL] to obtain an explanation of the arguments. Profiling a 3-D viscous Stokes flow application using the Nvidia visual profiler (nvvp) graphically exemplifies how the update velocities kernel is split up in boundary and inner domain computations and how the latter overlap with point-to-point MPI communication for halo exchange:
+
+![Communication computation overlap ParallelStencil](docs/images/mpi_overlap2.png)
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
@@ -282,6 +288,107 @@ search: ParallelStencil @init_parallel_stencil
   To see a description of a function or a macro type ?<functionname> or ?<macroname> (including the @), respectively.
 ```
 
+## Concise single/multi-XPU miniapps
+The miniapps regroup a collection of various 2-D and 3-D codes that leverage ParallelStencil to implement architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. The miniapps target various challenging domain science case studies where multi-physics coupling and important nonlinearities challenge existing solving strategies. In most cases, second order pseudo-transient relaxation delivers implicit solutions of the differential equations. Some miniapps feature a multi-XPU version, which combines the capabilities of ParallelStencil and [ImplicitGlobalGrid.jl] in order to enable multi-GPU and multi-CPU executions, unleashing _Julia-at-scale_.
+
+#### Performance metric
+Many-core processors as GPUs are throughput-oriented systems that use their massive parallelism to hide latency. On the scientific application side, most algorithms require only a few operations or flops compared to the amount of numbers or bytes accessed from main memory, and thus are significantly memory bound. The Flop/s metric is no longer the most adequate for reporting the application performance of many modern applications. This  status  motivated us to develop a memory throughput-based performance evaluation metric, `T_eff`, to evaluate the performance of iterative stencil-based solvers \[[1][JuliaCon20a]\].
+
+The effective memory access, `A_eff` [GB], is the the sum of twice the memory footprint of the unknown fields, `D_u`, (fields that depend on their own history and that need to be updated every iteration) and the known fields, `D_k`, that do not change in time. The effective memory access divided by the execution time per iteration, `t_it` [sec], defines the effective memory throughput, `T_eff` [GB/s].
+
+![Effective memory throughput metric](/docs/images/T_eff.png)
+
+The upper bound of `T_eff` is `T_peak` as measured e.g. by the \[[7][STREAM benchmark]\] for CPUs or a GPU analogue. Defining the `T_eff` metric, we assume that 1) we evaluate an iterative stencil-based solver, 2) the problem size is much larger than the cache sizes and 3) the usage of time blocking is not feasible or advantageous (which is a reasonable assumption for real-world applications). An important concept is not to include fields within the effective memory access that do not depend on their own history (e.g. fluxes); such fields can be re-computed on the fly or stored on-chip. Defining a theoretical upper bound for `T_eff` that is closer to the real upper bound is work in progress.
+
+Using simple array broadcasting capabilities both with GPU and CPU arrays within Julia does not enable close to optimal performance; ParallelStencil.jl permits to overcome this limitation (see [top Figure](#parallelstenciljl)) at similar ease of programming.
+
+#### Miniapp content
+* [Thermo-mechanical convection 2-D app](#thermo-mechanical-convection-2-d-app)
+* [Viscous Stokes 2-D app](#viscous-stokes-2-d-app)
+* [Viscous Stokes 3-D app](#viscous-stokes-3-d-app)
+* [Acoustic wave 2-D app](#acoustic-wave-2-d-app)
+* [Acoustic wave 3-D app](#acoustic-wave-3-d-app)
+* [Scalar porosity waves 2-D app](#scalar-porosity-waves-2-d-app)
+* [Hydro-mechanical porosity waves 2-D app](#hydro-mechanical-porosity-waves-2-d-app)
+* More to come, stay tuned...
+
+All miniapp codes follow a similar structure and permit serial and threaded CPU as well as Nvidia GPU execution. The first line of each miniapp code permits to enable the CUDA GPU backend upon setting the `USE_GPU` flag to `true`.
+
+All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-XPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
+```sh
+$ julia --project --check-bound=no -O3 <miniapp_code>.jl
+```
+
+Note: refer to the documentation of your Supercomputing Centre for instructions to run Julia at scale. Instructions for running on the Piz Daint GPU supercomputer at the [Swiss National Supercomputing Centre](https://www.cscs.ch/computers/piz-daint/) can be found [here](https://user.cscs.ch/tools/interactive/julia/) and for running on the octopus GPU supercomputer at the [Swiss Geocomputing Centre](https://wp.unil.ch/geocomputing/octopus/) can be found [here](https://gist.github.com/luraess/45a7a4059d8ace694812e7e301f1a258).
+
+#### Thermo-mechanical convection 2-D app
+> app: [ThermalConvection2D.jl](/miniapps/ThermalConvection2D.jl)
+
+This thermal convection example in 2-D combines a viscous Stokes flow to advection-diffusion of heat including a temperature-dependent shear viscosity. The miniapp resolves thermal convection cells (e.g. Earth's mantle convection and plumes):
+
+![thermal convection 2-D](/miniapps/ThermalConvect2D.gif)
+
+*The gif depicts non-dimensional temperature field as evolving into convection cells and plumes*. Results are obtained by running the miniapp [ThermalConvection2D.jl](/miniapps/ThermalConvection2D.jl).
+
+#### Viscous Stokes 2-D app
+> app: [Stokes2D.jl](/miniapps/Stokes2D.jl)
+
+The viscous Stokes flow example solves the incompressible Stokes equations with linear shear rheology in 2-D. The model configuration represents a buoyant inclusion within a less buoyant matrix:
+
+![viscous Stokes 2-D](/miniapps/Stokes2D.gif)
+
+*The figure depicts - Upper panels: the dynamical pressure field, the vertical Vy velocity. Lower pannels: the log10 of the vertical momentum balance residual Ry and the log10 of the error norm evolution as function of pseudo-transient iterations*. Results are obtained by running the miniapp [Stokes2D.jl](/miniapps/Stokes2D.jl).
+
+#### Viscous Stokes 3-D app
+> apps: [Stokes3D.jl](/miniapps/Stokes3D.jl), [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl)
+
+The viscous Stokes flow example solves the incompressible Stokes equations with linear shear rheology in 3-D. The model configuration represents a buoyant spherical inclusion within a less buoyant matrix:
+
+![viscous Stokes 3-D multi-XPU](/miniapps/stokes_multixpu/Stokes3D.gif)
+
+_The figure depicts vertically sliced cross-sections of - Upper panels: the dynamical pressure field, the vertical Vz velocity. Lower panels: the log10 of the vertical momentum balance residual Rz and the log10 of the error norm evolution as function of pseudo-transient iterations. **The numerical resolution is 252x252x252 grid points in 3-D on 8 GPUs (i.e. a local domain size of 127x127x127 per GPU).**_ The [Stokes3D.jl](/miniapps/Stokes3D.jl) and [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) are single- and multi-XPU implementations, respectively. The multi-XPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-XPU miniapp [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
+
+This multi-XPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
+
+#### Acoustic wave 2-D app
+> app: [acoustic2D.jl](/miniapps/acoustic2D.jl)
+
+The acoustic wave example solves acoustic waves in 2-D using the split velocity-pressure formulation:
+
+![Acoustic wave 2-D](/miniapps/acoustic2D.gif)
+
+*The animation depicts the dynamical pressure field evolution as function of explicit time steps*. Results are obtained by running the miniapp [acoustic2D.jl](/miniapps/acoustic2D.jl).
+
+#### Acoustic wave 3-D app
+> apps: [acoustic3D.jl](/miniapps/acoustic3D.jl), [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl)
+
+The acoustic wave examples solves acoustic waves in 3-D using the split velocity-pressure formulation:
+
+![Acoustic wave 3-D multi-XPU](/miniapps/acoustic_waves_multixpu/acoustic3D.gif)
+
+_The animation depicts the y-slice of the dynamical pressure field evolution as function of explicit time steps. **The achieved numerical resolution is 1020x1020x1020 grid points in 3-D on 8 GPUs (i.e. a local domain size of 511x511x511 per GPU).**_ The [acoustic3D.jl](/miniapps/acoustic3D.jl) and [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) are single- and multi-XPU implementation, respectively. The multi-XPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-XPU miniapp [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
+
+This multi-XPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
+
+#### Scalar porosity waves 2-D app
+> app: [scalar_porowaves2D.jl](/miniapps/scalar_porowaves2D.jl)
+
+The scalar porosity waves example solves the scalar solitary wave equations in 2-D assuming total pressure to be lithostatic, thus eliminating the need to solve for the total pressure explicitly:
+
+![scalar porosity waves 2-D - blobs](/miniapps/porowaves2D_blob.gif)
+![scalar porosity waves 2-D - channels](/miniapps/porowaves2D_chan.gif)
+
+*The animation depicts the normalised porosity and effective pressure fields evolution as function of explicit time steps. Top row: compaction and decompaction rheology are identical, resulting in circular solitary waves rearranging into solitons of characteristic size. Bottom row: decompaction occurs at much faster rate compared to compaction, resulting in chimney-shaped features.*
+
+#### Hydro-mechanical porosity waves 2-D app
+> app: [HydroMech2D.jl](/miniapps/HydroMech2D.jl)
+
+The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing to hydro-mechanical coupling, removing the lithostatic pressure assumption. The total and fluid pressure are explicitly computed from nonlinear Stokes and Darcy flow solvers, respectively \[[8][GJI2019]\]:
+
+![Hydro-mechanical porosity waves 2-D](/miniapps/HydroMech2D.gif)
+
+*The animation depicts the formation of fluid escape pipes in two-phase media, owing to decompaction weakening running the miniapp [HydroMech2D.jl](/miniapps/HydroMech2D.jl). Top row: evolution of the porosity distribution and effective pressure. Bottom row: Darcy flux (relative fluid to solid motion) and solid (porous matrix) deformation.*
+
 ## Dependencies
 ParallelStencil relies on the Julia CUDA package ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]) and [MacroTools.jl].
 
@@ -291,6 +398,9 @@ ParallelStencil may be installed directly with the [Julia package manager](https
 julia>]
   pkg> add https://github.com/omlins/ParallelStencil.jl
 ```
+
+## Questions, comments and discussions
+For questions, comments and discussions, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#distributed` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
 
 ## References
 \[1\] [Omlin, S., Räss, L., Kwasniewski, G., Malvoisin, B., & Podladchikov, Y. Y. (2020). Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia. JuliaCon Conference, virtual.][JuliaCon20a]
@@ -305,9 +415,13 @@ julia>]
 
 \[6\] [Besard, T., Churavy, V., Edelman, A., & De Sutter B. (2019). Rapid software prototyping for heterogeneous and distributed platforms. Advances in Engineering Software, 132, 29-46. doi: 10.1016/j.advengsoft.2019.02.002][Julia CUDA paper 2]
 
+\[7\] [McCalpin, J. D. (1995). Memory Bandwidth and Machine Balance in Current High Performance Computers. IEEE Computer Society Technical Committee on Computer Architecture (TCCA) Newsletter, December 1995.][STREAM benchmark]
+
+\[8\] [Räss, L., Duretz, T., & Podladchikov, Y. Y. (2019). Resolving hydromechanical coupling in two and three dimensions: spontaneous channelling of porous fluids owing to de-compaction weakening. Geophysical Journal International, ggz239.][GJI2019]
+
 [JuliaCon20a]: https://www.youtube.com/watch?v=vPsfZUqI4_0
 [JuliaCon20b]: https://www.youtube.com/watch?v=1t1AKnnGRqA
-[JuliaCon19]: https://pretalx.com/juliacon2019/talk/LGHLC3/
+[JuliaCon19]: https://www.youtube.com/watch?v=b90qqbYJ58Q
 [PASC19]: https://pasc19.pasc-conference.org/program/schedule/presentation/?id=msa218&sess=sess144
 [Base.Threads]: https://docs.julialang.org/en/v1/base/multi-threading/
 [ImplicitGlobalGrid.jl]: https://github.com/eth-cscs/ImplicitGlobalGrid.jl
@@ -317,5 +431,11 @@ julia>]
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [Julia CUDA paper 1]: https://doi.org/10.1109/TPDS.2018.2872064
 [Julia CUDA paper 2]: https://doi.org/10.1016/j.advengsoft.2019.02.002
+[GJI2019]: https://doi.org/10.1093/gji/ggz239
+[STREAM benchmark]: https://www.researchgate.net/publication/51992086_Memory_bandwidth_and_machine_balance_in_high_performance_computers
 [Julia REPL]: https://docs.julialang.org/en/v1/stdlib/REPL/
 [IJulia]: https://github.com/JuliaLang/IJulia.jl
+[CUDA.jl Array programming]: https://juliagpu.github.io/CUDA.jl/stable/usage/array/#Array-programming
+[GPU topic]: https://discourse.julialang.org/c/domain/gpu/
+[Julia at Scale topic]: https://discourse.julialang.org/c/domain/parallel/
+[Julia Slack]: https://julialang.slack.com/
