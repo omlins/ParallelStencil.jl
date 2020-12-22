@@ -1,0 +1,18 @@
+name = "ParallelStencil"
+uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
+authors = ["Samuel Omlin", "Swiss National Supercomputing Centre"]
+version = "0.4.4"
+
+[compat]
+julia = "1"
+CUDA = "1, 2"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
