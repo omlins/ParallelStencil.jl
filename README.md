@@ -290,8 +290,6 @@ search: ParallelStencil @init_parallel_stencil
     •    Data
 
   To see a description of a function or a macro type ?<functionname> or ?<macroname> (including the @), respectively.
-
-julia>
 ```
 
 ## Concise single/multi-XPU miniapps
