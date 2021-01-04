@@ -1,4 +1,4 @@
-<h1> <img src="https://github.com/omlins/ParallelStencil.jl/blob/logo/docs/logo/logo_ParallelStencil.png" alt="ParallelStencil.jl" width="50"> ParallelStencil.jl </h1>
+<h1> <img src="docs/logo/logo_ParallelStencil.png" alt="ParallelStencil.jl" width="50"> ParallelStencil.jl </h1>
 
 ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C can be achieved, which is typically a large improvement over the performance reached when using only [CUDA.jl Array programming]. For example, a 2-D shallow ice solver presented at JuliaCon 2020 \[[1][JuliaCon20a]\] achieved a nearly 20 times better performance than a corresponding [CUDA.jl Array programming] implementation; in absolute terms, it reached 70% of the theoretical upper performance bound of the used Nvidia P100 GPU, as defined by the effective throughput metric, `T_eff` (note that `T_eff` is very different from common throughput metrics, see section [Performance metric](#performance-metric)). The GPU performance of the solver is reported in green, the CPU performance in blue:
 
@@ -304,7 +304,7 @@ The effective memory access, `A_eff` [GB], is the the sum of twice the memory fo
 
 The upper bound of `T_eff` is `T_peak` as measured e.g. by the \[[7][STREAM benchmark]\] for CPUs or a GPU analogue. Defining the `T_eff` metric, we assume that 1) we evaluate an iterative stencil-based solver, 2) the problem size is much larger than the cache sizes and 3) the usage of time blocking is not feasible or advantageous (which is a reasonable assumption for real-world applications). An important concept is not to include fields within the effective memory access that do not depend on their own history (e.g. fluxes); such fields can be re-computed on the fly or stored on-chip. Defining a theoretical upper bound for `T_eff` that is closer to the real upper bound is work in progress.
 
-Using simple array broadcasting capabilities both with GPU and CPU arrays within Julia does not enable close to optimal performance; ParallelStencil.jl permits to overcome this limitation (see <a href="#fig_teff">top Figure</a>) at similar ease of programming.
+Using simple array broadcasting capabilities both with GPU and CPU arrays within Julia does not enable close to optimal performance; ParallelStencil.jl permits to overcome this limitation (see <a href="#fig_teff">top figure</a>) at similar ease of programming.
 
 #### Miniapp content
 * [Thermo-mechanical convection 2-D app](#thermo-mechanical-convection-2-d-app)
