@@ -1,5 +1,5 @@
 <div align="left">
-    <img src="https://github.com/omlins/ParallelStencil.jl/blob/logo/docs/logo/logo_ParallelStencil.png" alt="ParallelStencil.jl" width="200">
+    <img src="https://github.com/omlins/ParallelStencil.jl/blob/logo/docs/logo/logo_ParallelStencil.png" alt="ParallelStencil.jl" width="100">
 </div>
 
 # ParallelStencil.jl
