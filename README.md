@@ -404,7 +404,8 @@ julia>]
 ```
 
 ## Questions, comments and discussions
-For questions, comments and discussions, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#distributed` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
+To discuss technical issues, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#distributed` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
+To discuss numerical/domain-science issues, please post on Julia Discourse in the [Numerics topic] or the [Modelling & Simulations topic] or whichever other topic fits best your issue.
 
 ## References
 \[1\] [Omlin, S., Räss, L., Kwasniewski, G., Malvoisin, B., & Podladchikov, Y. Y. (2020). Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia. JuliaCon Conference, virtual.][JuliaCon20a]
@@ -442,4 +443,6 @@ For questions, comments and discussions, please post on Julia Discourse in the [
 [CUDA.jl Array programming]: https://juliagpu.github.io/CUDA.jl/stable/usage/array/#Array-programming
 [GPU topic]: https://discourse.julialang.org/c/domain/gpu/
 [Julia at Scale topic]: https://discourse.julialang.org/c/domain/parallel/
+[Numerics topic]: https://discourse.julialang.org/c/domain/numerics/
+[Modelling & Simulations topic]: https://discourse.julialang.org/c/domain/models
 [Julia Slack]: https://julialang.slack.com/
