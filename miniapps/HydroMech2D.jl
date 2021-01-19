@@ -148,8 +148,8 @@ end
     Radc     =   zeros(nx  ,ny  )
     Radc    .= [(((ix-1)*dx-0.5*lx)/λ/4.0)^2 + (((iy-1)*dy-0.25*ly)/λ)^2 for ix=1:size(Radc,1), iy=1:size(Radc,2)]
     Phi[Radc.<1.0] .= Phi[Radc.<1.0] .+ ϕA
-    EtaC     = μs./Phi.*η2μs.*0.0 .+ 1.0
-    K_muf    = k_μf0.*(Phi./ϕ0).*0.0 .+ 1.0
+    EtaC     = μs./Phi.*η2μs
+    K_muf    = k_μf0.*(Phi./ϕ0)
     ϕ0bc     = mean.(Phi[:,end])
     qDy[:,[1,end]] .= (ρsg.-ρfg).*(1.0.-ϕ0bc).*k_μf0.*(ϕ0bc./ϕ0).^nperm
     Phi      = Data.Array(Phi)
