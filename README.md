@@ -249,8 +249,7 @@ search: ParallelStencil @init_parallel_stencil
 
   Module ParallelStencil
 
-  Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs
-  and CPUs.
+  Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs and CPUs.
 
   Macros and functions
   ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
