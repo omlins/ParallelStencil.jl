@@ -8,12 +8,12 @@ else
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
-@parallel function swap_array!(A_old::Data.Array, A::Data.Array)
+@parallel function assign!(A_old::Data.Array, A::Data.Array)
     @all(A_old) = @all(A)
     return
 end
 
-@parallel function err_chk!(Err_A::Data.Array, A::Data.Array)
+@parallel function compute_error!(Err_A::Data.Array, A::Data.Array)
     @all(Err_A) = @all(Err_A) - @all(A)
     return
 end
@@ -43,7 +43,7 @@ end
     return
 end
 
-@parallel function heat_flux!(qTx::Data.Array, qTy::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number)
+@parallel function compute_qT!(qTx::Data.Array, qTy::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number)
     @all(qTx) = -DcT*@d_xi(T)/dx
     @all(qTy) = -DcT*@d_yi(T)/dy
     return
@@ -150,18 +150,18 @@ end
     # Time loop
     err_evo1=[]; err_evo2=[]
     for it = 1:nt
-        @parallel swap_array!(T_old, T)
+        @parallel assign!(T_old, T)
         errV, errP = 2*ε, 2*ε; iter=1; niter=0
         while (errV > ε || errP > ε) && iter <= iterMax
-            @parallel swap_array!(ErrV, Vy)
-            @parallel swap_array!(ErrP, Pt)
+            @parallel assign!(ErrV, Vy)
+            @parallel assign!(ErrP, Pt)
             @parallel compute_1!(RogT, Eta, ∇V, Pt, τxx, τyy, σxy, T, Vx, Vy, dτPt, ρ0gα, η0, dη_dT, ΔT, dτ_iter, β, dx, dy)
             @parallel compute_2!(Rx, Ry, dVxdτ, dVydτ, Pt, RogT, τxx, τyy, σxy, ρ, dampX, dampY, dτ_iter, dx, dy)
             @parallel update_V!(Vx, Vy, dVxdτ, dVydτ, dτ_iter)
             @parallel (1:size(Vx,1), 1:size(Vx,2)) bc_y!(Vx)
             @parallel (1:size(Vy,1), 1:size(Vy,2)) bc_x!(Vy)
-            @parallel err_chk!(ErrV, Vy)
-            @parallel err_chk!(ErrP, Pt)
+            @parallel compute_error!(ErrV, Vy)
+            @parallel compute_error!(ErrP, Pt)
             if mod(iter,nerr) == 0
                 errV = maximum(abs.(Array(ErrV)))/(1e-12 + maximum(abs.(Array(Vy))))
                 errP = maximum(abs.(Array(ErrP)))/(1e-12 + maximum(abs.(Array(Pt))))
@@ -171,7 +171,7 @@ end
             iter+=1; niter+=1
         end
         # Thermal solver
-        @parallel heat_flux!(qTx, qTy, T, DcT, dx, dy)
+        @parallel compute_qT!(qTx, qTy, T, DcT, dx, dy)
         @parallel advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, dx, dy)
         dt_adv = min(dx/maximum(abs.(Array(Vx))), dy/maximum(abs.(Array(Vy))))/2.1
         dt     = min(dt_diff, dt_adv)
