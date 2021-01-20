@@ -8,8 +8,8 @@ else
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
-@parallel function assign!(A_old::Data.Array, A::Data.Array)
-    @all(A_old) = @all(A)
+@parallel function assign!(A::Data.Array, B::Data.Array)
+    @all(A) = @all(B)
     return
 end
 
