@@ -50,7 +50,6 @@ end
 end
 
 @parallel_indices (ix,iy) function advect_T!(dT_dt::Data.Array, qTx::Data.Array, qTy::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, dx::Data.Number, dy::Data.Number)
-
     if (ix<=size(dT_dt, 1) && iy<=size(dT_dt, 2)) dT_dt[ix,iy] = -((qTx[ix+1,iy]-qTx[ix,iy])/dx + (qTy[ix,iy+1]-qTy[ix,iy])/dy) -
                                                                   (Vx[ix+1,iy+1]>0)*Vx[ix+1,iy+1]*(T[ix+1,iy+1]-T[ix  ,iy+1])/dx -
                                                                   (Vx[ix+2,iy+1]<0)*Vx[ix+2,iy+1]*(T[ix+2,iy+1]-T[ix+1,iy+1])/dx -
