@@ -151,7 +151,7 @@ end
     err_evo1=[]; err_evo2=[]
     for it = 1:nt
         @parallel swap_array!(T_old, T)
-        errV, errP = 2*ε, 2*ε; iter=1
+        errV, errP = 2*ε, 2*ε; iter=1; niter=0
         while (errV > ε || errP > ε) && iter <= iterMax
             @parallel swap_array!(ErrV, Vy)
             @parallel swap_array!(ErrP, Pt)
@@ -168,7 +168,7 @@ end
                 push!(err_evo1, max(errV, errP)); push!(err_evo2,iter)
                 # @printf("Total steps = %d, errV=%1.3e, errP=%1.3e \n", iter, errV, errP)
             end
-            global niter=iter; iter+=1
+            iter+=1; niter+=1
         end
         # Thermal solver
         @parallel heat_flux!(qTx, qTy, T, DcT, dx, dy)
