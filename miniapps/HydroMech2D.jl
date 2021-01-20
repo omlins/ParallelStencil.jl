@@ -81,17 +81,17 @@ end
     ηC0      = 1.0             # reference bulk viscosity
     # Physics - non-dimensional parameters
     η2μs     = 10.0            # bulk/shear viscosity ration
-    R        = 500.0           # Compaction/decompaction strength ratio for bulk rheology 
+    R        = 500.0           # Compaction/decompaction strength ratio for bulk rheology
     nperm    = 3.0             # Carman-Kozeny exponent
     ϕ0       = 0.01            # reference porosity
-    ra       = 2               # radius of initil porosity perturbation 
-    λ0       = 1.0             # standard deviation of initial porosity perturbation  
+    ra       = 2               # radius of initil porosity perturbation
+    λ0       = 1.0             # standard deviation of initial porosity perturbation
     t_tot    = 0.02            # total time
     # Physics - dependent scales
-    ρsg      = 2.0*ρfg         # solid rho*g 
+    ρsg      = 2.0*ρfg         # solid rho*g
     lx       = 20.0            # domain size x
     ly       = ra*lx           # domain size y
-    ϕA       = 2*ϕ0            # amplitude of initial porosity perturbation       
+    ϕA       = 2*ϕ0            # amplitude of initial porosity perturbation
     λPe      = 0.01            # effective pressure transition zone
     dt       = 1e-5            # physical time-step
     # Numerics
@@ -138,7 +138,7 @@ end
     dVxdτ    = @zeros(nx-1,ny-2)
     dVydτ    = @zeros(nx-2,ny-1)
     Rx       = @zeros(nx-1,ny-2)
-    Ry       = @zeros(nx-2,ny-1)   
+    Ry       = @zeros(nx-2,ny-1)
     Vx       = @zeros(nx+1,ny  )
     Vy       = @zeros(nx  ,ny+1)
     qDx      = @zeros(nx+1,ny  )
@@ -148,8 +148,8 @@ end
     Radc     =   zeros(nx  ,ny  )
     Radc    .= [(((ix-1)*dx-0.5*lx)/λ/4.0)^2 + (((iy-1)*dy-0.25*ly)/λ)^2 for ix=1:size(Radc,1), iy=1:size(Radc,2)]
     Phi[Radc.<1.0] .= Phi[Radc.<1.0] .+ ϕA
-    EtaC     = μs./Phi.*η2μs.*0.0 .+ 1.0
-    K_muf    = k_μf0.*(Phi./ϕ0).*0.0 .+ 1.0
+    EtaC     = μs./Phi.*η2μs
+    K_muf    = k_μf0.*(Phi./ϕ0)
     ϕ0bc     = mean.(Phi[:,end])
     qDy[:,[1,end]] .= (ρsg.-ρfg).*(1.0.-ϕ0bc).*k_μf0.*(ϕ0bc./ϕ0).^nperm
     Phi      = Data.Array(Phi)
