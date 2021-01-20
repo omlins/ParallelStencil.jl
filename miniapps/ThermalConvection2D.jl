@@ -22,8 +22,8 @@ end
     @all(RogT) = ρ0gα*@all(T)
     @all(Eta)  = η0*(1.0 - dη_dT*(@all(T) + ΔT/2.0))
     @all(∇V)   = @d_xa(Vx)/dx + @d_ya(Vy)/dy
-    @all(Pt)   = @all(Pt) - dτ_iter/β*@all(∇V) 
-    @all(τxx)  = 2.0*@all(Eta)*(@d_xa(Vx)/dx  - 1.0/3.0*@all(∇V))  
+    @all(Pt)   = @all(Pt) - dτ_iter/β*@all(∇V)
+    @all(τxx)  = 2.0*@all(Eta)*(@d_xa(Vx)/dx  - 1.0/3.0*@all(∇V))
     @all(τyy)  = 2.0*@all(Eta)*(@d_ya(Vy)/dy  - 1.0/3.0*@all(∇V))
     @all(σxy)  = 2.0*@av(Eta)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx))
     return
@@ -50,7 +50,7 @@ end
 end
 
 @parallel_indices (ix,iy) function advect_T!(dT_dt::Data.Array, qTx::Data.Array, qTy::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, dx::Data.Number, dy::Data.Number)
-    
+
     if (ix<=size(dT_dt, 1) && iy<=size(dT_dt, 2)) dT_dt[ix,iy] = -((qTx[ix+1,iy]-qTx[ix,iy])/dx + (qTy[ix,iy+1]-qTy[ix,iy])/dy) -
                                                                   (Vx[ix+1,iy+1]>0)*Vx[ix+1,iy+1]*(T[ix+1,iy+1]-T[ix  ,iy+1])/dx -
                                                                   (Vx[ix+2,iy+1]<0)*Vx[ix+2,iy+1]*(T[ix+2,iy+1]-T[ix+1,iy+1])/dx -
@@ -95,7 +95,7 @@ end
     ar        = 3                  # aspect ratio
     # Physics - dimentionally dependent parameters
     lx        = ar*ly              # domain extend, m
-    w         = 1e-2*ly            # initial perturbation standard deviation, m 
+    w         = 1e-2*ly            # initial perturbation standard deviation, m
     ρ0gα      = Ra*η0*DcT/ΔT/ly^3  # thermal expansion
     dη_dT     = 1e-10/ΔT           # viscosity's temperature dependence
     # Numerics
