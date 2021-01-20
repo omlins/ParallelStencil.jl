@@ -23,7 +23,7 @@ end
 end
 
 @parallel function compute_τ!(∇V::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, τxy::Data.Array, τxz::Data.Array, τyz::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, Mus::Data.Array, dx::Data.Number, dy::Data.Number, dz::Data.Number)
-    @all(τxx) = 2.0*@inn_yz(Mus)*(@d_xi(Vx)/dx  - 1.0/3.0*@inn_yz(∇V))   
+    @all(τxx) = 2.0*@inn_yz(Mus)*(@d_xi(Vx)/dx  - 1.0/3.0*@inn_yz(∇V))
     @all(τyy) = 2.0*@inn_xz(Mus)*(@d_yi(Vy)/dy  - 1.0/3.0*@inn_xz(∇V))
     @all(τzz) = 2.0*@inn_xy(Mus)*(@d_zi(Vz)/dz  - 1.0/3.0*@inn_xy(∇V))
     @all(τxy) = 2.0*@av_xyi(Mus)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx))
@@ -55,7 +55,7 @@ end
     return
 end
 
-@parallel_indices (ix,iz) function bc_y!(A::Data.Array) 
+@parallel_indices (ix,iz) function bc_y!(A::Data.Array)
     A[ ix,  1,  iz] = A[   ix,    2,   iz]
     A[ ix,end,  iz] = A[   ix,end-1,   iz]
     return
@@ -127,7 +127,7 @@ end
     X, Z, Zv     = 0:dx:lx, 0:dz:lz, -dz/2:dz:(lz+dz/2)
     # Time loop
     @parallel timesteps!(dτVx, dτVy, dτVz, dτPt, Mus, Vsc, Ptsc, min_dxyz2, max_nxyz)
-    err=2*ε; iter=1; err_evo1=[]; err_evo2=[]
+    err=2*ε; iter=1; niter=0; err_evo1=[]; err_evo2=[]
     while err > ε && iter <= iterMax
         if (iter==11)  global wtime0 = Base.time()  end
         @parallel compute_P!(∇V, Pt, Vx, Vy, Vz, dτPt, dx, dy, dz)
@@ -147,7 +147,7 @@ end
             push!(err_evo1,maximum([mean_Rx, mean_Ry, mean_Rz, mean_∇V])); push!(err_evo2,iter)
             @printf("Total steps = %d, err = %1.3e [mean_Rx=%1.3e, mean_Ry=%1.3e, mean_Rz=%1.3e, mean_∇V=%1.3e] \n", iter, err, mean_Rx, mean_Ry, mean_Rz, mean_∇V)
         end
-        global niter=iter; iter+=1
+        iter+=1; niter+=1
     end
     # Performance
     wtime    = Base.time() - wtime0
