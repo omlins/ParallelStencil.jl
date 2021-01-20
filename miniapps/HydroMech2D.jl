@@ -186,9 +186,6 @@ end
             end
             global niter=iter; iter+=1
         end
-        dt = dt_red/(1e-10+maximum(abs.(∇V)))
-        t  = t + dt
-        it+=1
         # Performance
         wtime    = Base.time()-wtime0
         A_eff    = (8*2)/1e9*nx*ny*sizeof(Data.Number)  # Effective main memory access per iteration [GB] (Lower bound of required memory access: Te has to be read and written: 2 whole-array memaccess; Ci has to be read: : 1 whole-array memaccess)
@@ -204,6 +201,9 @@ end
             p4 = heatmap(X, Yv, Array(Vy)'   , aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Yv[1],Yv[end]), c=:viridis, title="vertical velocity")
             display(plot(p1, p2, p3, p4)); frame(anim)
         end
+        dt = dt_red/(1e-10+maximum(abs.(∇V)))
+        t  = t + dt
+        it+=1
     end
     gif(anim, "HydroMech2D.gif", fps = 15)
     return
