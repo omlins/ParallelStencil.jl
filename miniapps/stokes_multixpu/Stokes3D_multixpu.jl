@@ -16,7 +16,7 @@ maximum_g(A) = (max_l  = maximum(A); MPI.Allreduce(max_l,  MPI.MAX, MPI.COMM_WOR
 @views av_za(A) = (A[:,:,1:end-1] .+ A[:,:,2:end]).*0.5
 @views inn(A)   =  A[2:end-1,2:end-1,2:end-1]
 
-@parallel function timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτVz::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxyz2::Data.Number, max_nxyz)
+@parallel function compute_timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτVz::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxyz2::Data.Number, max_nxyz)
     @all(dτVx) = Vsc*min_dxyz2/@av_xi(Mus)/6.1
     @all(dτVy) = Vsc*min_dxyz2/@av_yi(Mus)/6.1
     @all(dτVz) = Vsc*min_dxyz2/@av_zi(Mus)/6.1
@@ -31,7 +31,7 @@ end
 end
 
 @parallel function compute_τ!(∇V::Data.Array, τxx::Data.Array, τyy::Data.Array, τzz::Data.Array, τxy::Data.Array, τxz::Data.Array, τyz::Data.Array, Vx::Data.Array, Vy::Data.Array, Vz::Data.Array, Mus::Data.Array, dx::Data.Number, dy::Data.Number, dz::Data.Number)
-    @all(τxx) = 2.0*@inn_yz(Mus)*(@d_xi(Vx)/dx  - 1.0/3.0*@inn_yz(∇V))   
+    @all(τxx) = 2.0*@inn_yz(Mus)*(@d_xi(Vx)/dx  - 1.0/3.0*@inn_yz(∇V))
     @all(τyy) = 2.0*@inn_xz(Mus)*(@d_yi(Vy)/dy  - 1.0/3.0*@inn_xz(∇V))
     @all(τzz) = 2.0*@inn_xy(Mus)*(@d_zi(Vz)/dz  - 1.0/3.0*@inn_xy(∇V))
     @all(τxy) = 2.0*@av_xyi(Mus)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx))
@@ -63,7 +63,7 @@ end
     return
 end
 
-@parallel_indices (ix,iz) function bc_y!(A::Data.Array) 
+@parallel_indices (ix,iz) function bc_y!(A::Data.Array)
     A[ ix,  1,  iz] = A[   ix,    2,   iz]
     A[ ix,end,  iz] = A[   ix,end-1,   iz]
     return
@@ -132,7 +132,7 @@ end
     Rog        = Data.Array(Rog)
     # Preparation of visualisation
     ENV["GKSwstype"]="nul"
-    if (me==0) 
+    if (me==0)
         if isdir("viz3D_out")==false mkdir("viz3D_out") end; loadpath = "./viz3D_out/"; anim = Animation(loadpath,String[])
         println("Animation directory: $(anim.dir)")
     end
@@ -147,8 +147,8 @@ end
     y_sl2, y_sl = Int(ceil((ny_g()-2)/2)), Int(ceil(ny_g()/2))
     Xi_g, Zi_g  = dx:dx:(lx-dx), dz:dz:(lz-dz) # inner points only
     # Time loop
-    @parallel timesteps!(dτVx, dτVy, dτVz, dτPt, Mus, Vsc, Ptsc, min_dxyz2, max_nxyz)
-    err=2*ε; iter=1; err_evo1=[]; err_evo2=[]
+    @parallel compute_timesteps!(dτVx, dτVy, dτVz, dτPt, Mus, Vsc, Ptsc, min_dxyz2, max_nxyz)
+    err=2*ε; iter=1; niter=0; err_evo1=[]; err_evo2=[]
     while err > ε && iter <= iterMax
         if (iter==11)  tic()  end
         @parallel compute_P!(∇V, Pt, Vx, Vy, Vz, dτPt, dx, dy, dz)
@@ -171,7 +171,7 @@ end
             push!(err_evo1,maximum([mean_Rx, mean_Ry, mean_Rz, mean_∇V])); push!(err_evo2,iter)
             if (me==0) @printf("Total steps = %d, err = %1.3e [mean_Rx=%1.3e, mean_Ry=%1.3e, mean_Rz=%1.3e, mean_∇V=%1.3e] \n", iter, err, mean_Rx, mean_Ry, mean_Rz, mean_∇V) end
         end
-        global niter=iter; iter+=1
+        iter+=1; niter+=1
     end
     # Performance
     wtime    = toc()

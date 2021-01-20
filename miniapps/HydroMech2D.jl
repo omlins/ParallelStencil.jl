@@ -81,17 +81,17 @@ end
     ηC0      = 1.0             # reference bulk viscosity
     # Physics - non-dimensional parameters
     η2μs     = 10.0            # bulk/shear viscosity ration
-    R        = 500.0           # Compaction/decompaction strength ratio for bulk rheology 
+    R        = 500.0           # Compaction/decompaction strength ratio for bulk rheology
     nperm    = 3.0             # Carman-Kozeny exponent
     ϕ0       = 0.01            # reference porosity
-    ra       = 2               # radius of initil porosity perturbation 
-    λ0       = 1.0             # standard deviation of initial porosity perturbation  
+    ra       = 2               # radius of initil porosity perturbation
+    λ0       = 1.0             # standard deviation of initial porosity perturbation
     t_tot    = 0.02            # total time
     # Physics - dependent scales
-    ρsg      = 2.0*ρfg         # solid rho*g 
+    ρsg      = 2.0*ρfg         # solid rho*g
     lx       = 20.0            # domain size x
     ly       = ra*lx           # domain size y
-    ϕA       = 2*ϕ0            # amplitude of initial porosity perturbation       
+    ϕA       = 2*ϕ0            # amplitude of initial porosity perturbation
     λPe      = 0.01            # effective pressure transition zone
     dt       = 1e-5            # physical time-step
     # Numerics
@@ -138,7 +138,7 @@ end
     dVxdτ    = @zeros(nx-1,ny-2)
     dVydτ    = @zeros(nx-2,ny-1)
     Rx       = @zeros(nx-1,ny-2)
-    Ry       = @zeros(nx-2,ny-1)   
+    Ry       = @zeros(nx-2,ny-1)
     Vx       = @zeros(nx+1,ny  )
     Vy       = @zeros(nx  ,ny+1)
     qDx      = @zeros(nx+1,ny  )
@@ -148,8 +148,8 @@ end
     Radc     =   zeros(nx  ,ny  )
     Radc    .= [(((ix-1)*dx-0.5*lx)/λ/4.0)^2 + (((iy-1)*dy-0.25*ly)/λ)^2 for ix=1:size(Radc,1), iy=1:size(Radc,2)]
     Phi[Radc.<1.0] .= Phi[Radc.<1.0] .+ ϕA
-    EtaC     = μs./Phi.*η2μs.*0.0 .+ 1.0
-    K_muf    = k_μf0.*(Phi./ϕ0).*0.0 .+ 1.0
+    EtaC     = μs./Phi.*η2μs
+    K_muf    = k_μf0.*(Phi./ϕ0)
     ϕ0bc     = mean.(Phi[:,end])
     qDy[:,[1,end]] .= (ρsg.-ρfg).*(1.0.-ϕ0bc).*k_μf0.*(ϕ0bc./ϕ0).^nperm
     Phi      = Data.Array(Phi)
@@ -165,7 +165,7 @@ end
     # Time loop
     while t<t_tot
         @parallel update_old!(Phi_o, ∇V_o, Phi, ∇V)
-        err=2*ε; iter=1
+        err=2*ε; iter=1; niter=0
         while err > ε && iter <= iterMax
             if (iter==11)  global wtime0 = Base.time()  end
             @parallel compute_params_∇!(EtaC, K_muf, Rog, ∇V, ∇qD, Phi, Pf, Pt, Vx, Vy, qDx, qDy, μs, η2μs, R, λPe, k_μf0, ϕ0, nperm, θ_e, θ_k, ρfg, ρsg, ρgBG, dx, dy)
@@ -184,11 +184,8 @@ end
                 norm_Ry = norm(Ry)/length(Ry); norm_RPf = norm(RPf)/length(RPf); err = max(norm_Ry, norm_RPf)
                 # @printf("iter = %d, err = %1.3e [norm_Ry=%1.3e, norm_RPf=%1.3e] \n", iter, err, norm_Ry, norm_RPf)
             end
-            global niter=iter; iter+=1
+            iter+=1; niter+=1
         end
-        dt = dt_red/(1e-10+maximum(abs.(∇V)))
-        t  = t + dt
-        it+=1
         # Performance
         wtime    = Base.time()-wtime0
         A_eff    = (8*2)/1e9*nx*ny*sizeof(Data.Number)  # Effective main memory access per iteration [GB] (Lower bound of required memory access: Te has to be read and written: 2 whole-array memaccess; Ci has to be read: : 1 whole-array memaccess)
@@ -197,13 +194,17 @@ end
         @printf("it = %d, time = %1.3e sec (@ T_eff = %1.2f GB/s) \n", it, wtime, round(T_eff, sigdigits=2))
         # Visualisation
         default(size=(500,700))
-        if mod(it,5)==1
+        if mod(it,5)==0
             p1 = heatmap(X, Y,  Array(Phi)'  , aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Y[1],Y[end]), c=:viridis, title="porosity")
             p2 = heatmap(X, Y,  Array(Pt-Pf)', aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Y[1],Y[end]), c=:viridis, title="effective pressure")
             p3 = heatmap(X, Yv, Array(qDy)'  , aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Yv[1],Yv[end]), c=:viridis, title="vertical Darcy flux")
             p4 = heatmap(X, Yv, Array(Vy)'   , aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Yv[1],Yv[end]), c=:viridis, title="vertical velocity")
             display(plot(p1, p2, p3, p4)); frame(anim)
         end
+        # Time
+        dt = dt_red/(1e-10+maximum(abs.(∇V)))
+        t  = t + dt
+        it+=1
     end
     gif(anim, "HydroMech2D.gif", fps = 15)
     return

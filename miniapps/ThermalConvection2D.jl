@@ -8,12 +8,12 @@ else
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
-@parallel function swap_array!(A_old::Data.Array, A::Data.Array)
-    @all(A_old) = @all(A)
+@parallel function assign!(A::Data.Array, B::Data.Array)
+    @all(A) = @all(B)
     return
 end
 
-@parallel function err_chk!(Err_A::Data.Array, A::Data.Array)
+@parallel function compute_error!(Err_A::Data.Array, A::Data.Array)
     @all(Err_A) = @all(Err_A) - @all(A)
     return
 end
@@ -22,8 +22,8 @@ end
     @all(RogT) = ρ0gα*@all(T)
     @all(Eta)  = η0*(1.0 - dη_dT*(@all(T) + ΔT/2.0))
     @all(∇V)   = @d_xa(Vx)/dx + @d_ya(Vy)/dy
-    @all(Pt)   = @all(Pt) - dτ_iter/β*@all(∇V) 
-    @all(τxx)  = 2.0*@all(Eta)*(@d_xa(Vx)/dx  - 1.0/3.0*@all(∇V))  
+    @all(Pt)   = @all(Pt) - dτ_iter/β*@all(∇V)
+    @all(τxx)  = 2.0*@all(Eta)*(@d_xa(Vx)/dx  - 1.0/3.0*@all(∇V))
     @all(τyy)  = 2.0*@all(Eta)*(@d_ya(Vy)/dy  - 1.0/3.0*@all(∇V))
     @all(σxy)  = 2.0*@av(Eta)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx))
     return
@@ -43,14 +43,13 @@ end
     return
 end
 
-@parallel function heat_flux!(qTx::Data.Array, qTy::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number)
+@parallel function compute_qT!(qTx::Data.Array, qTy::Data.Array, T::Data.Array, DcT::Data.Number, dx::Data.Number, dy::Data.Number)
     @all(qTx) = -DcT*@d_xi(T)/dx
     @all(qTy) = -DcT*@d_yi(T)/dy
     return
 end
 
 @parallel_indices (ix,iy) function advect_T!(dT_dt::Data.Array, qTx::Data.Array, qTy::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, dx::Data.Number, dy::Data.Number)
-    
     if (ix<=size(dT_dt, 1) && iy<=size(dT_dt, 2)) dT_dt[ix,iy] = -((qTx[ix+1,iy]-qTx[ix,iy])/dx + (qTy[ix,iy+1]-qTy[ix,iy])/dy) -
                                                                   (Vx[ix+1,iy+1]>0)*Vx[ix+1,iy+1]*(T[ix+1,iy+1]-T[ix  ,iy+1])/dx -
                                                                   (Vx[ix+2,iy+1]<0)*Vx[ix+2,iy+1]*(T[ix+2,iy+1]-T[ix+1,iy+1])/dx -
@@ -95,7 +94,7 @@ end
     ar        = 3                  # aspect ratio
     # Physics - dimentionally dependent parameters
     lx        = ar*ly              # domain extend, m
-    w         = 1e-2*ly            # initial perturbation standard deviation, m 
+    w         = 1e-2*ly            # initial perturbation standard deviation, m
     ρ0gα      = Ra*η0*DcT/ΔT/ly^3  # thermal expansion
     dη_dT     = 1e-10/ΔT           # viscosity's temperature dependence
     # Numerics
@@ -151,28 +150,28 @@ end
     # Time loop
     err_evo1=[]; err_evo2=[]
     for it = 1:nt
-        @parallel swap_array!(T_old, T)
-        errV, errP = 2*ε, 2*ε; iter=1
+        @parallel assign!(T_old, T)
+        errV, errP = 2*ε, 2*ε; iter=1; niter=0
         while (errV > ε || errP > ε) && iter <= iterMax
-            @parallel swap_array!(ErrV, Vy)
-            @parallel swap_array!(ErrP, Pt)
+            @parallel assign!(ErrV, Vy)
+            @parallel assign!(ErrP, Pt)
             @parallel compute_1!(RogT, Eta, ∇V, Pt, τxx, τyy, σxy, T, Vx, Vy, dτPt, ρ0gα, η0, dη_dT, ΔT, dτ_iter, β, dx, dy)
             @parallel compute_2!(Rx, Ry, dVxdτ, dVydτ, Pt, RogT, τxx, τyy, σxy, ρ, dampX, dampY, dτ_iter, dx, dy)
             @parallel update_V!(Vx, Vy, dVxdτ, dVydτ, dτ_iter)
             @parallel (1:size(Vx,1), 1:size(Vx,2)) bc_y!(Vx)
             @parallel (1:size(Vy,1), 1:size(Vy,2)) bc_x!(Vy)
-            @parallel err_chk!(ErrV, Vy)
-            @parallel err_chk!(ErrP, Pt)
+            @parallel compute_error!(ErrV, Vy)
+            @parallel compute_error!(ErrP, Pt)
             if mod(iter,nerr) == 0
                 errV = maximum(abs.(Array(ErrV)))/(1e-12 + maximum(abs.(Array(Vy))))
                 errP = maximum(abs.(Array(ErrP)))/(1e-12 + maximum(abs.(Array(Pt))))
                 push!(err_evo1, max(errV, errP)); push!(err_evo2,iter)
                 # @printf("Total steps = %d, errV=%1.3e, errP=%1.3e \n", iter, errV, errP)
             end
-            global niter=iter; iter+=1
+            iter+=1; niter+=1
         end
         # Thermal solver
-        @parallel heat_flux!(qTx, qTy, T, DcT, dx, dy)
+        @parallel compute_qT!(qTx, qTy, T, DcT, dx, dy)
         @parallel advect_T!(dT_dt, qTx, qTy, T, Vx, Vy, dx, dy)
         dt_adv = min(dx/maximum(abs.(Array(Vx))), dy/maximum(abs.(Array(Vy))))/2.1
         dt     = min(dt_diff, dt_adv)

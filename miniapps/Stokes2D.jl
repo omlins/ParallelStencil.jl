@@ -8,7 +8,7 @@ else
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
-@parallel function timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxy2::Data.Number, max_nxy::Int)
+@parallel function compute_timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxy2::Data.Number, max_nxy::Int)
     @all(dτVx) = Vsc*min_dxy2/@av_xi(Mus)/4.1
     @all(dτVy) = Vsc*min_dxy2/@av_yi(Mus)/4.1
     @all(dτPt) = Ptsc*4.1*@all(Mus)/max_nxy
@@ -17,12 +17,12 @@ end
 
 @parallel function compute_P!(∇V::Data.Array, Pt::Data.Array, Vx::Data.Array, Vy::Data.Array, dτPt::Data.Array, dx::Data.Number, dy::Data.Number)
     @all(∇V)  = @d_xa(Vx)/dx + @d_ya(Vy)/dy
-    @all(Pt)  = @all(Pt) - @all(dτPt)*@all(∇V) 
+    @all(Pt)  = @all(Pt) - @all(dτPt)*@all(∇V)
     return
 end
 
 @parallel function compute_τ!(∇V::Data.Array, τxx::Data.Array, τyy::Data.Array, τxy::Data.Array, Vx::Data.Array, Vy::Data.Array,  Mus::Data.Array, dx::Data.Number, dy::Data.Number)
-    @all(τxx) = 2.0*@all(Mus)*(@d_xa(Vx)/dx - 1.0/3.0*@all(∇V))  
+    @all(τxx) = 2.0*@all(Mus)*(@d_xa(Vx)/dx - 1.0/3.0*@all(∇V))
     @all(τyy) = 2.0*@all(Mus)*(@d_ya(Vy)/dy - 1.0/3.0*@all(∇V))
     @all(τxy) = 2.0*@av(Mus)*(0.5*(@d_yi(Vx)/dy + @d_xi(Vy)/dx))
     return
@@ -31,7 +31,7 @@ end
 @parallel function compute_dV!(Rx::Data.Array, Ry::Data.Array, dVxdτ::Data.Array, dVydτ::Data.Array, Pt::Data.Array, Rog::Data.Array, τxx::Data.Array, τyy::Data.Array, τxy::Data.Array, dampX::Data.Number, dampY::Data.Number, dx::Data.Number, dy::Data.Number)
     @all(Rx)    = @d_xi(τxx)/dx + @d_ya(τxy)/dy - @d_xi(Pt)/dx
     @all(Ry)    = @d_yi(τyy)/dy + @d_xa(τxy)/dx - @d_yi(Pt)/dy + @av_yi(Rog)
-    @all(dVxdτ) = dampX*@all(dVxdτ) + @all(Rx) 
+    @all(dVxdτ) = dampX*@all(dVxdτ) + @all(Rx)
     @all(dVydτ) = dampY*@all(dVydτ) + @all(Ry)
     return
 end
@@ -104,8 +104,8 @@ end
     println("Animation directory: $(anim.dir)")
     X, Y, Yv  = 0:dx:lx, 0:dy:ly, (-dy/2):dy:(ly+dy/2)
     # Time loop
-    @parallel timesteps!(dτVx, dτVy, dτPt, Mus, Vsc, Ptsc, min_dxy2, max_nxy)
-    err=2*ε; iter=1; err_evo1=[]; err_evo2=[]
+    @parallel compute_timesteps!(dτVx, dτVy, dτPt, Mus, Vsc, Ptsc, min_dxy2, max_nxy)
+    err=2*ε; iter=1; niter=0; err_evo1=[]; err_evo2=[]
     while err > ε && iter <= iterMax
         if (iter==11)  global wtime0 = Base.time()  end
         @parallel compute_P!(∇V, Pt, Vx, Vy, dτPt, dx, dy)
@@ -121,7 +121,7 @@ end
             push!(err_evo1, maximum([mean_Rx, mean_Ry, mean_∇V])); push!(err_evo2,iter)
             @printf("Total steps = %d, err = %1.3e [mean_Rx=%1.3e, mean_Ry=%1.3e, mean_∇V=%1.3e] \n", iter, err, mean_Rx, mean_Ry, mean_∇V)
         end
-        global niter=iter; iter+=1
+        iter+=1; niter+=1
     end
     # Performance
     wtime    = Base.time() - wtime0
