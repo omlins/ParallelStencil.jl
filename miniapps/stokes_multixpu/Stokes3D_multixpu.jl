@@ -16,7 +16,7 @@ maximum_g(A) = (max_l  = maximum(A); MPI.Allreduce(max_l,  MPI.MAX, MPI.COMM_WOR
 @views av_za(A) = (A[:,:,1:end-1] .+ A[:,:,2:end]).*0.5
 @views inn(A)   =  A[2:end-1,2:end-1,2:end-1]
 
-@parallel function timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτVz::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxyz2::Data.Number, max_nxyz)
+@parallel function compute_timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτVz::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxyz2::Data.Number, max_nxyz)
     @all(dτVx) = Vsc*min_dxyz2/@av_xi(Mus)/6.1
     @all(dτVy) = Vsc*min_dxyz2/@av_yi(Mus)/6.1
     @all(dτVz) = Vsc*min_dxyz2/@av_zi(Mus)/6.1
@@ -147,7 +147,7 @@ end
     y_sl2, y_sl = Int(ceil((ny_g()-2)/2)), Int(ceil(ny_g()/2))
     Xi_g, Zi_g  = dx:dx:(lx-dx), dz:dz:(lz-dz) # inner points only
     # Time loop
-    @parallel timesteps!(dτVx, dτVy, dτVz, dτPt, Mus, Vsc, Ptsc, min_dxyz2, max_nxyz)
+    @parallel compute_timesteps!(dτVx, dτVy, dτVz, dτPt, Mus, Vsc, Ptsc, min_dxyz2, max_nxyz)
     err=2*ε; iter=1; niter=0; err_evo1=[]; err_evo2=[]
     while err > ε && iter <= iterMax
         if (iter==11)  tic()  end
