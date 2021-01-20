@@ -165,7 +165,7 @@ end
     # Time loop
     while t<t_tot
         @parallel update_old!(Phi_o, ∇V_o, Phi, ∇V)
-        err=2*ε; iter=1
+        err=2*ε; iter=1; niter=0
         while err > ε && iter <= iterMax
             if (iter==11)  global wtime0 = Base.time()  end
             @parallel compute_params_∇!(EtaC, K_muf, Rog, ∇V, ∇qD, Phi, Pf, Pt, Vx, Vy, qDx, qDy, μs, η2μs, R, λPe, k_μf0, ϕ0, nperm, θ_e, θ_k, ρfg, ρsg, ρgBG, dx, dy)
@@ -184,7 +184,7 @@ end
                 norm_Ry = norm(Ry)/length(Ry); norm_RPf = norm(RPf)/length(RPf); err = max(norm_Ry, norm_RPf)
                 # @printf("iter = %d, err = %1.3e [norm_Ry=%1.3e, norm_RPf=%1.3e] \n", iter, err, norm_Ry, norm_RPf)
             end
-            global niter=iter; iter+=1
+            iter+=1; niter+=1
         end
         # Performance
         wtime    = Base.time()-wtime0
@@ -201,6 +201,7 @@ end
             p4 = heatmap(X, Yv, Array(Vy)'   , aspect_ratio=1, xlims=(X[1],X[end]), ylims=(Yv[1],Yv[end]), c=:viridis, title="vertical velocity")
             display(plot(p1, p2, p3, p4)); frame(anim)
         end
+        # Time
         dt = dt_red/(1e-10+maximum(abs.(∇V)))
         t  = t + dt
         it+=1
