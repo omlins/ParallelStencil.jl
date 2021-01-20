@@ -8,7 +8,7 @@ else
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
-@parallel function timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxy2::Data.Number, max_nxy::Int)
+@parallel function compute_timesteps!(dτVx::Data.Array, dτVy::Data.Array, dτPt::Data.Array, Mus::Data.Array, Vsc::Data.Number, Ptsc::Data.Number, min_dxy2::Data.Number, max_nxy::Int)
     @all(dτVx) = Vsc*min_dxy2/@av_xi(Mus)/4.1
     @all(dτVy) = Vsc*min_dxy2/@av_yi(Mus)/4.1
     @all(dτPt) = Ptsc*4.1*@all(Mus)/max_nxy
@@ -104,7 +104,7 @@ end
     println("Animation directory: $(anim.dir)")
     X, Y, Yv  = 0:dx:lx, 0:dy:ly, (-dy/2):dy:(ly+dy/2)
     # Time loop
-    @parallel timesteps!(dτVx, dτVy, dτPt, Mus, Vsc, Ptsc, min_dxy2, max_nxy)
+    @parallel compute_timesteps!(dτVx, dτVy, dτPt, Mus, Vsc, Ptsc, min_dxy2, max_nxy)
     err=2*ε; iter=1; niter=0; err_evo1=[]; err_evo2=[]
     while err > ε && iter <= iterMax
         if (iter==11)  global wtime0 = Base.time()  end
