@@ -225,6 +225,8 @@ Here is the resulting movie when running the application on 8 GPUs, solving 3-D 
 
 ![3-D heat diffusion](examples/movies/diffusion3D_8gpus.gif)
 
+The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_hidecomm.jl).
+
 ## Seamless interoperability with communication packages and hiding communication
 The previous multi-XPU example shows that ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
 
