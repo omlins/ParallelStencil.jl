@@ -242,8 +242,8 @@ function literaltypes(type::DataType, expr::Expr)
         elseif type <: AbstractFloat && typeof(args[i]) <: AbstractFloat
             literal = type(args[i])
             args[i] = :($literal)
-        elseif type <: Complex{<:AbstractFloat} && (typeof(args[i]) <: AbstractFloat || typeof(args[i]) <: Complex{<:AbstractFloat})
-            literal = type(args[i])
+        elseif type <: Complex{<:AbstractFloat} && typeof(args[i]) <: AbstractFloat # NOTE: complex float numbers decompose into two normal floats with both the same type
+            literal = type.types[1](args[i])
             args[i] = :($literal)
         elseif typeof(args[i]) == Expr
             args[i] = literaltypes(type, args[i])
