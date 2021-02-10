@@ -38,13 +38,13 @@ const BOUNDARY_WIDTH_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE_2D = Tuple{T, T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE = Tuple{T, T, T} where T <: Integer
 const OPERATORS = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
-const SUPPORTED_LITERALTYPES = [:BigFloat, :Float16, :Float32, :Float64, :BigInt, :Int128, :Int16, :Int32, :Int64, :Int8, :UInt128, :UInt16, :UInt32, :UInt64, :UInt8]
-const SUPPORTED_NUMBERTYPES = [:BigFloat, :Float16, :Float32, :Float64]
+const SUPPORTED_LITERALTYPES = [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
+const SUPPORTED_NUMBERTYPES  = [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const NUMBERTYPE_NONE = DataType
 const ERRMSG_UNSUPPORTED_PACKAGE = "unsupported package for parallelization"
-const ERRMSG_CHECK_PACKAGE  = "package must be noted LITERALLY (NOT a variable containing the package) and has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
-const ERRMSG_CHECK_NUMBERTYPE = "numbertype must be a primitive datatype noted LITERALLY (NOT a variable containing the datatype) and has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
-const ERRMSG_CHECK_LITERALTYPES = "the type given to 'literaltype' must be a primitive datatype noted LITERALLY (NOT a variable containing the datatype) and has to be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
+const ERRMSG_CHECK_PACKAGE  = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
+const ERRMSG_CHECK_NUMBERTYPE = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
+const ERRMSG_CHECK_LITERALTYPES = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
 
 ## FUNCTIONS TO DEAL WITH FUNCTION DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
@@ -102,7 +102,7 @@ function eval_arg(caller::Module, arg)
     try
         return @eval(caller, $arg)
     catch e
-        @ArgumentEvaluationError("argument $arg could not be evaluated at parse time (in module $caller). Make the argument constant or a literal.")
+        @ArgumentEvaluationError("argument $arg could not be evaluated at parse time (in module $caller).")
     end
 end
 
@@ -132,10 +132,8 @@ end
 ## FUNCTIONS FOR ERROR HANDLING
 
 check_package(P)                = ( if !isa(P, Symbol) || !(P in SUPPORTED_PACKAGES)  @ArgumentError("$ERRMSG_CHECK_PACKAGE (obtained: $P)." ) end )
-check_numbertype(T)             = ( if !isa(T, Symbol) || !(T in SUPPORTED_NUMBERTYPES) @ArgumentError("$ERRMSG_CHECK_NUMBERTYPE (obtained: $T)." ) end )
-check_literaltype(T)            = ( if !isa(T, Symbol) || !(T in SUPPORTED_LITERALTYPES) @ArgumentError("$ERRMSG_CHECK_LITERALTYPES (obtained: $T)." ) end )
-check_numbertype(T::DataType)   = check_numbertype(nameof(T))
-check_literaltype(T::DataType)  = check_literaltype(nameof(T))
+check_numbertype(T::DataType)   = ( if !(T in SUPPORTED_NUMBERTYPES) @ArgumentError("$ERRMSG_CHECK_NUMBERTYPE (obtained: $T)." ) end )
+check_literaltype(T::DataType)  = ( if !(T in SUPPORTED_LITERALTYPES) @ArgumentError("$ERRMSG_CHECK_LITERALTYPES (obtained: $T)." ) end )
 check_numbertype(datatypes...)  = check_numbertype.(datatypes)
 check_literaltype(datatypes...) = check_literaltype.(datatypes)
 
