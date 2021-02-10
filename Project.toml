@@ -1,7 +1,7 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
 authors = ["Samuel Omlin", "Ludovic Räss"]
-version = "0.4.4"
+version = "0.5.0"
 
 [compat]
 julia = "1"
