@@ -91,7 +91,51 @@ using ParallelStencil.ParallelKernel.Exceptions
             end;
             @reset_parallel_kernel()
         end;
-        @testset "2. Exceptions" begin
+        @testset "2. parallel macros (literal conversion)" begin
+            @testset "@parallel_indices (Float64)" begin
+                @init_parallel_kernel($package, Float64)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
+                @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
+                @reset_parallel_kernel()
+            end;
+            @testset "@parallel_indices (Float32)" begin
+                @init_parallel_kernel($package, Float32)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                @test occursin("A[ix] = A[ix] + 1.0f0\n", expansion)
+                @reset_parallel_kernel()
+            end;
+            @testset "@parallel_indices (Float16)" begin
+                @init_parallel_kernel($package, Float16)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                @test occursin("A[ix] = A[ix] + Float16(1.0)\n", expansion)
+                @reset_parallel_kernel()
+            end;
+            @testset "@parallel_indices (ComplexF64)" begin
+                @init_parallel_kernel($package, ComplexF64)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
+                @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
+                @reset_parallel_kernel()
+            end;
+            @testset "@parallel_indices (ComplexF32)" begin
+                @init_parallel_kernel($package, ComplexF32)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
+                @test occursin("A[ix] = ((2.0f0 - 1.0f0im) - A[ix]) + 1.0f0\n", expansion)
+                @reset_parallel_kernel()
+            end;
+            @testset "@parallel_indices (ComplexF16)" begin
+                @init_parallel_kernel($package, ComplexF16)
+                @require @is_initialized()
+                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
+                @test occursin("A[ix] = ((Float16(2.0) - Float16(1.0) * im) - A[ix]) + Float16(1.0)\n", expansion)
+                @reset_parallel_kernel()
+            end;
+        end
+        @testset "3. Exceptions" begin
             @init_parallel_kernel($package, Float64)
             @require @is_initialized
             @testset "arguments @parallel" begin

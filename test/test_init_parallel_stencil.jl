@@ -10,11 +10,11 @@ using ParallelStencil.Exceptions
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. initialization of ParallelStencil" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, Float64, 3)
+            @init_parallel_stencil($package, ComplexF32, 3)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
-                @test @get_numbertype() == Float64
+                @test @get_numbertype() == ComplexF32
                 @test @get_ndims() == 3
             end;
             @testset "Data" begin

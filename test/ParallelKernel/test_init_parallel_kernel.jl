@@ -11,11 +11,11 @@ using ParallelStencil.ParallelKernel.Exceptions
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. initialization of ParallelKernel" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            @init_parallel_kernel($package, ComplexF16)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
-                @test @get_numbertype() == Float64
+                @test @get_numbertype() == ComplexF16
             end;
             @testset "Data" begin
                 @test @isdefined(Data)

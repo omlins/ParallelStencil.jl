@@ -218,8 +218,19 @@ synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 
 ## MACROS AND FUNCTIONS TO MODIFY THE TYPE OF LITERALS
 
-macro literaltypes(type, expr) check_literaltype(type); esc(literaltypes(@eval(__module__, $type), expr)) end
-macro literaltypes(type1, type2, expr) check_literaltype(type1); check_literaltype(type2); esc(literaltypes(@eval(__module__, $type1), @eval(__module__, $type2), expr)) end
+macro literaltypes(type, expr)
+    type_val = eval_arg(__module__, type)
+    check_literaltype(type_val)
+    esc(literaltypes(type_val, expr))
+end
+
+macro literaltypes(type1, type2, expr)
+    type1_val = eval_arg(__module__, type1)
+    type2_val = eval_arg(__module__, type2)
+    check_literaltype(type1_val)
+    check_literaltype(type2_val)
+    esc(literaltypes(type1_val, type2_val, expr))
+end
 
 function literaltypes(type::DataType, expr::Expr)
     args = expr.args
@@ -230,6 +241,9 @@ function literaltypes(type::DataType, expr::Expr)
             args[i] = :($literal)
         elseif type <: AbstractFloat && typeof(args[i]) <: AbstractFloat
             literal = type(args[i])
+            args[i] = :($literal)
+        elseif type <: Complex{<:AbstractFloat} && typeof(args[i]) <: AbstractFloat # NOTE: complex float numbers decompose into two normal floats with both the same type
+            literal = type.types[1](args[i])
             args[i] = :($literal)
         elseif typeof(args[i]) == Expr
             args[i] = literaltypes(type, args[i])
