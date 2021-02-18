@@ -44,7 +44,7 @@ end
     # Initial conditions
     P         .= Data.Array([exp(-(x_g(ix,dx,P)-0.5*lx)^2 -(y_g(iy,dy,P)-0.5*ly)^2 -(z_g(iz,dz,P)-0.5*lz)^2) for ix=1:size(P,1), iy=1:size(P,2), iz=1:size(P,3)])
     dt         = min(dx,dy,dz)/sqrt(k/ρ)/6.1
-     # Preparation of visualisation
+    # Preparation of visualisation
     ENV["GKSwstype"]="nul"
     if (me==0)
         if isdir("viz3D_out")==false mkdir("viz3D_out") end; loadpath = "./viz3D_out/"; anim = Animation(loadpath,String[])
