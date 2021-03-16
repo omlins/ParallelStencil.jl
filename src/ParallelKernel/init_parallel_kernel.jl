@@ -19,7 +19,6 @@ macro init_parallel_kernel(args...) @ArgumentError("wrong number of arguments.")
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType; datadoc_call=:())
     if package == PKG_CUDA
-        @assert CUDA.functional(true)
         data_module = Data_cuda(numbertype)
         import_cmd  = :(import CUDA)
     elseif package == PKG_THREADS
