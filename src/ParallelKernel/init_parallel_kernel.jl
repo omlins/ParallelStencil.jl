@@ -19,10 +19,6 @@ macro init_parallel_kernel(args...) @ArgumentError("wrong number of arguments.")
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType; datadoc_call=:())
     if package == PKG_CUDA
-        # @assert CUDA.functional(true)
-        # if !CUDA.functional()
-        #     @warn "CUDA is not functional and likely to result in a runtime error if using ParallelStencil with the CUDA backend."
-        # end
         data_module = Data_cuda(numbertype)
         import_cmd  = :(import CUDA)
     elseif package == PKG_THREADS
