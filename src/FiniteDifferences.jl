@@ -21,6 +21,7 @@ Provides macros for 1-D finite differences computations. The dimensions x refers
 
 ###### Others
 - [`@maxloc`](@ref)
+- [`@minloc`](@ref)
 
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
@@ -28,7 +29,7 @@ module FiniteDifferences1D
 export @d, @d2
 export @all, @inn
 export @av
-export @maxloc
+export @maxloc, @minloc
 export @within
 
 @doc "`@d(A)`: Compute differences between adjacent elements of `A`." :(@d)
@@ -37,6 +38,7 @@ export @within
 @doc "`@inn(A)`: Select the inner elements of `A`. Corresponds to `A[2:end-1]`" :(@inn)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A`." :(@av)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
+@doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil: INDICES, WITHIN_DOC
 const ix = INDICES[1]
@@ -48,6 +50,7 @@ macro    all(A::Symbol)  esc(:( $A[$ix  ] )) end
 macro    inn(A::Symbol)  esc(:( $A[$ixi ] )) end
 macro     av(A::Symbol)  esc(:(($A[$ix] + $A[$ix+1] )*0.5 )) end
 macro maxloc(A::Symbol)  esc(:( max( max($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
+macro minloc(A::Symbol)  esc(:( min( min($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 
 @doc WITHIN_DOC
 macro within(macroname::String, A::Symbol)
@@ -93,6 +96,7 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 
 ###### Others
 - [`@maxloc`](@ref)
+- [`@minloc`](@ref)
 
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
@@ -100,7 +104,7 @@ module FiniteDifferences2D
 export @d_xa, @d_ya, @d_xi, @d_yi, @d2_xi, @d2_yi
 export @all, @inn, @inn_x, @inn_y
 export @av, @av_xa, @av_ya, @av_xi, @av_yi
-export @maxloc
+export @maxloc, @minloc
 export @within
 
 @doc "`@d_xa(A)`: Compute differences between adjacent elements of `A` along the dimension x." :(@d_xa)
@@ -119,6 +123,7 @@ export @within
 @doc "`@av_xi(A)`: Compute averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xa(A))`." :(@av_xi)
 @doc "`@av_yi(A)`: Compute averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_ya(A))`." :(@av_yi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
+@doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil: INDICES, WITHIN_DOC
 ix, iy = INDICES[1], INDICES[2]
@@ -141,6 +146,8 @@ macro  av_xi(A::Symbol)  esc(:(($A[$ix  ,$iyi ] + $A[$ix+1,$iyi ] )*0.5 )) end
 macro  av_yi(A::Symbol)  esc(:(($A[$ixi ,$iy  ] + $A[$ixi ,$iy+1] )*0.5 )) end
 macro maxloc(A::Symbol)  esc(:( max( max( max($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
                                           max($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
+macro minloc(A::Symbol)  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
+                                          min($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
 
 @doc WITHIN_DOC
 macro within(macroname::String, A::Symbol)
@@ -203,6 +210,7 @@ Provides macros for 3-D finite differences computations. The dimensions x, y and
 
 ###### Others
 - [`@maxloc`](@ref)
+- [`@minloc`](@ref)
 
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
@@ -210,7 +218,7 @@ module FiniteDifferences3D
 export @d_xa, @d_ya, @d_za, @d_xi, @d_yi, @d_zi, @d2_xi, @d2_yi, @d2_zi
 export @all, @inn, @inn_x, @inn_y, @inn_z, @inn_xy, @inn_xz, @inn_yz
 export @av, @av_xa, @av_ya, @av_za, @av_xi, @av_yi, @av_zi, @av_xya, @av_xza, @av_yza, @av_xyi, @av_xzi, @av_yzi #, @av_xya2, @av_xza2, @av_yza2
-export @maxloc
+export @maxloc, @minloc
 export @within
 
 @doc "`@d_xa(A)`: Compute differences between adjacent elements of `A` along the dimension x." :(@d_xa)
@@ -244,6 +252,7 @@ export @within
 @doc "`@av_xzi(A)`: Compute averages between adjacent elements of `A` along the dimensions x and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xza(A))`." :(@av_xzi)
 @doc "`@av_yzi(A)`: Compute averages between adjacent elements of `A` along the dimensions y and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_yza(A))`." :(@av_yzi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
+@doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil: INDICES, WITHIN_DOC
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
@@ -291,6 +300,9 @@ macro av_yzi(A::Symbol)  esc(:(($A[$ixi ,$iy  ,$iz  ] + $A[$ixi ,$iy+1,$iz  ] +
 macro maxloc(A::Symbol)  esc(:( max( max( max( max($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
                                                max($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
                                                max($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
+macro minloc(A::Symbol)  esc(:( min( min( min( min($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
+                                               min($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
+                                               min($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
 
 @doc WITHIN_DOC
 macro within(macroname::String, A::Symbol)
