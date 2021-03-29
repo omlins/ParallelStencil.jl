@@ -406,7 +406,7 @@ ParallelStencil relies on the Julia CUDA package ([CUDA.jl] \[[5][Julia CUDA pap
 ParallelStencil may be installed directly with the [Julia package manager](https://docs.julialang.org/en/v1/stdlib/Pkg/index.html) from the REPL:
 ```julia-repl
 julia>]
-  pkg> add https://github.com/omlins/ParallelStencil.jl
+  pkg> add ParallelStencil
 ```
 
 ## Questions, comments and discussions
