@@ -295,7 +295,7 @@ search: ParallelStencil @init_parallel_stencil
 
     •    Data
 
-  To see a description of a function or a macro type ?<functionname> or ?<macroname> (including the @), respectively.
+  To see a description of a function, macro or module type ?<functionname>, ?<macroname> (including the @) or ?<modulename>, respectively.
 ```
 
 ## Concise single/multi-XPU miniapps
