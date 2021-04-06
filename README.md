@@ -407,6 +407,7 @@ ParallelStencil may be installed directly with the [Julia package manager](https
 ```julia-repl
 julia>]
   pkg> add ParallelStencil
+  pkg> test ParallelStencil
 ```
 
 ## Questions, comments and discussions
