@@ -26,7 +26,7 @@ https://github.com/omlins/ParallelStencil.jl
 # Modules generated in caller
 - [`Data`](@ref)
 
-To see a description of a function or a macro type `?<functionname>` or `?<macroname>` (including the `@`), respectively.
+To see a description of a function, macro or module type `?<functionname>`, `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
 module ParallelStencil
 
