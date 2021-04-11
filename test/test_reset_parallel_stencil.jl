@@ -2,9 +2,13 @@ using Test
 using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols, longnameof
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. Reset of ParallelStencil" begin
             @testset "Reset if not initialized" begin
