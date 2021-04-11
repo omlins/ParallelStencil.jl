@@ -5,9 +5,13 @@ import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, 
 import ParallelStencil.ParallelKernel: @require, @symbols, longnameof
 import ParallelStencil.ParallelKernel: checkargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. initialization of ParallelKernel" begin
             @require !@is_initialized()

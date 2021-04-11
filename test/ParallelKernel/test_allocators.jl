@@ -3,9 +3,13 @@ import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA
 import ParallelStencil.ParallelKernel: @require, longnameof
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES 
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. allocator macros" begin
             @require !@is_initialized()

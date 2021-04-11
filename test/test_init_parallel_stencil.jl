@@ -4,9 +4,13 @@ import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, 
 import ParallelStencil: @require, @symbols, longnameof
 import ParallelStencil: checkargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims
 using ParallelStencil.Exceptions
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. initialization of ParallelStencil" begin
             @require !@is_initialized()

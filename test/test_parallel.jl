@@ -5,10 +5,14 @@ import ParallelStencil: @require, longnameof, @prettyexpand, prettystring
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
             @init_parallel_stencil($package, Float64, 3)

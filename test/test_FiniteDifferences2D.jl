@@ -3,9 +3,13 @@ using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS
 import ParallelStencil: @require
 using ParallelStencil.FiniteDifferences2D
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+TEST_PACKAGES = SUPPORTED_PACKAGES
+@static if PKG_CUDA in TEST_PACKAGES
+    import CUDA
+    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
 
-@static for package in SUPPORTED_PACKAGES  eval(:(
+@static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @init_parallel_stencil($package, Float64, 2)
         @require @is_initialized()
