@@ -5,7 +5,7 @@ version = "0.5.3"
 
 [compat]
 julia = "1"
-CUDA = "1, 2"
+CUDA = "1, 2, 3"
 MacroTools = "0.5"
 
 [deps]
