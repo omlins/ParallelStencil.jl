@@ -1,11 +1,11 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
 authors = ["Samuel Omlin", "Ludovic Räss"]
-version = "0.5.3"
+version = "0.5.4"
 
 [compat]
 julia = "1"
-CUDA = "1, 2, 3"
+CUDA = "3"
 MacroTools = "0.5"
 
 [deps]
