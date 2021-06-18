@@ -3,16 +3,13 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 2)
-    macro pow(args...)  esc(:(CUDA.pow($(args...)))) end
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    pow(x,y) = x^y
-    macro pow(args...)  esc(:(pow($(args...)))) end
 end
 using Plots, Printf, Statistics
 
 @parallel function compute_nonlin!(K_mu::Data.Array, EtaR::Data.Array, Phi::Data.Array, Eta::Data.Array, k_μ0::Data.Number, n::Data.Number)
-    @all(K_mu) = k_μ0*@pow(@all(Phi), n)
+    @all(K_mu) = k_μ0 * @all(Phi)^n
     @all(EtaR) = @all(Eta)	
     return
 end
