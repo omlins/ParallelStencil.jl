@@ -3,13 +3,8 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 2)
-    macro pow(args...)  esc(:(CUDA.pow($(args...)))) end
-    macro tanh(args...) esc(:(CUDA.tanh($(args...)))) end
 else
     @init_parallel_stencil(Threads, Float64, 2)
-    pow(x,y) = x^y
-    macro pow(args...)  esc(:(pow($(args...)))) end
-    macro tanh(args...) esc(:(Base.tanh($(args...)))) end
 end
 using Plots, Printf, Statistics, LinearAlgebra
 
@@ -20,8 +15,8 @@ using Plots, Printf, Statistics, LinearAlgebra
 end
 
 @parallel function compute_params_∇!(EtaC::Data.Array, K_muf::Data.Array, Rog::Data.Array, ∇V::Data.Array, ∇qD::Data.Array, Phi::Data.Array, Pf::Data.Array, Pt::Data.Array, Vx::Data.Array, Vy::Data.Array, qDx::Data.Array, qDy::Data.Array, μs::Data.Number, η2μs::Data.Number, R::Data.Number, λPe::Data.Number, k_μf0::Data.Number, ϕ0::Data.Number, nperm::Data.Number, θ_e::Data.Number, θ_k::Data.Number, ρfg::Data.Number, ρsg::Data.Number, ρgBG::Data.Number, dx::Data.Number, dy::Data.Number)
-    @all(EtaC)  = (1.0-θ_e)*@all(EtaC)  + θ_e*( μs/@all(Phi)*η2μs*(1.0+0.5*(1.0/R-1.0)*(1.0+@tanh((@all(Pf)-@all(Pt))/λPe))) )
-    @all(K_muf) = (1.0-θ_k)*@all(K_muf) + θ_k*( k_μf0*@pow((@all(Phi)/ϕ0), nperm) )
+    @all(EtaC)  = (1.0-θ_e)*@all(EtaC)  + θ_e*( μs/@all(Phi)*η2μs*(1.0+0.5*(1.0/R-1.0)*(1.0+tanh((@all(Pf)-@all(Pt))/λPe))) )
+    @all(K_muf) = (1.0-θ_k)*@all(K_muf) + θ_k*( k_μf0 * (@all(Phi)/ϕ0)^nperm )
     @all(Rog)   = ρfg*@all(Phi) + ρsg*(1.0-@all(Phi)) - ρgBG
     @all(∇V)    = @d_xa(Vx)/dx  + @d_ya(Vy)/dy
     @all(∇qD)   = @d_xa(qDx)/dx + @d_ya(qDy)/dy
