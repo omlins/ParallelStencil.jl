@@ -264,26 +264,39 @@ end
 
 function add_threadids(indices::Array, ranges::Array, block::Expr)
     if !(length(ranges)==3) @ModuleInternalError("ranges must be an Array or Tuple of size 3.") end # E.g. (5:28,5:28,1:1) in 2D. Note that for simplicity for the users and developers, 1D and 2D problems are always expressed like 3D problems...
+    check_thread_bounds = true
+    if haskey(ENV, "PS_THREAD_BOUND_CHECK") check_thread_bounds = (parse(Int64, ENV["PS_THREAD_BOUND_CHECK"]) > 0); end # PS_THREAD_BOUND_CHECK=0 enables to deactivate the check whether each thread is in bounds of the ranges array in order to reach maximal performance. If deactivated and any thread is out-of-bound it will cause normally a segmentation fault. To ensure that all threads are in bounds, the thread block must be of the same size as the ranges passed to the @parallel function.
+    thread_bounds_check = :(begin end)
     rangelength_x, rangelength_y, rangelength_z = RANGELENGTHS_VARNAMES
     tx, ty, tz = THREADIDS_VARNAMES
     ndims = length(indices)
     if ndims == 1
         ix, = indices
         range_x, = ranges
+        if check_thread_bounds
+            thread_bounds_check = quote
+                if ($tx > $rangelength_x) return; end
+            end
+        end
         quote
             $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
-            if ($tx > $rangelength_x) return; end
+            $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $block
         end
     elseif ndims == 2
         ix, iy = indices
         range_x, range_y = ranges
+        if check_thread_bounds
+            thread_bounds_check = quote
+                if ($tx > $rangelength_x) return; end
+                if ($ty > $rangelength_y) return; end
+            end
+        end
         quote
             $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
             $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
-            if ($tx > $rangelength_x) return; end
-            if ($ty > $rangelength_y) return; end
+            $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
             $block
@@ -291,13 +304,18 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
     elseif ndims == 3
         ix, iy, iz = indices
         range_x, range_y, range_z = ranges
+        if check_thread_bounds
+            thread_bounds_check = quote
+                if ($tx > $rangelength_x) return; end
+                if ($ty > $rangelength_y) return; end
+                if ($tz > $rangelength_z) return; end
+            end
+        end
         quote
             $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
             $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
             $tz = (CUDA.blockIdx().z-1) * CUDA.blockDim().z + CUDA.threadIdx().z;  # thread ID, dimension z
-            if ($tx > $rangelength_x) return; end
-            if ($ty > $rangelength_y) return; end
-            if ($tz > $rangelength_z) return; end
+            $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
             $iz = $range_z[$tz]                                                    # index, dimension z
