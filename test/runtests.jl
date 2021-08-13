@@ -28,7 +28,7 @@ function runtests()
             continue
         end
         try
-            run(`$exename -O3 --check-bounds=no $(joinpath(testdir, f))`)
+            run(`$exename -O3 --startup-file=no --check-bounds=no $(joinpath(testdir, f))`)
         catch ex
             nfail += 1
         end
