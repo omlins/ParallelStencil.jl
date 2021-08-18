@@ -367,13 +367,15 @@ promote_maxsize(maxsize::MAXSIZE_TYPE_2D)       = (maxsize..., 1)
 promote_maxsize(maxsize::MAXSIZE_TYPE)          = maxsize
 promote_maxsize(maxsize)                        = @ModuleInternalError("maxsize must be a Tuple of Integer of size 1, 2 or 3 (obtained: $maxsize; its type is: $(typeof(maxsize))).")
 
+maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
+maxsize(a::T) where T<:Number        = (1, 1, 1)
+maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel call: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
+maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: this implemented as a recursive function to generate optimal code for this function whose runtime would otherwise would become non-negligable for small problems.
+merge(a::Tuple, b::Tuple)            = max.(a,b)
+
 function get_ranges(args...)
-    complex_args = [x for x in args if !(isa(x, AbstractArray) || isa(x, Number))]
-    if length(complex_args) > 0 @ArgumentError("automatic detection of ranges not possible in @parallel call: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.") end
-    arrays = [x for x in args if isa(x, AbstractArray)];
-    if (length(arrays) == 0) @ArgumentError("automatic detection of ranges not possible: no arrays detected in kernel arguments. Specify ranges or nthreads and nblocks manually.") end
-    maxsize = ( maximum([size(A,1) for A in arrays]), maximum([size(A,2) for A in arrays]), maximum([size(A,3) for A in arrays]) )
-    return (1:max(maxsize[1],1), 1:max(maxsize[2],1), 1:max(maxsize[3],1))
+    maxsizes = maxsize(args...)
+    return (1:maxsizes[1], 1:maxsizes[2], 1:maxsizes[3])
 end
 
 function compute_ranges(maxsize)
