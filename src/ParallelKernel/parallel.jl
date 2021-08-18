@@ -370,7 +370,7 @@ promote_maxsize(maxsize)                        = @ModuleInternalError("maxsize 
 maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
 maxsize(a::T) where T<:Number        = (1, 1, 1)
 maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel call: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
-maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: this implemented as a recursive function to generate optimal code for this function whose runtime would otherwise would become non-negligable for small problems.
+maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: this is implemented as a recursive function to generate optimal code for this function whose runtime would otherwise would become non-negligable for small problems.
 merge(a::Tuple, b::Tuple)            = max.(a,b)
 
 function get_ranges(args...)
