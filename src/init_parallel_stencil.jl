@@ -15,7 +15,7 @@ Initialize the package ParallelStencil, giving access to its main functionality.
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA or Threads).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
+- `numbertype::DataType`: the type of numbers used by `@zeros`, `@ones` and `@rand` and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after `@init_parallel_stencil`.
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels (1, 2 or 3).
 
 See also: [`Data`](@ref)
