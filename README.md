@@ -257,7 +257,7 @@ It can be launched as follows:
 ```julia
 @parallel (1:size(A,1), 1:size(A,3)) bc_y!(A)
 ```
-Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this example](/examples/diffusion2D_shmem_novis.jl)).
+Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
