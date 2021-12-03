@@ -365,7 +365,7 @@ All miniapp codes follow a similar structure and permit serial and threaded CPU 
 
 All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-XPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
 ```sh
-$ julia --project --check-bound=no -O3 <miniapp_code>.jl
+$ julia --project --check-bounds=no -O3 <miniapp_code>.jl
 ```
 
 Note: refer to the documentation of your Supercomputing Centre for instructions to run Julia at scale. Instructions for running on the Piz Daint GPU supercomputer at the [Swiss National Supercomputing Centre](https://www.cscs.ch/computers/piz-daint/) can be found [here](https://user.cscs.ch/tools/interactive/julia/) and for running on the octopus GPU supercomputer at the [Swiss Geocomputing Centre](https://wp.unil.ch/geocomputing/octopus/) can be found [here](https://gist.github.com/luraess/45a7a4059d8ace694812e7e301f1a258).
