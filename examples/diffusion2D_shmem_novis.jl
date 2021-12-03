@@ -1,4 +1,4 @@
-const USE_GPU = false
+const USE_GPU = true
 using BenchmarkTools
 using ParallelStencil
 using ParallelStencil.FiniteDifferences2D
