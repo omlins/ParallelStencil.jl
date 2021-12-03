@@ -18,6 +18,7 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
 * [50-lines multi-XPU example](#50-lines-multi-xpu-example)
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
+* [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
 * [Concise single/multi-XPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
@@ -242,6 +243,21 @@ end
 This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs \[[1][JuliaCon20a], [2][JuliaCon20b]\]. Type `?@hide_communication` in the [Julia REPL] to obtain an explanation of the arguments. Profiling a 3-D viscous Stokes flow application using the Nvidia visual profiler (nvvp) graphically exemplifies how the update velocities kernel is split up in boundary and inner domain computations and how the latter overlap with point-to-point MPI communication for halo exchange:
 
 ![Communication computation overlap ParallelStencil](docs/images/mpi_overlap2.png)
+
+## Support for architecture-agnostic low level kernel programming
+High-level [stencil computations with math-close notation](#stencil-computations-with-math-close-notation) can be completed with index-based programming using the macro `@parallel_indices`. For example, the following kernel enables setting Neumann boundary conditions in dimension y (`∂A/∂y = 0`) when using finite differences in 3-D:
+```julia
+@parallel_indices (ix,iz) function bc_y!(A)
+    A[ix,   1, iz] = A[ix,     2, iz]
+    A[ix, end, iz] = A[ix, end-1, iz]
+    return
+end
+```
+It can be launched as follows:
+```julia
+@parallel (1:size(A,1), 1:size(A,3)) bc_y!(A)
+```
+Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this example](/examples/diffusion2D_shmem_novis.jl)).
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
