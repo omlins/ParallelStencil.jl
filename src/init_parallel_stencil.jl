@@ -6,6 +6,14 @@
 @doc replace(ParallelKernel.PARALLEL_ASYNC_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_async(args...)     check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_async($(args...)))); end
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
 # NOTE: @parallel does not appear here as it is extended and therefore defined in parallel.jl
+@doc replace(ParallelKernel.GRIDDIM_DOC,            "@init_parallel_kernel" => "@init_parallel_stencil") macro gridDim(args...)            check_initialized(); esc(:(ParallelStencil.ParallelKernel.@gridDim($(args...)))); end
+@doc replace(ParallelKernel.BLOCKIDX_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockIdx(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@blockIdx($(args...)))); end
+@doc replace(ParallelKernel.BLOCKDIM_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockDim(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@blockDim($(args...)))); end
+@doc replace(ParallelKernel.THREADIDX_DOC,          "@init_parallel_kernel" => "@init_parallel_stencil") macro threadIdx(args...)          check_initialized(); esc(:(ParallelStencil.ParallelKernel.@threadIdx($(args...)))); end
+@doc replace(ParallelKernel.SYNCTHREADS_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro sync_threads(args...)       check_initialized(); esc(:(ParallelStencil.ParallelKernel.@sync_threads($(args...)))); end
+@doc replace(ParallelKernel.SHAREDMEM_DOC,          "@init_parallel_kernel" => "@init_parallel_stencil") macro sharedMem(args...)          check_initialized(); esc(:(ParallelStencil.ParallelKernel.@sharedMem($(args...)))); end
+@doc replace(replace(ParallelKernel.PKSHOW_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil"), "pk_show"    => "ps_show")    macro ps_show(args...)     check_initialized(); esc(:(ParallelStencil.ParallelKernel.@pk_show($(args...)))); end
+@doc replace(replace(ParallelKernel.PKPRINTLN_DOC,  "@init_parallel_kernel" => "@init_parallel_stencil"), "pk_println" => "ps_println") macro ps_println(args...)  check_initialized(); esc(:(ParallelStencil.ParallelKernel.@pk_println($(args...)))); end
 
 
 """

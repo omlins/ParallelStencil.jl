@@ -6,7 +6,7 @@ Enables writing parallel high-performance kernels and whole applications that ca
 # Usage
     using ParallelStencil.ParallelKernel
 
-# Macros and functions
+# Primary macros
 - [`@init_parallel_kernel`](@ref)
 - [`@parallel`](@ref)
 - [`@hide_communication`](@ref)
@@ -18,10 +18,21 @@ Enables writing parallel high-performance kernels and whole applications that ca
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
 
+# Macros available for [`@parallel_indices`](@ref) kernels
+- [`@pk_show`](@ref)
+- [`@pk_println`](@ref)
+!!! note "Advanced"
+    - [`@gridDim`](@ref)
+    - [`@blockIdx`](@ref)
+    - [`@blockDim`](@ref)
+    - [`@threadIdx`](@ref)
+    - [`@sync_threads`](@ref)
+    - [`@sharedMem`](@ref)
+
 # Modules generated in caller
 - [`Data`](@ref)
 
-To see a description of a function or a macro type `?<functionname>` or `?<macroname>` (including the `@`), respectively.
+To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
 module ParallelKernel
 
@@ -37,10 +48,12 @@ include("shared.jl")
 include("allocators.jl")
 include("hide_communication.jl")
 include("init_parallel_kernel.jl")
+include("kernel_language.jl")
 include("parallel.jl")
 include("reset_parallel_kernel.jl")
 
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println
 
 end # Module ParallelKernel

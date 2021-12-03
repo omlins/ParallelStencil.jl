@@ -6,7 +6,7 @@ Enables domain scientists to write high-level code for parallel high-performance
 # General overview and examples
 https://github.com/omlins/ParallelStencil.jl
 
-# Macros and functions
+# Primary macros
 - [`@init_parallel_stencil`](@ref)
 - [`@parallel`](@ref)
 - [`@hide_communication`](@ref)
@@ -18,6 +18,17 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
 
+# Macros available for [`@parallel_indices`](@ref) kernels
+- [`@ps_show`](@ref)
+- [`@ps_println`](@ref)
+!!! note "Advanced"
+    - [`@gridDim`](@ref)
+    - [`@blockIdx`](@ref)
+    - [`@blockDim`](@ref)
+    - [`@threadIdx`](@ref)
+    - [`@sync_threads`](@ref)
+    - [`@sharedMem`](@ref)
+
 # Submodules
 - [`ParallelStencil.FiniteDifferences1D`](@ref)
 - [`ParallelStencil.FiniteDifferences2D`](@ref)
@@ -26,7 +37,7 @@ https://github.com/omlins/ParallelStencil.jl
 # Modules generated in caller
 - [`Data`](@ref)
 
-To see a description of a function, macro or module type `?<functionname>`, `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
+To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
 module ParallelStencil
 
@@ -50,5 +61,6 @@ include("FiniteDifferences.jl")
 ## Exports (need to be after include of submodules as re-exports from them)
 export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println
 
 end # Module ParallelStencil

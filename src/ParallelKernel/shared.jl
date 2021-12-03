@@ -14,14 +14,17 @@ using MacroTools
 import MacroTools: postwalk, isexpr, inexpr
 
 
-## CONSTANTS
+## CONSTANTS AND TYPES
+#NOTE: constants needs to be defined before including the submodules to have them accessible there.
 
 const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
 const INT_CUDA = Int64
+const INT_THREADS = Int64
 const NTHREADS_MAX = 256
+const INDICES = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
 const RANGES_VARNAME = gensym_world("ranges", @__MODULE__)
 const RANGELENGTHS_VARNAMES = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
 const THREADIDS_VARNAMES = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
@@ -45,6 +48,12 @@ const ERRMSG_UNSUPPORTED_PACKAGE = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE  = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
 const ERRMSG_CHECK_LITERALTYPES = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
+
+struct Dim3
+    x::INT_THREADS
+    y::INT_THREADS
+    z::INT_THREADS
+end
 
 
 ## FUNCTIONS TO DEAL WITH FUNCTION DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT

@@ -132,11 +132,12 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
         kernel = substitute(kernel, :(Data.Array), :(Data.DeviceArray))
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-    if (package == PKG_CUDA)
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$INT_CUDA))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$INT_CUDA))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$INT_CUDA))
+    if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
     if (package == PKG_CUDA)
         body = add_threadids(indices, ranges, body)
@@ -187,6 +188,9 @@ end
 function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     push!(kernelcall.args, ranges)
+    push!(kernelcall.args, :($INT_THREADS(length($ranges[1]))))
+    push!(kernelcall.args, :($INT_THREADS(length($ranges[2]))))
+    push!(kernelcall.args, :($INT_THREADS(length($ranges[3]))))
     if async
         return kernelcall # NOTE: This cannot be used currently as there is no obvious solution how to sync in this case.
     else
@@ -326,26 +330,53 @@ end
 
 function add_loop(indices::Array, ranges::Array, block::Expr)
     if !(length(ranges)==3) @ModuleInternalError("ranges must be an Array or Tuple of size 3") end # E.g. (5:28,5:28,1:1) in 2D.
+    range_x, range_y, range_z = ranges
     ndims = length(indices)
     if ndims == 1
+        ix, = indices
+        ix_ps, iy_ps, iz_ps = INDICES
+        ix_ps_assignment = (ix_ps!=ix) ? :($ix_ps = $ix) : :(begin end)  # Note: this assignement is only required in parallel_indices kernels, where the user chooses the index names freely. Assingning it to the know index name allows to use it in application independent macros (e.g. blockIdx).
+        iy_ps_assignment = :($iy_ps = $range_y[1])
+        iz_ps_assignment = :($iz_ps = $range_z[1])
         quote
-            Base.Threads.@threads for $(indices[1]) in $(ranges[1])
+            $iz_ps_assignment
+            $iy_ps_assignment
+            Base.Threads.@threads for $ix in $range_x
+                $ix_ps_assignment
                 $block
             end
         end
     elseif ndims == 2
+        ix, iy = indices
+        ix_ps, iy_ps, iz_ps = INDICES
+        ix_ps_assignment = (ix_ps!=ix) ? :($ix_ps = $ix) : :(begin end)  # Note: this assignement is only required in parallel_indices kernels, where the user chooses the index names freely.
+        iy_ps_assignment = (iy_ps!=iy) ? :($iy_ps = $iy) : :(begin end)  # ...
+        iz_ps_assignment = :($iz_ps = $range_z[1])
         quote
-            Base.Threads.@threads for $(indices[2]) in $(ranges[2])
-                for $(indices[1]) in $(ranges[1])
+            $iz_ps_assignment
+            Base.Threads.@threads for $iy in $range_y
+                $iy_ps_assignment
+                for $ix in $range_x
+                    $ix_ps_assignment
                     $block
                 end
             end
         end
     elseif ndims == 3
+        ix, iy, iz = indices
+        ix_ps, iy_ps, iz_ps = INDICES
+        ix_ps_assignment = (ix_ps!=ix) ? :($ix_ps = $ix) : :(begin end)  # Note: this assignement is only required in parallel_indices kernels, where the user chooses the index names freely.
+        iy_ps_assignment = (iy_ps!=iy) ? :($iy_ps = $iy) : :(begin end)  # ...
+        iz_ps_assignment = (iz_ps!=iz) ? :($iz_ps = $iz) : :(begin end)  # ...
         quote
-            Base.Threads.@threads for $(indices[3]) in $(ranges[3])
-                for $(indices[2]) in $(ranges[2]), $(indices[1]) in $(ranges[1])
-                    $block
+            Base.Threads.@threads for $iz in $range_z
+                $iz_ps_assignment
+                for $iy in $range_y
+                    $iy_ps_assignment
+                    for $ix in $range_x
+                        $ix_ps_assignment
+                        $block
+                    end
                 end
             end
         end

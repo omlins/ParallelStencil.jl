@@ -18,6 +18,7 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
 * [50-lines multi-XPU example](#50-lines-multi-xpu-example)
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
+* [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
 * [Concise single/multi-XPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
@@ -243,6 +244,21 @@ This enables close to ideal weak scaling of real-world applications on thousands
 
 ![Communication computation overlap ParallelStencil](docs/images/mpi_overlap2.png)
 
+## Support for architecture-agnostic low level kernel programming
+High-level [stencil computations with math-close notation](#stencil-computations-with-math-close-notation) can be completed with index-based programming using the macro `@parallel_indices`. For example, the following kernel enables setting Neumann boundary conditions in dimension y (`∂A/∂y = 0`) when using finite differences in 3-D:
+```julia
+@parallel_indices (ix,iz) function bc_y!(A)
+    A[ix,   1, iz] = A[ix,     2, iz]
+    A[ix, end, iz] = A[ix, end-1, iz]
+    return
+end
+```
+It can be launched as follows:
+```julia
+@parallel (1:size(A,1), 1:size(A,3)) bc_y!(A)
+```
+Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
+
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
 ```julia-repl
@@ -260,44 +276,65 @@ search: ParallelStencil @init_parallel_stencil
 
   https://github.com/omlins/ParallelStencil.jl
 
-  Macros and functions
-  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
+  Primary macros
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    @init_parallel_stencil
+    •  @init_parallel_stencil
 
-    •    @parallel
+    •  @parallel
 
-    •    @hide_communication
+    •  @hide_communication
 
-    •    @zeros
+    •  @zeros
 
-    •    @ones
+    •  @ones
 
-    •    @rand
+    •  @rand
 
   │ Advanced
   │
-  │    •    @parallel_indices
+  │    •  @parallel_indices
   │
-  │    •    @parallel_async
+  │    •  @parallel_async
   │
-  │    •    @synchronize
+  │    •  @synchronize
+
+  Macros available for @parallel_indices kernels
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
+
+    •  @ps_show
+
+    •  @ps_println
+
+  │ Advanced
+  │
+  │    •  @gridDim
+  │
+  │    •  @blockIdx
+  │
+  │    •  @blockDim
+  │
+  │    •  @threadIdx
+  │
+  │    •  @sync_threads
+  │
+  │    •  @sharedMem
 
   Submodules
   ≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    ParallelStencil.FiniteDifferences1D
+    •  ParallelStencil.FiniteDifferences1D
 
-    •    ParallelStencil.FiniteDifferences2D
+    •  ParallelStencil.FiniteDifferences2D
 
-    •    ParallelStencil.FiniteDifferences3D
+    •  ParallelStencil.FiniteDifferences3D
 
   Modules generated in caller
   ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    Data
+    •  Data
 
-  To see a description of a function, macro or module type ?<functionname>, ?<macroname> (including the @) or ?<modulename>, respectively.
+  To see a description of a macro or module type ?<macroname> (including the @) or ?<modulename>, respectively.
 ```
 
 ## Concise single/multi-XPU miniapps
@@ -328,7 +365,7 @@ All miniapp codes follow a similar structure and permit serial and threaded CPU 
 
 All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-XPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
 ```sh
-$ julia --project --check-bound=no -O3 <miniapp_code>.jl
+$ julia --project --check-bounds=no -O3 <miniapp_code>.jl
 ```
 
 Note: refer to the documentation of your Supercomputing Centre for instructions to run Julia at scale. Instructions for running on the Piz Daint GPU supercomputer at the [Swiss National Supercomputing Centre](https://www.cscs.ch/computers/piz-daint/) can be found [here](https://user.cscs.ch/tools/interactive/julia/) and for running on the octopus GPU supercomputer at the [Swiss Geocomputing Centre](https://wp.unil.ch/geocomputing/octopus/) can be found [here](https://gist.github.com/luraess/45a7a4059d8ace694812e7e301f1a258).

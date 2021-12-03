@@ -58,11 +58,12 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
         kernel = substitute(kernel, :(Data.Array), :(Data.DeviceArray))
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-    if (package == PKG_CUDA)
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$INT_CUDA))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$INT_CUDA))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$INT_CUDA))
+    if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
     if (package == PKG_CUDA)
         body = add_threadids(indices, ranges, body)
