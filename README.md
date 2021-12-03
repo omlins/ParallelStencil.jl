@@ -439,7 +439,7 @@ The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing 
 *The animation depicts the formation of fluid escape pipes in two-phase media, owing to decompaction weakening running the miniapp [HydroMech2D.jl](/miniapps/HydroMech2D.jl). Top row: evolution of the porosity distribution and effective pressure. Bottom row: Darcy flux (relative fluid to solid motion) and solid (porous matrix) deformation.*
 
 ## Dependencies
-ParallelStencil relies on the Julia CUDA package ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]) and [MacroTools.jl].
+ParallelStencil relies on the Julia CUDA package ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]), [MacroTools.jl] and [StaticArrays.jl].
 
 ## Installation
 ParallelStencil may be installed directly with the [Julia package manager](https://docs.julialang.org/en/v1/stdlib/Pkg/index.html) from the REPL:
@@ -480,6 +480,7 @@ To discuss numerical/domain-science issues, please post on Julia Discourse in th
 [MPI.jl]: https://github.com/JuliaParallel/MPI.jl
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
+[StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
 [Julia CUDA paper 1]: https://doi.org/10.1109/TPDS.2018.2872064
 [Julia CUDA paper 2]: https://doi.org/10.1016/j.advengsoft.2019.02.002
 [GJI2019]: https://doi.org/10.1093/gji/ggz239
