@@ -260,44 +260,65 @@ search: ParallelStencil @init_parallel_stencil
 
   https://github.com/omlins/ParallelStencil.jl
 
-  Macros and functions
-  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
+  Primary macros
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    @init_parallel_stencil
+    •  @init_parallel_stencil
 
-    •    @parallel
+    •  @parallel
 
-    •    @hide_communication
+    •  @hide_communication
 
-    •    @zeros
+    •  @zeros
 
-    •    @ones
+    •  @ones
 
-    •    @rand
+    •  @rand
 
   │ Advanced
   │
-  │    •    @parallel_indices
+  │    •  @parallel_indices
   │
-  │    •    @parallel_async
+  │    •  @parallel_async
   │
-  │    •    @synchronize
+  │    •  @synchronize
+
+  Macros available for @parallel_indices kernels
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
+
+    •  @ps_show
+
+    •  @ps_println
+
+  │ Advanced
+  │
+  │    •  @gridDim
+  │
+  │    •  @blockIdx
+  │
+  │    •  @blockDim
+  │
+  │    •  @threadIdx
+  │
+  │    •  @sync_threads
+  │
+  │    •  @sharedMem
 
   Submodules
   ≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    ParallelStencil.FiniteDifferences1D
+    •  ParallelStencil.FiniteDifferences1D
 
-    •    ParallelStencil.FiniteDifferences2D
+    •  ParallelStencil.FiniteDifferences2D
 
-    •    ParallelStencil.FiniteDifferences3D
+    •  ParallelStencil.FiniteDifferences3D
 
   Modules generated in caller
   ≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡≡
 
-    •    Data
+    •  Data
 
-  To see a description of a function, macro or module type ?<functionname>, ?<macroname> (including the @) or ?<modulename>, respectively.
+  To see a description of a macro or module type ?<macroname> (including the @) or ?<modulename>, respectively.
 ```
 
 ## Concise single/multi-XPU miniapps
