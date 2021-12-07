@@ -5,7 +5,7 @@ import .ParallelKernel: ENABLE_CUDA  # ENABLE_CUDA must also always be accessibl
 end
 import .ParallelKernel: checkargs_init, check_numbertype, eval_arg, is_function, is_call, gensym_world
 import .ParallelKernel: PKG_CUDA, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_THREADS, INDICES
-import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, prettystring, @gorgeousexpand, gorgeousstring
+import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
 
 
 ## CONSTANTS
