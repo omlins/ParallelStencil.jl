@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, SUPPORTED_PACKAGES, PKG_CUDA
-import ParallelStencil.ParallelKernel: @require, @symbols, longnameof
+import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: checkargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
