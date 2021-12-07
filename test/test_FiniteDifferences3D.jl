@@ -11,6 +11,7 @@ end
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+        @require !@is_initialized()
         @init_parallel_stencil($package, Float64, 3)
         @require @is_initialized()
         nx, ny, nz = 7, 5, 6
@@ -39,7 +40,6 @@ end
         Rxxyyzz = @zeros(nx+2, ny+2, nz+2);
         @testset "1. compute macros" begin
             @testset "differences" begin
-                @require @is_initialized()
                 @parallel  d_xa!(R, Ax)      = (@all(R) = @d_xa(Ax); return)
                 @parallel  d_ya!(R, Ay)      = (@all(R) = @d_ya(Ay); return)
                 @parallel  d_za!(R, Az)      = (@all(R) = @d_za(Az); return)
@@ -60,7 +60,6 @@ end
                 R.=0; @parallel d2_zi!(R, Axxyyzz);  @test all(R .== (Axxyyzz[2:end-1,2:end-1,3:end].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,2:end-1,1:end-2]))
             end;
             @testset "selection" begin
-                @require @is_initialized()
                 @parallel all!(R, A)        = (@all(R) = @all(A); return)
                 @parallel inn!(R, Axxyyzz)  = (@all(R) = @inn(Axxyyzz); return)
                 @parallel inn_x!(R, Axx)    = (@all(R) = @inn_x(Axx); return)
@@ -79,7 +78,6 @@ end
                 R.=0; @parallel inn_yz!(R, Ayyzz);  @test all(R .== Ayyzz[      :,2:end-1,2:end-1])
             end;
             @testset "averages" begin
-                @require @is_initialized()
                 @parallel av!(R, Axyz)      = (@all(R) = @av(Axyz); return)
                 @parallel av_xa!(R, Ax)     = (@all(R) = @av_xa(Ax); return)
                 @parallel av_ya!(R, Ay)     = (@all(R) = @av_ya(Ay); return)
@@ -108,14 +106,12 @@ end
                 R.=0; @parallel av_yzi!(R, Axxyz);  @test all(R .== (Axxyz[2:end-1,1:end-1,1:end-1].+Axxyz[2:end-1,2:end,1:end-1].+Axxyz[2:end-1,1:end-1,2:end].+Axxyz[2:end-1,2:end,2:end])*0.25)
             end;
             @testset "others" begin
-                @require @is_initialized()
                 @parallel maxloc!(R, Axxyyzz) = (@all(R) = @maxloc(Axxyyzz); return)
                 R.=0; @parallel maxloc!(R, Axxyyzz); @test all(R .== max.(max.(max.(max.(max.(max.(Axxyyzz[1:end-2,2:end-1,2:end-1],Axxyyzz[3:end,2:end-1,2:end-1]),Axxyyzz[2:end-1,2:end-1,2:end-1]),Axxyyzz[2:end-1,1:end-2,2:end-1]),Axxyyzz[2:end-1,3:end,2:end-1]),Axxyyzz[2:end-1,2:end-1,1:end-2]),Axxyyzz[2:end-1,2:end-1,3:end]))
             end;
         end;
         @testset "2. apply masks" begin
             @testset "selection" begin
-                @require @is_initialized()
                 @parallel inn_all!(Rxxyyzz, A)       = (@inn(Rxxyyzz) = @all(A); return)
                 @parallel inn_inn!(Rxxyyzz, Axxyyzz) = (@inn(Rxxyyzz) = @inn(Axxyyzz); return)
                 Rxxyyzz.=0; @parallel inn_all!(Rxxyyzz, A);        @test all(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== A)
@@ -124,7 +120,6 @@ end
                 Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;               @test all(Rxxyyzz .== 0)  # Test that boundary values remained zero.
             end;
             @testset "differences" begin
-                @require @is_initialized()
                 @parallel  inn_d_xa!(Rxxyyzz, Ax)       = (@inn(Rxxyyzz) = @d_xa(Ax); return)
                 @parallel  inn_d_yi!(Rxxyyzz, Axxyzz)   = (@inn(Rxxyyzz) = @d_yi(Axxyzz); return)
                 @parallel  inn_d2_yi!(Rxxyyzz, Axxyyzz) = (@inn(Rxxyyzz) = @d2_yi(Axxyyzz); return)

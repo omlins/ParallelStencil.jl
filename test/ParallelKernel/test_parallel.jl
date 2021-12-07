@@ -2,8 +2,8 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, longnameof, @prettyexpand, prettystring
-import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel, parallel_indices, synchronize
+import ParallelStencil.ParallelKernel: @require, @prettystring
+import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -14,27 +14,28 @@ end
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
+            @require !@is_initialized()
             @init_parallel_kernel($package, Float64)
             @require @is_initialized()
             @testset "@parallel" begin
-                @static if $package == PKG_CUDA
-                    call = prettystring(parallel(:(f(A))))
-                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))))) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))", call)
+                @static if $package == $PKG_CUDA
+                    call = @prettystring(1, @parallel f(A))
+                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))))) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
                     @test occursin("CUDA.synchronize()", call)
-                    call = prettystring(parallel(:ranges, :(f(A))))
-                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)))) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges))) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges))", call)
-                    call = prettystring(parallel(:nblocks, :nthreads, :(f(A))))
-                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))", call)
-                    call = prettystring(parallel(:ranges, :nblocks, :nthreads, :(f(A))))
-                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges))", call)
-                    call = prettystring(parallel(:nblocks, :nthreads, :(stream=mystream), :(f(A))))
-                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))", call)
-                elseif $package == PKG_THREADS
-                    @test prettystring(parallel(:(f(A)))) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))"
-                    @test prettystring(parallel(:ranges, :(f(A)))) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges))"
-                    @test prettystring(parallel(:nblocks, :nthreads, :(f(A)))) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))"
-                    @test prettystring(parallel(:ranges, :nblocks, :nthreads, :(f(A)))) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges))"
-                    @test prettystring(parallel(:(stream=mystream), :(f(A)))) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))"
+                    call = @prettystring(1, @parallel ranges f(A))
+                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)))) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges))) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
+                    call = @prettystring(1, @parallel nblocks nthreads f(A))
+                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                    call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
+                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
+                    call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
+                    @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                elseif $package == $PKG_THREADS
+                    @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
+                    @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
+                    @test @prettystring(1, @parallel nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))"
+                    @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
+                    @test @prettystring(1, @parallel stream=mystream f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                 end;
             end;
             @testset "@parallel_indices (1D)" begin
@@ -83,63 +84,70 @@ end
                 @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
             end;
             @testset "@parallel_async" begin
-                @static if $package == PKG_CUDA
-                    call = prettystring(parallel(:(f(A)); async=true))
+                @static if $package == $PKG_CUDA
+                    call = @prettystring(1, @parallel_async f(A))
                     @test !occursin("CUDA.synchronize()", call)
                 end;
             end;
             @testset "@synchronize" begin
-                @static if $package == PKG_CUDA
-                    @test prettystring(synchronize()) == "CUDA.synchronize()"
+                @static if $package == $PKG_CUDA
+                    @test @prettystring(1, @synchronize()) == "CUDA.synchronize()"
                 end;
             end;
             @reset_parallel_kernel()
         end;
         @testset "2. parallel macros (literal conversion)" begin
             @testset "@parallel_indices (Float64)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, Float64)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
                 @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
                 @reset_parallel_kernel()
             end;
             @testset "@parallel_indices (Float32)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, Float32)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
                 @test occursin("A[ix] = A[ix] + 1.0f0\n", expansion)
                 @reset_parallel_kernel()
             end;
             @testset "@parallel_indices (Float16)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, Float16)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
                 @test occursin("A[ix] = A[ix] + Float16(1.0)\n", expansion)
                 @reset_parallel_kernel()
             end;
             @testset "@parallel_indices (ComplexF64)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, ComplexF64)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
                 @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
                 @reset_parallel_kernel()
             end;
             @testset "@parallel_indices (ComplexF32)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, ComplexF32)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
                 @test occursin("A[ix] = ((2.0f0 - 1.0f0im) - A[ix]) + 1.0f0\n", expansion)
                 @reset_parallel_kernel()
             end;
             @testset "@parallel_indices (ComplexF16)" begin
+                @require !@is_initialized()
                 @init_parallel_kernel($package, ComplexF16)
                 @require @is_initialized()
-                expansion = string(@prettyexpand @parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
+                expansion = @prettystring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0 - 1.0im - A[ix] + 1.0; return))
                 @test occursin("A[ix] = ((Float16(2.0) - Float16(1.0) * im) - A[ix]) + Float16(1.0)\n", expansion)
                 @reset_parallel_kernel()
             end;
         end
         @testset "3. Exceptions" begin
+            @require !@is_initialized()
             @init_parallel_kernel($package, Float64)
             @require @is_initialized
             @testset "arguments @parallel" begin
