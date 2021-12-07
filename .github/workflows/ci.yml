@@ -2,6 +2,8 @@ name: CI
 on:
   - push
   - pull_request
+env:
+  JULIA_NUM_THREADS: 2
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
