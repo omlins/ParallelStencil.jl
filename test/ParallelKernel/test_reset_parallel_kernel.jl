@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, SUPPORTED_PACKAGES, PKG_CUDA, PKG_NONE, NUMBERTYPE_NONE
-import ParallelStencil.ParallelKernel: @require, @symbols, longnameof
+import ParallelStencil.ParallelKernel: @require, @symbols
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
