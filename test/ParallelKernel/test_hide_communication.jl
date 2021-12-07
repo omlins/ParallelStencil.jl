@@ -2,8 +2,8 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, longnameof, @prettyexpand, prettystring, @gorgeousexpand, gorgeousstring
-import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication, hide_communication_cuda
+import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring
+import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_cuda
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -14,6 +14,7 @@ end
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. hide_communication macro" begin
+            @require !@is_initialized()
             @init_parallel_kernel($package, Float64)
             @require @is_initialized()
             @testset "@hide_communication boundary_width block (macro expansion)" begin
@@ -25,7 +26,6 @@ end
                 end;
             end;
             @testset "@hide_communication" begin
-                @require @is_initialized()
                 @parallel_indices (ix,iy,iz) function add_indices!(A)
                     A[ix,iy,iz] = A[ix,iy,iz] + ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
                     return
@@ -99,6 +99,7 @@ end
             @reset_parallel_kernel()
         end;
         @testset "2. Exceptions" begin
+            @require !@is_initialized()
             @init_parallel_kernel($package, Float64)
             @require @is_initialized
             @testset "arguments @hide_communication" begin
