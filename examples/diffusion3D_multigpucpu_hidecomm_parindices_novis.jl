@@ -1,6 +1,5 @@
 const USE_GPU = true
 using ImplicitGlobalGrid
-import MPI
 using ParallelStencil
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 3);
