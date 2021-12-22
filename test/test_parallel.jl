@@ -40,13 +40,25 @@ end
                 end;
             end;
             @testset "@parallel kernel" begin
-                A  = @zeros(4, 5, 6)
-                @parallel function write_indices!(A)
-                    @all(A) = $ix + ($iy-1)*size(A,1) + ($iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
-                    return
+                @testset "addition of range arguments" begin
+                    expansion = @prettystring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                    @test occursin("f(A, B, c::T, var\"##ranges, ParallelStencil.ParallelKernel#260\"::Tuple{UnitRange, UnitRange, UnitRange}, var\"##rangelength_x, ParallelStencil.ParallelKernel#261\"::Int64, var\"##rangelength_y, ParallelStencil.ParallelKernel#262\"::Int64, var\"##rangelength_z, ParallelStencil.ParallelKernel#263\"::Int64", expansion)
                 end
-                @parallel write_indices!(A);
-                @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                @testset "Data.Array to Data.DeviceArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.Array, B::Data.Array, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceArray, B::Data.DeviceArray,", expansion)
+                    end
+                end
+                @testset "@parallel kernel (3D)" begin
+                    A  = @zeros(4, 5, 6)
+                    @parallel function write_indices!(A)
+                        @all(A) = $ix + ($iy-1)*size(A,1) + ($iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
+                        return
+                    end
+                    @parallel write_indices!(A);
+                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                end
             end;
             @testset "apply masks" begin
                 expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
@@ -55,13 +67,27 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. Exceptions" begin
+        @testset "2. parallel macros (numbertype ommited)" begin
+            @require !@is_initialized()
+            @init_parallel_stencil(package = $package, ndims = 3)
+            @require @is_initialized
+            @testset "Data.Array{T} to Data.DeviceArray{T}" begin
+                @static if $package == $PKG_CUDA
+                    expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                    @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
+                end
+            end
+            @reset_parallel_stencil()
+        end
+        @testset "3. Exceptions" begin
             @init_parallel_stencil($package, Float64, 3)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                  # Error: isempty(args)
                 @test_throws ArgumentError checkargs_parallel(:(f()), :(something));                              # Error: last arg is not function or a kernel call.
                 @test_throws ArgumentError checkargs_parallel(:(f()=99), :(something));                           # Error: last arg is not function or a kernel call.
+                @test_throws ArgumentError checkargs_parallel(:(f(;s=1)));                                        # Error: function call with keyword argument.
+                @test_throws ArgumentError checkargs_parallel(:(f(;s=1)=(99*s; return)))                          # Error: function definition with keyword argument.
                 @test_throws ArgumentError checkargs_parallel(:(something), :(f()=99));                           # Error: if last arg is a function, then there cannot be any other argument.
                 @test_throws ArgumentError checkargs_parallel(:ranges, :nblocks, :nthreads, :something, :(f()));  # Error: if last arg is a kernel call, then we have an error if length(posargs) > 3
                 @test_throws ArgumentError validate_body(:(a = b + 1))
