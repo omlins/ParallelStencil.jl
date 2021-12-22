@@ -91,7 +91,7 @@ end
 function hide_communication_cuda(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr)
     compcall, bc_and_commcalls = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
-    posargs, kwargs, compkernelcall = split_args(parallel_args)
+    posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
     if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM) end
     if (length(posargs) > 0) @ArgumentError(ERRMSG_INVALID_COMP) end
     bc_and_commcalls = process_bc_and_commcalls(bc_and_commcalls)
@@ -116,7 +116,7 @@ end
 function hide_communication_cuda(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
     compcall, = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
-    posargs, kwargs, compkernelcall = split_args(parallel_args)
+    posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
     if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM) end
     if (length(posargs) > 0) @ArgumentError(ERRMSG_INVALID_COMP) end
     ranges = :(ParallelStencil.ParallelKernel.get_ranges($(compkernelcall.args[2:end]...)))
@@ -145,10 +145,10 @@ function extract_calls(block::Expr)
 end
 
 function process_bc_and_commcalls(block::Expr)
-    postwalk(block) do x
+    return postwalk(block) do x
         if !is_parallel_call(x) return x; end
         @capture(x, @parallel args__) || @ModuleInternalError("a @parallel call could not be pattern matched.")
-        posargs, kwargs = split_args(args)
+        posargs, kwargs = split_parallel_args(args)
         if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM) end
         if (length(posargs) != 1) @ArgumentError(ERRMSG_INVALID_BC_COMM) end
         return :(@parallel $(args[1:end-1]...) stream = ParallelStencil.ParallelKernel.get_priority_custream(1) $(args[end]))
