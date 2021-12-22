@@ -24,21 +24,37 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
 """
 
 function Data_cuda(numbertype::DataType)
-    :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-        import CUDA
-        Number         = $numbertype
-        Array{N}       = CUDA.CuArray{$numbertype, N}
-        DeviceArray{N} = CUDA.CuDeviceArray{$numbertype, N}
-    end)
+    if numbertype == NUMBERTYPE_NONE
+        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import CUDA
+            Array{T, N}       = CUDA.CuArray{T, N}
+            DeviceArray{T, N} = CUDA.CuDeviceArray{T, N}
+        end)
+    else
+        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import CUDA
+            Number         = $numbertype
+            Array{N}       = CUDA.CuArray{$numbertype, N}
+            DeviceArray{N} = CUDA.CuDeviceArray{$numbertype, N}
+        end)
+    end
 end
 
 function Data_threads(numbertype::DataType)
-    :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-        import Base
-        Number         = $numbertype
-        Array{N}       = Base.Array{$numbertype, N}
-        DeviceArray{N} = Base.Array{$numbertype, N}
-    end)
+    if numbertype == NUMBERTYPE_NONE
+        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import Base
+            Array{T, N}       = Base.Array{T, N}
+            DeviceArray{T, N} = Base.Array{T, N}
+        end)
+    else
+        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import Base
+            Number         = $numbertype
+            Array{N}       = Base.Array{$numbertype, N}
+            DeviceArray{N} = Base.Array{$numbertype, N}
+        end)
+    end
 end
 
 function Data_none()
