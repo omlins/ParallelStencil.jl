@@ -86,13 +86,17 @@ macro synchronize_threads(args...)      check_initialized(); esc(synchronize(arg
 function checkargs_parallel(args...)
     if isempty(args) @ArgumentError("arguments missing.") end
     if !is_call(args[end]) @ArgumentError("the last argument must be a kernel call (obtained: $(args[end])).") end
-    posargs, = split_args(args)
+    posargs, = split_parallel_args(args)
     if length(posargs) > 3 @ArgumentError("too many positional arguments.") end
+    kernelcall = args[end]
+    if length(extract_kernelcall_args(kernelcall)[2]) > 0 @ArgumentError("keyword arguments are not allowed int @parallel kernel calls.") end
 end
 
 function checkargs_parallel_indices(args...)
     if (length(args) != 2) @ArgumentError("wrong number of arguments.") end
-    if !is_function(args[end]) @ArgumentError("the last argument must be a function definition (obtained: $(args[end])).") end
+    if !is_kernel(args[end]) @ArgumentError("the last argument must be a kernel definition (obtained: $(args[end])).") end
+    kernel = args[end]
+    if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed int the signature of @parallel_indices kernels.") end
 end
 
 
@@ -101,7 +105,7 @@ end
 parallel_async(args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(args...; package=package, async=true)
 
 function parallel(args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
-    posargs, kwargs, kernelarg = split_args(args)
+    posargs, kwargs, kernelarg = split_parallel_args(args)
     if     (package == PKG_CUDA)    parallel_call_cuda(posargs..., kernelarg, kwargs, async)
     elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async) # Ignore keyword args as they are not for the threads case (noted in doc).
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
