@@ -1,8 +1,8 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package,  @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
-import ParallelStencil: checkargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims
+import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims
 using ParallelStencil.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -30,7 +30,25 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. Exceptions" begin
+        @testset "2. initialization of ParallelStencil without numbertype" begin
+            @require !@is_initialized()
+            @init_parallel_stencil(package = $package, ndims = 3)
+            @testset "initialized" begin
+                @test @is_initialized()
+                @test @get_package() == $package
+                @test @get_numbertype() == NUMBERTYPE_NONE
+                @test @get_ndims() == 3
+            end;
+            @testset "Data" begin
+                @test @isdefined(Data)
+                @test length(@symbols($(@__MODULE__), Data)) > 1
+                @test !(Symbol("Number") in @symbols($(@__MODULE__), Data))
+                @test Symbol("Array") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
+            end;
+            @reset_parallel_stencil()
+        end;
+        @testset "3. Exceptions" begin
             @testset "already initialized" begin
                 set_initialized(true)
                 set_package(:CUDA)
@@ -46,10 +64,18 @@ end
                 set_ndims(NDIMS_NONE)
             end;
             @testset "arguments" begin
-                MyType = Float32
-                @test_throws ArgumentError checkargs_init(5, Float64, 3)
-                @test_throws ArgumentError checkargs_init($package, MyType, 3)
-                @test_throws ArgumentError checkargs_init($package, Float64, Float64)
+                @test_throws ArgumentError extract_posargs_init($(@__MODULE__), 99, :Float64, 3)
+                @test_throws ArgumentError extract_posargs_init($(@__MODULE__), nameof($package), :Char, 3)
+                @test_throws ArgumentError extract_posargs_init($(@__MODULE__), nameof($package), :Float64, 77)
+                @test_throws ArgumentEvaluationError extract_posargs_init($(@__MODULE__), nameof($package), :MyType, 3)
+                @test_throws ArgumentEvaluationError extract_posargs_init($(@__MODULE__), nameof($package), :Float64, :myndims)
+                @test_throws ArgumentError extract_kwargs_init($(@__MODULE__), Dict(:package => 99, :numbertype => :Float64, :ndims => 3))
+                @test_throws ArgumentError extract_kwargs_init($(@__MODULE__), Dict(:package => nameof($package), :numbertype => :Char, :ndims => 3))
+                @test_throws ArgumentError extract_kwargs_init($(@__MODULE__), Dict(:package => nameof($package), :numbertype => :Float64, :ndims => 77))
+                @test_throws ArgumentEvaluationError extract_kwargs_init($(@__MODULE__), Dict(:package => nameof($package), :numbertype => :MyType, :ndims => 3))
+                @test_throws ArgumentEvaluationError extract_kwargs_init($(@__MODULE__), Dict(:package => nameof($package), :numbertype => :MyType, :ndims => :myndims))
+                @test_throws ArgumentError extract_kwargs_init($(@__MODULE__), Dict(:ndims => 77))
+                @test_throws ArgumentEvaluationError extract_kwargs_init($(@__MODULE__), Dict(:ndims => :myndims))
             end;
             @testset "check_initialized" begin
                 @require !is_initialized()
