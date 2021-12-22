@@ -9,13 +9,19 @@ Initialize the package ParallelKernel, giving access to its main functionality. 
 
 See also: [`Data`](@ref)
 """
-macro init_parallel_kernel(package, numbertype)
+macro init_parallel_kernel(args...)
     check_already_initialized()
-    numbertype_val = eval_arg(__module__, numbertype)
-    checkargs_init(package, numbertype_val)
+    posargs, kwargs_expr = split_args(args)
+    if (length(args) > 2)            @ArgumentError("too many arguments.")
+    elseif (0 < length(posargs) < 2) @ArgumentError("there must be either two or zero positional arguments.")
+    end
+    kwargs = split_kwargs(kwargs_expr)
+    if (length(posargs) == 2) package, numbertype_val = extract_posargs_init(__module__, posargs...)
+    else                      package, numbertype_val = extract_kwargs_init(__module__, kwargs)
+    end
+    if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
     esc(init_parallel_kernel(__module__, package, numbertype_val))
 end
-macro init_parallel_kernel(args...) @ArgumentError("wrong number of arguments."); end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType; datadoc_call=:())
     if package == PKG_CUDA
@@ -60,4 +66,19 @@ let
     check_already_initialized() = if is_initialized() @IncoherentCallError("ParallelKernel has already been initialized.") end
 end
 
-checkargs_init(package, numbertype) = (check_package(package); check_numbertype(numbertype);)
+function extract_posargs_init(caller::Module, package, numbertype)  # NOTE: this function takes not only symbols: numbertype can be anything that evaluates to a type in the caller and for package will be checked wether it is a symbol in check_package and a proper error message given if not.
+    numbertype_val = eval_arg(caller, numbertype)
+    check_package(package)
+    check_numbertype(numbertype_val)
+    return package, numbertype_val
+end
+
+function extract_kwargs_init(caller::Module, kwargs::Dict)
+    if (:package in keys(kwargs)) package = kwargs[:package]; check_package(package)
+    else                          package = PKG_NONE
+    end
+    if (:numbertype in keys(kwargs)) numbertype_val = eval_arg(caller, kwargs[:numbertype]); check_numbertype(numbertype_val)
+    else                             numbertype_val = NUMBERTYPE_NONE
+    end
+    return package, numbertype_val
+end
