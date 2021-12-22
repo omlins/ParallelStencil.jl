@@ -28,14 +28,20 @@ Initialize the package ParallelStencil, giving access to its main functionality.
 
 See also: [`Data`](@ref)
 """
-macro init_parallel_stencil(package, numbertype, ndims)
-    numbertype_val = eval_arg(__module__, numbertype)
-    ndims_val      = eval_arg(__module__, ndims)
-    check_already_initialized(package, numbertype_val, ndims_val);
-    checkargs_init(package, numbertype_val, ndims_val)
+macro init_parallel_stencil(args...)
+    posargs, kwargs_expr = split_args(args)
+    if (length(args) > 3)            @ArgumentError("too many arguments.")
+    elseif (0 < length(posargs) < 3) @ArgumentError("there must be either three or zero positional arguments.")
+    end
+    kwargs = split_kwargs(kwargs_expr)
+    if (length(posargs) == 3) package, numbertype_val, ndims_val = extract_posargs_init(__module__, posargs...)
+    else                      package, numbertype_val, ndims_val = extract_kwargs_init(__module__, kwargs)
+    end
+    if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
+    if (ndims == NDIMS_NONE) @ArgumentError("the ndims argument cannot be ommited.") end #TODO: this error message will disappear, once the ndims can be defined at runtime.
+    check_already_initialized(package, numbertype_val, ndims_val)
     esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val))
 end
-macro init_parallel_stencil(args...) @ArgumentError("wrong number of arguments."); end
 
 function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer)
     datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC, "@init_parallel_kernel" => "@init_parallel_stencil") Data)
@@ -46,6 +52,7 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     set_initialized(true)
     return nothing
 end
+
 
 macro is_initialized() is_initialized() end
 macro get_package() get_package() end
@@ -78,4 +85,17 @@ let
     end
 end
 
-checkargs_init(package, numbertype, ndims) = (checkargs_init(package, numbertype); check_ndims(ndims);)
+function extract_posargs_init(caller::Module, package, numbertype, ndims) # NOTE: this function takes not only symbols: numbertype can be anything that evaluates to a type in the caller and for package will be checked wether it is a symbol in check_package and a proper error message given if not.
+    package, numbertype_val = extract_posargs_init(caller, package, numbertype)
+    ndims_val = eval_arg(caller, ndims)
+    check_ndims(ndims_val)
+    return package, numbertype_val, ndims_val
+end
+
+function extract_kwargs_init(caller::Module, kwargs::Dict)
+    package, numbertype_val = ParallelKernel.extract_kwargs_init(caller, kwargs)
+    if (:ndims in keys(kwargs)) ndims_val = eval_arg(caller, kwargs[:ndims]); check_ndims(ndims_val)
+    else                        ndims_val = NUMBERTYPE_NONE
+    end
+    return package, numbertype_val, ndims_val
+end
