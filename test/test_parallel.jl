@@ -1,7 +1,7 @@
 using Test
 using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS, INDICES
-import ParallelStencil: @require, @prettystring
+import ParallelStencil: @require, @prettystring, @gorgeousstring
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
@@ -41,8 +41,8 @@ end
             end;
             @testset "@parallel kernel" begin
                 @testset "addition of range arguments" begin
-                    expansion = @prettystring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                    @test occursin("f(A, B, c::T, var\"##ranges, ParallelStencil.ParallelKernel#260\"::Tuple{UnitRange, UnitRange, UnitRange}, var\"##rangelength_x, ParallelStencil.ParallelKernel#261\"::Int64, var\"##rangelength_y, ParallelStencil.ParallelKernel#262\"::Int64, var\"##rangelength_z, ParallelStencil.ParallelKernel#263\"::Int64", expansion)
+                    expansion = @gorgeousstring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                    @test occursin("f(A, B, c::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
                 end
                 @testset "Data.Array to Data.DeviceArray" begin
                     @static if $package == $PKG_CUDA
