@@ -96,7 +96,7 @@ function checkargs_parallel_indices(args...)
     if (length(args) != 2) @ArgumentError("wrong number of arguments.") end
     if !is_kernel(args[end]) @ArgumentError("the last argument must be a kernel definition (obtained: $(args[end])).") end
     kernel = args[end]
-    if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed int the signature of @parallel_indices kernels.") end
+    if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed in the signature of @parallel_indices kernels.") end
 end
 
 
