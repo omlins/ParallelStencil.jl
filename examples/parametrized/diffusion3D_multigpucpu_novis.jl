@@ -1,6 +1,5 @@
 const USE_GPU = true
 using ImplicitGlobalGrid
-import MPI
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -9,12 +8,12 @@ else
     @init_parallel_stencil(package=Threads, ndims=3);
 end
 
-@parallel function diffusion3D_step!(T2::Data.Array{_T}, T::Data.Array{_T}, Ci::Data.Array{_T}, lam::_T, dt::_T, _dx::_T, _dy::_T, _dz::_T) where _T <: ParallelStencil.PSNumber
+@parallel function diffusion3D_step!(T2::Data.Array{_T}, T::Data.Array{_T}, Ci::Data.Array{_T}, lam::_T, dt::_T, _dx::_T, _dy::_T, _dz::_T) where _T <: PSNumber
     @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2));
     return
 end
 
-function diffusion3D(lam::_T, c0::_T, lx::_T, ly::_T, lz::_T) where _T <: ParallelStencil.PSNumber
+function diffusion3D(lam::_T, c0::_T, lx::_T, ly::_T, lz::_T) where _T <: PSNumber
 
 # Numerics
 nx, ny, nz = 512, 512, 512;                              # Number of gridpoints in dimensions x, y and z
