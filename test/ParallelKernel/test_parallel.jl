@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, @prettystring
+import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -40,8 +40,8 @@ end
             end;
             @testset "@parallel_indices" begin
                 @testset "addition of range arguments" begin
-                    expansion = @prettystring(1, @parallel_indices (ix,iy) f(a::T, b::T) where T <: Union{Array{Float32}, Array{Float64}} = (println("a=$a, b=$b)"); return))
-                    @test occursin("f(a::T, b::T, var\"##ranges, ParallelStencil.ParallelKernel#260\"::Tuple{UnitRange, UnitRange, UnitRange}, var\"##rangelength_x, ParallelStencil.ParallelKernel#261\"::Int64, var\"##rangelength_y, ParallelStencil.ParallelKernel#262\"::Int64, var\"##rangelength_z, ParallelStencil.ParallelKernel#263\"::Int64", expansion)
+                    expansion = @gorgeousstring(1, @parallel_indices (ix,iy) f(a::T, b::T) where T <: Union{Array{Float32}, Array{Float64}} = (println("a=$a, b=$b)"); return))
+                    @test occursin("f(a::T, b::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
                 end
                 @testset "Data.Array to Data.DeviceArray" begin
                     @static if $package == $PKG_CUDA
