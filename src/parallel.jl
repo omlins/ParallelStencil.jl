@@ -24,12 +24,14 @@ macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...)
 
 function checkargs_parallel(args...)
     if isempty(args) @ArgumentError("arguments missing.") end
-    if is_function(args[end])  # Case: @parallel kernel
+    if is_kernel(args[end])  # Case: @parallel kernel
         if (length(args) != 1) @ArgumentError("wrong number of arguments in @parallel kernel call.") end
+        kernel = args[end]
+        if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed in the signature of @parallel kernels.") end
     elseif is_call(args[end])  # Case: @parallel <args...> kernelcall
         ParallelKernel.checkargs_parallel(args...)
     else
-        @ArgumentError("the last argument must be a function definition or a kernel call (obtained: $(args[end])).")
+        @ArgumentError("the last argument must be a kernel definition or a kernel call (obtained: $(args[end])).")
     end
 end
 
@@ -37,7 +39,7 @@ end
 ## GATEWAY FUNCTIONS
 
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
-    if is_function(args[end])
+    if is_kernel(args[end])
         numbertype = get_numbertype()
         ndims      = get_ndims()
         parallel_kernel(caller, package, numbertype, ndims, args...)

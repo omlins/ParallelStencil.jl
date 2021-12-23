@@ -11,7 +11,7 @@ else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
 using MacroTools
-import MacroTools: postwalk, isexpr, inexpr
+import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
 ## CONSTANTS AND TYPES
@@ -41,8 +41,9 @@ const BOUNDARY_WIDTH_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE_2D = Tuple{T, T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE = Tuple{T, T, T} where T <: Integer
 const OPERATORS = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
-const SUPPORTED_LITERALTYPES = [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
-const SUPPORTED_NUMBERTYPES  = [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
+const SUPPORTED_LITERALTYPES =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
+const SUPPORTED_NUMBERTYPES  =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
+const PKNumber               = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE = DataType
 const ERRMSG_UNSUPPORTED_PACKAGE = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE  = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
@@ -56,19 +57,17 @@ struct Dim3
 end
 
 
-## FUNCTIONS TO DEAL WITH FUNCTION DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
+## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
+
+extract_kernel_args(kernel::Expr)   = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
+get_body(kernel::Expr)              = return kernel.args[2]
+set_body!(kernel::Expr, body::Expr) = ((kernel.args[2] = body); return kernel)
 
 function push_to_signature!(kernel::Expr, arg::Expr)
-    push!(kernel.args[1].args, arg)
+    kernel_elems = splitdef(kernel)
+    push!(kernel_elems[:args], arg)
+    kernel = combinedef(kernel_elems)
     return kernel
-end
-
-function get_body(kernel::Expr)
-    return kernel.args[2]
-end
-
-function set_body!(kernel::Expr, body::Expr)
-    kernel.args[2] = body
 end
 
 function remove_return(body::Expr)
@@ -89,9 +88,9 @@ function add_return(body::Expr)
 end
 
 
-## FUNCTIONS TO DEAL WITH FUNCTION/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
+## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
-is_function(arg)    = ( isa(arg, Expr) && ( (arg.head == :function) || (arg.head == :(=) && isa(arg.args[1], Expr) && arg.args[1].head == :call) ) )
+is_kernel(arg)      = isdef(arg) # NOTE: to be replaced with MacroTools.isdef(arg): isdef is to be merged fixed in MacroTools (see temporary functions at the end of this file)
 is_call(arg)        = ( isa(arg, Expr) && (arg.head == :call) )
 is_block(arg)       = ( isa(arg, Expr) && (arg.head == :block) )
 is_parallel_call(x) = isexpr(x, :macrocall) && (x.args[1] == Symbol("@parallel") || x.args[1] == :(@parallel))
@@ -99,9 +98,27 @@ is_parallel_call(x) = isexpr(x, :macrocall) && (x.args[1] == Symbol("@parallel")
 macro get_args(args...) return args end
 extract_args(call::Expr, macroname::Symbol) = eval(substitute(deepcopy(call), macroname, Symbol("@get_args")))
 
-function split_args(args)
-    posargs   = [x for x in args[1:end-1] if !(isa(x,Expr) && x.head == :(=))]
-    kwargs    = [x for x in args[1:end-1] if isa(x,Expr) && x.head == :(=)]
+extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_kernelcall=true)
+
+function is_kwarg(arg; in_kernelcall=false)
+    if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
+    else             return ( isa(arg, Expr) && (arg.head == :(=)) )
+    end
+end
+
+function split_args(args; in_kernelcall=false)
+    posargs   = [x for x in args if !is_kwarg(x; in_kernelcall=in_kernelcall)]
+    kwargs    = [x for x in args if  is_kwarg(x; in_kernelcall=in_kernelcall)]
+    return posargs, kwargs
+end
+
+function split_kwargs(kwargs)
+    if !all(is_kwarg.(kwargs)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
+    return Dict(x.args[1] => x.args[2] for x in kwargs)
+end
+
+function split_parallel_args(args)
+    posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
     if any([x.args[1] in [:blocks, :threads] for x in kwargs]) @KeywordArgumentError("Invalid keyword argument in @parallel call: blocks / threads. They must be passed as positional arguments or been omited.") end
     return posargs, kwargs, kernelarg
@@ -119,7 +136,7 @@ end
 ## FUNCTIONS FOR COMMON MANIPULATIONS ON EXPRESSIONS
 
 function substitute(expr::Expr, old, new)
-    postwalk(expr) do x
+    return postwalk(expr) do x
         if x == old
             return new
         else
@@ -128,10 +145,11 @@ function substitute(expr::Expr, old, new)
     end
 end
 
-function inexpr_walk(expr::Expr, s::Symbol)
+function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
     postwalk(expr) do x
-        if ((isa(x,Expr) && x.head==s) || (isa(x,Symbol) && x==s)) found = true end
+        if (isa(x,Expr) && x.head==s) found = true end
+        if (!match_only_head && (isa(x,Symbol) && x==s)) found = true end
         return x
     end
     return found
@@ -200,3 +218,10 @@ function simplify_varnames!(expr::Expr)
     end
     return expr
 end
+
+
+## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)
+
+isdef(ex)     = isshortdef(ex) || islongdef(ex)
+islongdef(ex) = @capture(ex, function (fcall_ | fcall_) body_ end)
+isshortdef(ex) = MacroTools.isshortdef(ex)

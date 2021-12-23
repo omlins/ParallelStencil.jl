@@ -55,5 +55,6 @@ include("reset_parallel_kernel.jl")
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println
+export PKNumber
 
 end # Module ParallelKernel
