@@ -89,7 +89,7 @@ function checkargs_parallel(args...)
     posargs, = split_parallel_args(args)
     if length(posargs) > 3 @ArgumentError("too many positional arguments.") end
     kernelcall = args[end]
-    if length(extract_kernelcall_args(kernelcall)[2]) > 0 @ArgumentError("keyword arguments are not allowed int @parallel kernel calls.") end
+    if length(extract_kernelcall_args(kernelcall)[2]) > 0 @ArgumentError("keyword arguments are not allowed in @parallel kernel calls.") end
 end
 
 function checkargs_parallel_indices(args...)
