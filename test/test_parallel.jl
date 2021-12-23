@@ -73,7 +73,7 @@ end
             @require @is_initialized
             @testset "Data.Array{T} to Data.DeviceArray{T}" begin
                 @static if $package == $PKG_CUDA
-                    expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c::<:Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c<:Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
             end
