@@ -11,7 +11,10 @@ Call `zeros(numbertype, args...)`, where `numbertype` is the datatype selected w
     The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 """
 @doc ZEROS_DOC
-macro zeros(args...) check_initialized(); esc(_zeros(args...)); end
+macro zeros(args...)
+    check_initialized();
+    esc(_zeros(args...));
+end
 
 
 ##
@@ -27,7 +30,10 @@ Call `ones(numbertype, args...)`, where `numbertype` is the datatype selected wi
     The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 """
 @doc ONES_DOC
-macro ones(args...) check_initialized(); esc(_ones(args...)); end
+macro ones(args...)
+    check_initialized();
+    esc(_ones(args...));
+end
 
 
 ##
@@ -43,7 +49,10 @@ Call `rand(numbertype, args...)`, where `numbertype` is the datatype selected wi
     The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 """
 @doc RAND_DOC
-macro rand(args...) check_initialized(); esc(_rand(args...)); end
+macro rand(args...)
+    check_initialized();
+    esc(_rand(args...));
+end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
@@ -60,52 +69,47 @@ macro rand_threads(args...)  check_initialized(); esc(_rand(args...; package=PKG
 
 function _zeros(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
-    if !(package in SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(ParallelStencil.ParallelKernel.zeros_xpu($(args...); numbertype_default=$numbertype, package=Symbol($("$package"))))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_gpu($numbertype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($numbertype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _ones(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
-    if !(package in SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(ParallelStencil.ParallelKernel.ones_xpu($(args...); numbertype_default=$numbertype, package=Symbol($("$package"))))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_gpu($numbertype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($numbertype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _rand(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
-    if !(package in SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(ParallelStencil.ParallelKernel.rand_xpu($(args...); numbertype_default=$numbertype, package=Symbol($("$package"))))
-end
-
-function zeros_xpu(args...; numbertype_default::DataType=NUMBERTYPE_NONE, package::Symbol=PKG_NONE)
-    numbertype, args_remainder = determine_args(args...; numbertype_default=numbertype_default, package=package)
-    if     (package == PKG_CUDA)    return CUDA.zeros(numbertype, args_remainder...)
-    elseif (package == PKG_THREADS) return Base.zeros(numbertype, args_remainder...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($numbertype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($numbertype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function ones_xpu(args...; numbertype_default::DataType=NUMBERTYPE_NONE, package::Symbol=PKG_NONE)
-    numbertype, args_remainder = determine_args(args...; numbertype_default=numbertype_default, package=package)
-    if     (package == PKG_CUDA)    return CUDA.ones(numbertype, args_remainder...)
-    elseif (package == PKG_THREADS) return Base.ones(numbertype, args_remainder...)
-    end
-end
 
-function rand_xpu(args...; numbertype_default::DataType=NUMBERTYPE_NONE, package::Symbol=PKG_NONE)
-    numbertype, args_remainder = determine_args(args...; numbertype_default=numbertype_default, package=package)
-    if     (package == PKG_CUDA)    return CUDA.CuArray(rand(numbertype, args_remainder...))
-    elseif (package == PKG_THREADS) return Base.rand(numbertype, args_remainder...)
-    end
-end
+## RUNTIME ALLOCATOR FUNCTIONS
 
-function determine_args(args...; numbertype_default::DataType=NUMBERTYPE_NONE, package::Symbol=PKG_NONE)
-    if length(args) > 0 && isa(args[1], DataType)
-        numbertype     = args[1]
-        args_remainder = args[2:end]
-    elseif numbertype_default != NUMBERTYPE_NONE
-        numbertype = numbertype_default
-        args_remainder = args
-    else
-        @ArgumentError("the numbertype argument is mandatory when no default is set.")
-    end
-    return numbertype, args_remainder
+zeros_cpu(T0::DataType, T::DataType, args...) = Base.zeros(T, args...)               # If the user has passed a numbertype as first argument to @zeros, then the default numbertype added automatically by the @zeros macro (T0) is not used.
+ ones_cpu(T0::DataType, T::DataType, args...) = Base.ones(T, args...)                # ...
+ rand_cpu(T0::DataType, T::DataType, args...) = Base.rand(T, args...)                # ...
+
+zeros_gpu(T0::DataType, T::DataType, args...) = CUDA.zeros(T, args...)               # ...
+ ones_gpu(T0::DataType, T::DataType, args...) = CUDA.ones(T, args...)                # ...
+ rand_gpu(T0::DataType, T::DataType, args...) = CUDA.CuArray(Base.rand(T, args...))  # ...
+
+zeros_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.zeros(T0, args...))
+ ones_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.ones(T0, args...))
+ rand_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.rand(T0, args...))
+
+zeros_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.zeros(T0, args...))
+ ones_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.ones(T0, args...))
+ rand_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.CuArray(Base.rand(T0, args...)))
+
+function check_default_numbertype(T0::DataType)
+    if (T0 == NUMBERTYPE_NONE) @ArgumentError("the numbertype argument is mandatory in @zeros, @ones and @rand when no default is set.") end
 end
