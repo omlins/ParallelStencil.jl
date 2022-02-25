@@ -38,6 +38,12 @@ end
         Axxyyzz =  @rand(nx+2, ny+2, nz+2);
         R       = @zeros(nx  , ny  , nz  );
         Rxxyyzz = @zeros(nx+2, ny+2, nz+2);
+        x       = LinRange(zero(Data.Number), one(Data.Number), nx)
+        y       = LinRange(zero(Data.Number), one(Data.Number), ny)
+        z       = LinRange(zero(Data.Number), one(Data.Number), nz)
+        xvec    = Data.Array(x)
+        yvec    = Data.Array(y)
+        zvec    = Data.Array(z)
         @testset "1. compute macros" begin
             @testset "differences" begin
                 @parallel  d_xa!(R, Ax)      = (@all(R) = @d_xa(Ax); return)
@@ -68,6 +74,9 @@ end
                 @parallel inn_xy!(R, Axxyy) = (@all(R) = @inn_xy(Axxyy); return)
                 @parallel inn_xz!(R, Axxzz) = (@all(R) = @inn_xz(Axxzz); return)
                 @parallel inn_yz!(R, Ayyzz) = (@all(R) = @inn_yz(Ayyzz); return)
+                @parallel idx_x!(R, A)      = (@all(R) = @idx_x(A); return)
+                @parallel idx_y!(R, A)      = (@all(R) = @idx_y(A); return)
+                @parallel idx_z!(R, A)      = (@all(R) = @idx_z(A); return)
                 R.=0; @parallel all!(R, A);         @test all(R .== A)
                 R.=0; @parallel inn!(R, Axxyyzz);   @test all(R .== Axxyyzz[2:end-1,2:end-1,2:end-1])
                 R.=0; @parallel inn_x!(R, Axx);     @test all(R .== Axx[2:end-1,      :,      :])
@@ -76,6 +85,12 @@ end
                 R.=0; @parallel inn_xy!(R, Axxyy);  @test all(R .== Axxyy[2:end-1,2:end-1,      :])
                 R.=0; @parallel inn_xz!(R, Axxzz);  @test all(R .== Axxzz[2:end-1,      :,2:end-1])
                 R.=0; @parallel inn_yz!(R, Ayyzz);  @test all(R .== Ayyzz[      :,2:end-1,2:end-1])
+                R.=0; @parallel idx_x!(R, x); @test reduce(+, Rcol == x for Rcol in eachcol(collect(eachslice(R, dims=3))[1])) == size(R,2)
+                R.=0; @parallel idx_y!(R, y); @test reduce(+, Rrow == y for Rrow in eachrow(collect(eachslice(R, dims=3))[1])) == size(R,1)
+                R.=0; @parallel idx_z!(R, z); @test reduce(+, Rrow == z for Rrow in eachrow(collect(eachslice(R, dims=1))[1])) == size(R,2)
+                R.=0; @parallel idx_x!(R, xvec); @test reduce(+, Rcol == x for Rcol in eachcol(collect(eachslice(R, dims=3))[1])) == size(R,2)
+                R.=0; @parallel idx_y!(R, yvec); @test reduce(+, Rrow == y for Rrow in eachrow(collect(eachslice(R, dims=3))[1])) == size(R,1)
+                R.=0; @parallel idx_z!(R, zvec); @test reduce(+, Rrow == z for Rrow in eachrow(collect(eachslice(R, dims=1))[1])) == size(R,2)
             end;
             @testset "averages" begin
                 @parallel av!(R, Axyz)      = (@all(R) = @av(Axyz); return)

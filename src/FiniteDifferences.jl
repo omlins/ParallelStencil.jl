@@ -102,7 +102,7 @@ To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FiniteDifferences2D
 export @d_xa, @d_ya, @d_xi, @d_yi, @d2_xi, @d2_yi
-export @all, @inn, @inn_x, @inn_y
+export @all, @inn, @inn_x, @inn_y, @idx_x, @idx_y
 export @av, @av_xa, @av_ya, @av_xi, @av_yi
 export @maxloc, @minloc
 export @within
@@ -117,6 +117,8 @@ export @within
 @doc "`@inn(A)`: Select the inner elements of `A`. Corresponds to `A[2:end-1,2:end-1]`." :(@inn)
 @doc "`@inn_x(A)`: Select the inner elements of `A` in dimension x. Corresponds to `A[2:end-1,:]`." :(@inn_x)
 @doc "`@inn_y(A)`: Select the inner elements of `A` in dimension y. Corresponds to `A[:,2:end-1]`." :(@inn_y)
+@doc "`@idx_x(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[ix]`." :(@idx_x)
+@doc "`@idx_y(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iy]`." :(@idx_y)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y." :(@av)
 @doc "`@av_xa(A)`: Compute averages between adjacent elements of `A` along the dimension x." :(@av_xa)
 @doc "`@av_ya(A)`: Compute averages between adjacent elements of `A` along the dimension y." :(@av_ya)
@@ -139,6 +141,8 @@ macro    all(A::Symbol)  esc(:( $A[$ix  ,$iy  ] )) end
 macro    inn(A::Symbol)  esc(:( $A[$ixi ,$iyi ] )) end
 macro  inn_x(A::Symbol)  esc(:( $A[$ixi ,$iy  ] )) end
 macro  inn_y(A::Symbol)  esc(:( $A[$ix  ,$iyi ] )) end
+macro  idx_x(A::Symbol)  esc(:( $A[$ix] )) end
+macro  idx_y(A::Symbol)  esc(:( $A[$iy] )) end
 macro     av(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] + $A[$ix,$iy+1] + $A[$ix+1,$iy+1])*0.25 )) end
 macro  av_xa(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] )*0.5 )) end
 macro  av_ya(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix  ,$iy+1] )*0.5 )) end
@@ -155,6 +159,8 @@ macro within(macroname::String, A::Symbol)
     elseif macroname == "@inn"    esc(  :($ix<=size($A,1)-2 && $iy<=size($A,2)-2)  )
     elseif macroname == "@inn_x"  esc(  :($ix<=size($A,1)-2 && $iy<=size($A,2)  )  )
     elseif macroname == "@inn_y"  esc(  :($ix<=size($A,1)   && $iy<=size($A,2)-2)  )
+    elseif macroname == "@idx_y"  esc(  :($ix<=length($A))  )
+    elseif macroname == "@idx_y"  esc(  :($iy<=length($A))  )
     else error("unkown macroname: $macroname. If you want to add your own assignement macros, overwrite the macro 'within(macroname::String, A::Symbol)'; to still use the exising macro within as well call ParallelStencil.FiniteDifferences{1|2|3}D.@within(macroname, A) at the end.")
     end
 end
@@ -216,7 +222,7 @@ To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FiniteDifferences3D
 export @d_xa, @d_ya, @d_za, @d_xi, @d_yi, @d_zi, @d2_xi, @d2_yi, @d2_zi
-export @all, @inn, @inn_x, @inn_y, @inn_z, @inn_xy, @inn_xz, @inn_yz
+export @all, @inn, @inn_x, @inn_y, @inn_z, @inn_xy, @inn_xz, @inn_yz, @idx_x, @idx_y, @idx_z
 export @av, @av_xa, @av_ya, @av_za, @av_xi, @av_yi, @av_zi, @av_xya, @av_xza, @av_yza, @av_xyi, @av_xzi, @av_yzi #, @av_xya2, @av_xza2, @av_yza2
 export @maxloc, @minloc
 export @within
@@ -238,6 +244,9 @@ export @within
 @doc "`@inn_xy(A)`: Select the inner elements of `A` in dimensions x and y. Corresponds to `A[2:end-1,2:end-1,:]`." :(@inn_xy)
 @doc "`@inn_xz(A)`: Select the inner elements of `A` in dimensions x and z. Corresponds to `A[2:end-1,:,2:end-1]`." :(@inn_xz)
 @doc "`@inn_yz(A)`: Select the inner elements of `A` in dimensions y and z. Corresponds to `A[:,2:end-1,2:end-1]`." :(@inn_yz)
+@doc "`@idx_x(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[ix]`." :(@idx_x)
+@doc "`@idx_y(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iy]`." :(@idx_y)
+@doc "`@idx_z(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iz]`." :(@idx_z)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y and z." :(@av)
 @doc "`@av_xa(A)`: Compute averages between adjacent elements of `A` along the dimension x." :(@av_xa)
 @doc "`@av_ya(A)`: Compute averages between adjacent elements of `A` along the dimension y." :(@av_ya)
@@ -275,6 +284,9 @@ macro  inn_z(A::Symbol)  esc(:( $A[$ix  ,$iy  ,$izi ] )) end
 macro inn_xy(A::Symbol)  esc(:( $A[$ixi ,$iyi ,$iz  ] )) end
 macro inn_xz(A::Symbol)  esc(:( $A[$ixi ,$iy  ,$izi ] )) end
 macro inn_yz(A::Symbol)  esc(:( $A[$ix  ,$iyi ,$izi ] )) end
+macro  idx_x(A::Symbol)  esc(:( $A[$ix] )) end
+macro  idx_y(A::Symbol)  esc(:( $A[$iy] )) end
+macro  idx_z(A::Symbol)  esc(:( $A[$iz] )) end
 macro     av(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
                                 $A[$ix+1,$iy+1,$iz  ] + $A[$ix+1,$iy+1,$iz+1] +
                                 $A[$ix  ,$iy+1,$iz+1] + $A[$ix  ,$iy  ,$iz+1] +
@@ -314,6 +326,9 @@ macro within(macroname::String, A::Symbol)
     elseif macroname == "@inn_xy"  esc(  :($ix<=size($A,1)-2 && $iy<=size($A,2)-2 && $iz<=size($A,3)  )  )
     elseif macroname == "@inn_xz"  esc(  :($ix<=size($A,1)-2 && $iy<=size($A,2)   && $iz<=size($A,3)-2)  )
     elseif macroname == "@inn_yz"  esc(  :($ix<=size($A,1)   && $iy<=size($A,2)-2 && $iz<=size($A,3)-2)  )
+    elseif macroname == "@idx_y"   esc(  :($ix<=length($A))  )
+    elseif macroname == "@idx_y"   esc(  :($iy<=length($A))  )
+    elseif macroname == "@idx_z"   esc(  :($iz<=length($A))  )
     else error("unkown macroname: $macroname. If you want to add your own assignement macros, overwrite the macro 'within(macroname::String, A::Symbol)'; to still use the exising macro within as well call ParallelStencil.FiniteDifferences{1|2|3}D.@within(macroname, A) at the end.")
     end
 end

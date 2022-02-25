@@ -26,6 +26,10 @@ end
         Axxyy  =  @rand(nx+2, ny+2);
         R      = @zeros(nx,   ny  );
         Rxxyy  = @zeros(nx+2, ny+2);
+        x      = LinRange(zero(Data.Number), one(Data.Number), nx)
+        y      = LinRange(zero(Data.Number), one(Data.Number), ny)
+        xvec   = Data.Array(x)
+        yvec   = Data.Array(y)
         @testset "1. compute macros" begin
             @testset "differences" begin
                 @parallel  d_xa!(R, Ax)    = (@all(R) = @d_xa(Ax); return)
@@ -46,10 +50,16 @@ end
                 @parallel inn!(R, Axxyy) = (@all(R) = @inn(Axxyy); return)
                 @parallel inn_x!(R, Axx) = (@all(R) = @inn_x(Axx); return)
                 @parallel inn_y!(R, Ayy) = (@all(R) = @inn_y(Ayy); return)
+                @parallel idx_x!(R, A)   = (@all(R) = @idx_x(A); return)
+                @parallel idx_y!(R, A)   = (@all(R) = @idx_y(A); return)
                 R.=0; @parallel all!(R, A);      @test all(R .== A)
                 R.=0; @parallel inn!(R, Axxyy);  @test all(R .== Axxyy[2:end-1,2:end-1])
                 R.=0; @parallel inn_x!(R, Axx);  @test all(R .== Axx[2:end-1,      :])
                 R.=0; @parallel inn_y!(R, Ayy);  @test all(R .== Ayy[      :,2:end-1])
+                R.=0; @parallel idx_x!(R, x);    @test reduce(+, Rcol == x for Rcol in eachcol(R)) == size(R,2)
+                R.=0; @parallel idx_y!(R, y);    @test reduce(+, Rrow == y for Rrow in eachrow(R)) == size(R,1)
+                R.=0; @parallel idx_x!(R, xvec); @test reduce(+, Rcol == xvec for Rcol in eachcol(R)) == size(R,2)
+                R.=0; @parallel idx_y!(R, yvec); @test reduce(+, Rrow == yvec for Rrow in eachrow(R)) == size(R,1)
             end;
             @testset "averages" begin
                 @parallel av!(R, Axy)     = (@all(R) = @av(Axy); return)
