@@ -1,115 +1,214 @@
 ##
 const ZEROS_DOC = """
     @zeros(args...)
+    @zeros(args..., <keyword arguments>)
+
+Call `zeros(numbertype, args...)`, where `numbertype` is by default the datatype selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads and CUDA.zeros for CUDA).
 
 !!! note "Advanced"
-        @zeros(numbertype, args...)
+    The `numbertype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
-Call `zeros(numbertype, args...)`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads and CUDA.zeros for CUDA).
-
-!!! note "Advanced"
-    The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+# Keyword arguments
+    - `numbertype::DataType`: the type of numbers.
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 """
 @doc ZEROS_DOC
 macro zeros(args...)
-    check_initialized();
-    esc(_zeros(args...));
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    numbertype, celldims = handle_kwargs_allocators(kwargs_expr, (:numbertype, :celldims), "@zeros")
+    esc(_zeros(posargs...; numbertype=numbertype, celldims=celldims))
 end
 
 
 ##
 const ONES_DOC = """
     @ones(args...)
+    @ones(args..., <keyword arguments>)
+
+Call `ones(numbertype, args...)`, where `numbertype` is by default the datatype selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads CUDA.ones for CUDA).
 
 !!! note "Advanced"
-        @ones(numbertype, args...)
+    The `numbertype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
-Call `ones(numbertype, args...)`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads CUDA.ones for CUDA).
-
-!!! note "Advanced"
-    The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+# Keyword arguments
+    - `numbertype::DataType`: the type of numbers.
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 """
 @doc ONES_DOC
 macro ones(args...)
-    check_initialized();
-    esc(_ones(args...));
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    numbertype, celldims = handle_kwargs_allocators(kwargs_expr, (:numbertype, :celldims), "@ones")
+    esc(_ones(posargs...; numbertype=numbertype, celldims=celldims))
 end
 
 
 ##
 const RAND_DOC = """
     @rand(args...)
+    @rand(args...; <keyword arguments>)
+
+Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 !!! note "Advanced"
-        @rand(numbertype, args...)
+    The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
-Call `rand(numbertype, args...)`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
-
-!!! note "Advanced"
-    The `numbertype` can be explicitly passed as argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+# Keyword arguments
+    - `eltype::DataType`: the type of the elements, which can be numbers or booleans.
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 """
 @doc RAND_DOC
 macro rand(args...)
-    check_initialized();
-    esc(_rand(args...));
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@rand")
+    esc(_rand(posargs...; eltype=eltype, celldims=celldims))
+end
+
+
+##
+const FALSES_DOC = """
+    @falses(args...)
+    @falses(args..., <keyword arguments>)
+
+Call `falses(args...)`, where the function `falses` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+
+# Keyword arguments
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+"""
+@doc FALSES_DOC
+macro falses(args...)
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    celldims, = handle_kwargs_allocators(kwargs_expr, (:celldims, :eltype), "@falses")
+    esc(_falses(posargs...; celldims=celldims))
+end
+
+
+##
+const TRUES_DOC = """
+    @trues(args...)
+    @trues(args..., <keyword arguments>)
+
+Call `trues(args...)`, where the function `trues` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+
+# Keyword arguments
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+"""
+@doc TRUES_DOC
+macro trues(args...)
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    celldims, = handle_kwargs_allocators(kwargs_expr, (:celldims, :eltype), "@trues")
+    esc(_trues(posargs...; celldims=celldims))
 end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro zeros_cuda(args...)    check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
-macro ones_cuda(args...)     check_initialized(); esc(_ones(args...; package=PKG_CUDA)); end
-macro rand_cuda(args...)     check_initialized(); esc(_rand(args...; package=PKG_CUDA)); end
-macro zeros_threads(args...) check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
-macro ones_threads(args...)  check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
-macro rand_threads(args...)  check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
+macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
+macro ones_cuda(args...)      check_initialized(); esc(_ones(args...; package=PKG_CUDA)); end
+macro rand_cuda(args...)      check_initialized(); esc(_rand(args...; package=PKG_CUDA)); end
+macro falses_cuda(args...)    check_initialized(); esc(_falses(args...; package=PKG_CUDA)); end
+macro trues_cuda(args...)     check_initialized(); esc(_trues(args...; package=PKG_CUDA)); end
+macro zeros_threads(args...)  check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
+macro ones_threads(args...)   check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
+macro rand_threads(args...)   check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
+macro falses_threads(args...) check_initialized(); esc(_falses(args...; package=PKG_THREADS)); end
+macro trues_threads(args...)  check_initialized(); esc(_trues(args...; package=PKG_THREADS)); end
 
 
 ## ALLOCATOR FUNCTIONS
 
-function _zeros(args...; package::Symbol=get_package())
-    numbertype = get_numbertype()
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_gpu($numbertype, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($numbertype, $(args...)))
+function _zeros(args...; numbertype=nothing, celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(numbertype, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _ones(args...; package::Symbol=get_package())
-    numbertype = get_numbertype()
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_gpu($numbertype, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($numbertype, $(args...)))
+function _ones(args...; numbertype=nothing, celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(numbertype, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _rand(args...; package::Symbol=get_package())
-    numbertype = get_numbertype()
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($numbertype, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($numbertype, $(args...)))
+function _rand(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+end
+
+function _falses(args...; celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(Bool, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function _trues(args...; celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(Bool, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function determine_celltype(eltype, celldims)
+    if isnothing(eltype)
+        eltype = get_numbertype()
+        if (eltype == NUMBERTYPE_NONE) @ArgumentError("the keyword argument 'numbertype' is mandatory in @zeros, @ones and @rand when no default is set.") end
+    end
+    if !isnothing(celldims) celltype = :(ParallelStencil.ParallelKernel.SArray{Tuple{$celldims...}, $eltype, length($celldims), prod($celldims)})
+    else                    celltype = eltype
+    end
+    return celltype
+end
+
+
+## MACRO ARGUMENT HANDLER FUNCTIONS
+
+function handle_kwargs_allocators(kwargs_expr, valid_kwargs, macroname)
+    kwargs = split_kwargs(kwargs_expr)
+    validate_kwargkeys(kwargs, valid_kwargs, macroname)
+    return extract_kwargvalues(kwargs, valid_kwargs)
 end
 
 
 ## RUNTIME ALLOCATOR FUNCTIONS
 
-zeros_cpu(T0::DataType, T::DataType, args...) = Base.zeros(T, args...)               # If the user has passed a numbertype as first argument to @zeros, then the default numbertype added automatically by the @zeros macro (T0) is not used.
- ones_cpu(T0::DataType, T::DataType, args...) = Base.ones(T, args...)                # ...
- rand_cpu(T0::DataType, T::DataType, args...) = Base.rand(T, args...)                # ...
+ zeros_cpu(T::DataType, args...) = (check_datatype(T);       Base.zeros(T, args...))
+  ones_cpu(T::DataType, args...) = (check_datatype(T);       Base.ones(T, args...))
+  rand_cpu(T::DataType, args...) = (check_datatype(T, Bool); Base.rand(T, args...))
+falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
+ trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...) # Base.fill(T(falses(size(T))), 2,3)
 
-zeros_gpu(T0::DataType, T::DataType, args...) = CUDA.zeros(T, args...)               # ...
- ones_gpu(T0::DataType, T::DataType, args...) = CUDA.ones(T, args...)                # ...
- rand_gpu(T0::DataType, T::DataType, args...) = CUDA.CuArray(Base.rand(T, args...))  # ...
+ zeros_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.zeros(T, args...))
+  ones_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.ones(T, args...))
+  rand_gpu(T::DataType, args...) = CuArray(rand_cpu(T, args...))
+falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
+ trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
 
-zeros_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.zeros(T0, args...))
- ones_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.ones(T0, args...))
- rand_cpu(T0::DataType, args...) = (check_default_numbertype(T0); Base.rand(T0, args...))
+function fill_cpu(T, x, args...)::Array{T}
+    check_datatype(T, Bool)
+    if T <: SArray
+        if     (length(x) == length(T)) cell = T(x)
+        elseif (length(x) == 1)         cell = T(fill(eltype(T)(x), size(T)))
+        else                            @ArgumentError("@fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by `celldims`.")
+        end
+    else
+        cell = T(x)
+    end
+    Base.fill(cell, args...)
+end
 
-zeros_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.zeros(T0, args...))
- ones_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.ones(T0, args...))
- rand_gpu(T0::DataType, args...) = (check_default_numbertype(T0); CUDA.CuArray(Base.rand(T0, args...)))
-
-function check_default_numbertype(T0::DataType)
-    if (T0 == NUMBERTYPE_NONE) @ArgumentError("the numbertype argument is mandatory in @zeros, @ones and @rand when no default is set.") end
+function check_datatype(T::DataType, valid_non_numbertypes::DataType...)
+    if !(eltype(T) in valid_non_numbertypes) check_numbertype(eltype(T)) end
 end
