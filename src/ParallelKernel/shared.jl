@@ -10,6 +10,7 @@ const PKG_NONE = :PKG_NONE
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
+using StaticArrays
 using MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
@@ -115,6 +116,16 @@ end
 function split_kwargs(kwargs)
     if !all(is_kwarg.(kwargs)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
     return Dict(x.args[1] => x.args[2] for x in kwargs)
+end
+
+function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String)
+    for k in keys(kwargs)
+        if !(k in valid_kwargs) @KeywordArgumentError("Invalid keyword argument in $macroname call: `$k`. Valid keyword arguments are: `$(join(valid_kwargs, "`, `"))`.") end
+    end
+end
+
+function extract_kwargvalues(kwargs::Dict, valid_kwargs::Tuple)
+    return ((k in keys(kwargs)) ? kwargs[k] : nothing for k in valid_kwargs)
 end
 
 function split_parallel_args(args)
