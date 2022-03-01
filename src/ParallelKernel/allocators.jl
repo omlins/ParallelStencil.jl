@@ -105,6 +105,29 @@ macro trues(args...)
 end
 
 
+##
+const FILL_DOC = """
+    @fill(x, args...)
+    @fill(x, args...; <keyword arguments>)
+
+Call `fill(T(x), args...)`, where `T` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+
+!!! note "Advanced"
+    The element type `T` can be explicitly passed as keyword argument, `eltype`, in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+
+# Keyword arguments
+    - `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
+    - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+"""
+@doc FILL_DOC
+macro fill(args...)
+    check_initialized()
+    posargs, kwargs_expr = split_args(args)
+    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@fill")
+    esc(_fill(posargs...; eltype=eltype, celldims=celldims))
+end
+
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
@@ -112,11 +135,13 @@ macro ones_cuda(args...)      check_initialized(); esc(_ones(args...; package=PK
 macro rand_cuda(args...)      check_initialized(); esc(_rand(args...; package=PKG_CUDA)); end
 macro falses_cuda(args...)    check_initialized(); esc(_falses(args...; package=PKG_CUDA)); end
 macro trues_cuda(args...)     check_initialized(); esc(_trues(args...; package=PKG_CUDA)); end
+macro fill_cuda(args...)      check_initialized(); esc(_fill(args...; package=PKG_CUDA)); end
 macro zeros_threads(args...)  check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
 macro ones_threads(args...)   check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
 macro rand_threads(args...)   check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
 macro falses_threads(args...) check_initialized(); esc(_falses(args...; package=PKG_THREADS)); end
 macro trues_threads(args...)  check_initialized(); esc(_trues(args...; package=PKG_THREADS)); end
+macro fill_threads(args...)   check_initialized(); esc(_fill(args...; package=PKG_THREADS)); end
 
 
 ## ALLOCATOR FUNCTIONS
@@ -141,6 +166,14 @@ function _rand(args...; eltype=nothing, celldims=nothing, package::Symbol=get_pa
     celltype = determine_celltype(eltype, celldims)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function _fill(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -188,23 +221,29 @@ end
   ones_cpu(T::DataType, args...) = (check_datatype(T);       Base.ones(T, args...))
   rand_cpu(T::DataType, args...) = (check_datatype(T, Bool); Base.rand(T, args...))
 falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
- trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...) # Base.fill(T(falses(size(T))), 2,3)
+ trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...)
 
  zeros_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.zeros(T, args...))
   ones_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.ones(T, args...))
   rand_gpu(T::DataType, args...) = CuArray(rand_cpu(T, args...))
 falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
  trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
+  fill_gpu(T::DataType, args...) = CuArray(fill_cpu(T, args...))
 
-function fill_cpu(T, x, args...)::Array{T}
-    check_datatype(T, Bool)
+# function fill_cpu(T::DataType, x::Enum, args...)
+#
+#     check_datatype(T, Bool)
+# end
+
+function fill_cpu(T::DataType, x, args...)::Array{T}
+    #check_datatype(T, Bool, Enum)
     if T <: SArray
-        if     (length(x) == length(T)) cell = T(x)
-        elseif (length(x) == 1)         cell = T(fill(eltype(T)(x), size(T)))
+        if     (length(x) == length(T)) cell = convert(T, x)
+        elseif (length(x) == 1)         cell = T(fill(convert(eltype(T), x), size(T)))
         else                            @ArgumentError("@fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by `celldims`.")
         end
     else
-        cell = T(x)
+        cell = convert(T, x)
     end
     Base.fill(cell, args...)
 end
@@ -212,3 +251,6 @@ end
 function check_datatype(T::DataType, valid_non_numbertypes::DataType...)
     if !(eltype(T) in valid_non_numbertypes) check_numbertype(eltype(T)) end
 end
+
+import Base.length
+length(x::Enum) = 1
