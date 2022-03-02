@@ -6,7 +6,7 @@ The module Data is created in the module where `@init_parallel_kernel` is called
 --------------------------------------------------------------------------------
     Data.Number
 
-The type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (selected with argument `numbertype` of [`@init_parallel_kernel`](@ref)).
+The type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (selected with argument `numbertype` of [`@init_parallel_kernel`](@ref)).
 
 --------------------------------------------------------------------------------
     Data.Array{ndims}

@@ -2,6 +2,9 @@
 @doc replace(ParallelKernel.ZEROS_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro zeros(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@zeros($(args...)))); end
 @doc replace(ParallelKernel.ONES_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro ones(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@ones($(args...)))); end
 @doc replace(ParallelKernel.RAND_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro rand(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@rand($(args...)))); end
+@doc replace(ParallelKernel.FALSES_DOC,             "@init_parallel_kernel" => "@init_parallel_stencil") macro falses(args...)             check_initialized(); esc(:(ParallelStencil.ParallelKernel.@falses($(args...)))); end
+@doc replace(ParallelKernel.TRUES_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro trues(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@trues($(args...)))); end
+@doc replace(ParallelKernel.FILL_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro fill(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@fill($(args...)))); end
 @doc replace(ParallelKernel.PARALLEL_INDICES_DOC,   "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_indices(args...)   check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_indices($(args...)))); end
 @doc replace(ParallelKernel.PARALLEL_ASYNC_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_async(args...)     check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_async($(args...)))); end
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
@@ -23,7 +26,7 @@ Initialize the package ParallelStencil, giving access to its main functionality.
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA or Threads).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels (1, 2 or 3).
 
 See also: [`Data`](@ref)

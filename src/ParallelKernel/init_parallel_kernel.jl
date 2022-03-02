@@ -5,7 +5,7 @@ Initialize the package ParallelKernel, giving access to its main functionality. 
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA or Threads).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
 
 See also: [`Data`](@ref)
 """
