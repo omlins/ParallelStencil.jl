@@ -230,16 +230,6 @@ falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
  trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
   fill_gpu(T::DataType, args...) = CuArray(fill_cpu(T, args...))
 
-# function fill_cpu(T::DataType, x::Enum, args...)
-#
-#     check_datatype(T, Bool)
-# end
-
-#TODO: HERE I AM: make Enum check work - 'in' will not work then try also rand with Enum
-
-#TODO: see also how to do bool and @fill etc... (and optionally names for cell conten with static FielArray? - No, I not good idea probably as encourages bad syntax as @all(Tau).xx, or wrong syntax: @d(Tau.xx)/dx - also @d(Tau).xx/dx will compute wrong unused results for all other than x dim...)
-#TODO: update doc about optional numbertype as well as examples and unit tests!
-
 function fill_cpu(T::DataType, x, args...)::Array{T}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("@fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) `eltype` ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype(T, Bool, Enum)
