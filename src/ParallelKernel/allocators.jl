@@ -255,3 +255,6 @@ length(x::Enum) = 1
 
 import Base.eltype
 eltype(x::Enum) = typeof(x)
+
+import Random
+Random.SamplerType{T}() where {T<:Enum} = Random.Sampler(Random.GLOBAL_RNG, instances(T))
