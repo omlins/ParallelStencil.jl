@@ -110,10 +110,10 @@ const FILL_DOC = """
     @fill(x, args...)
     @fill(x, args...; <keyword arguments>)
 
-Call `fill(T(x), args...)`, where `T` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 !!! note "Advanced"
-    The element type `T` can be explicitly passed as keyword argument, `eltype`, in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+    The element type `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `numbertype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
 # Keyword arguments
     - `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
@@ -170,14 +170,6 @@ function _rand(args...; eltype=nothing, celldims=nothing, package::Symbol=get_pa
     end
 end
 
-function _fill(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(eltype, celldims)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu($celltype, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
-end
-
 function _falses(args...; celldims=nothing, package::Symbol=get_package())
     celltype = determine_celltype(Bool, celldims)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_gpu($celltype, $(args...)))
@@ -190,6 +182,14 @@ function _trues(args...; celldims=nothing, package::Symbol=get_package())
     celltype = determine_celltype(Bool, celldims)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function _fill(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu($celltype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -217,14 +217,14 @@ end
 
 ## RUNTIME ALLOCATOR FUNCTIONS
 
- zeros_cpu(T::DataType, args...) = (check_datatype(T);       Base.zeros(T, args...))
-  ones_cpu(T::DataType, args...) = (check_datatype(T);       Base.ones(T, args...))
-  rand_cpu(T::DataType, args...) = (check_datatype(T, Bool); Base.rand(T, args...))
+ zeros_cpu(T::DataType, args...) = (check_datatype(T); Base.zeros(T, args...))
+  ones_cpu(T::DataType, args...) = (check_datatype(T); Base.ones(T, args...))
+  rand_cpu(T::DataType, args...) = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
 falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
  trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...)
 
- zeros_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.zeros(T, args...))
-  ones_gpu(T::DataType, args...) = (check_datatype(T);       CUDA.ones(T, args...))
+ zeros_gpu(T::DataType, args...) = (check_datatype(T); CUDA.zeros(T, args...))
+  ones_gpu(T::DataType, args...) = (check_datatype(T); CUDA.ones(T, args...))
   rand_gpu(T::DataType, args...) = CuArray(rand_cpu(T, args...))
 falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
  trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
@@ -235,8 +235,14 @@ falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
 #     check_datatype(T, Bool)
 # end
 
+#TODO: HERE I AM: make Enum check work - 'in' will not work then try also rand with Enum
+
+#TODO: see also how to do bool and @fill etc... (and optionally names for cell conten with static FielArray? - No, I not good idea probably as encourages bad syntax as @all(Tau).xx, or wrong syntax: @d(Tau.xx)/dx - also @d(Tau).xx/dx will compute wrong unused results for all other than x dim...)
+#TODO: update doc about optional numbertype as well as examples and unit tests!
+
 function fill_cpu(T::DataType, x, args...)::Array{T}
-    #check_datatype(T, Bool, Enum)
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("@fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) `eltype` ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype(T, Bool, Enum)
     if T <: SArray
         if     (length(x) == length(T)) cell = convert(T, x)
         elseif (length(x) == 1)         cell = T(fill(convert(eltype(T), x), size(T)))
@@ -248,9 +254,14 @@ function fill_cpu(T::DataType, x, args...)::Array{T}
     Base.fill(cell, args...)
 end
 
-function check_datatype(T::DataType, valid_non_numbertypes::DataType...)
-    if !(eltype(T) in valid_non_numbertypes) check_numbertype(eltype(T)) end
+function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, UnionAll}...)
+    if !any(T .<: valid_non_numbertypes) && !any(eltype(T) .<: valid_non_numbertypes)  #!(eltype(T) in valid_non_numbertypes) || !(((T <: Enum) || (eltype(T) <: Enum)) && (Enum in valid_non_numbertypes))
+        check_numbertype(eltype(T))
+    end
 end
 
 import Base.length
 length(x::Enum) = 1
+
+import Base.eltype
+eltype(x::Enum) = typeof(x)
