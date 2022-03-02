@@ -217,7 +217,7 @@ end
 ## RUNTIME ALLOCATOR FUNCTIONS
 
  zeros_cpu(T::DataType, args...) = (check_datatype(T); Base.zeros(T, args...))
-  ones_cpu(T::DataType, args...) = (check_datatype(T); Base.ones(T, args...))
+  ones_cpu(T::DataType, args...) = (check_datatype(T); fill_cpu(T, 1, args...))
   rand_cpu(T::DataType, args...) = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
 falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
  trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...)
