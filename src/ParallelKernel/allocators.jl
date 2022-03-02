@@ -222,8 +222,8 @@ end
 falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
  trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...)
 
- zeros_gpu(T::DataType, args...) = (check_datatype(T); CUDA.zeros(T, args...))
-  ones_gpu(T::DataType, args...) = (check_datatype(T); CUDA.ones(T, args...))
+ zeros_gpu(T::DataType, args...) = (check_datatype(T); (T <: Number) ? CUDA.zeros(T, args...) : CuArray(zeros_cpu(T, args...)))
+  ones_gpu(T::DataType, args...) = (check_datatype(T); (T <: Number) ? CUDA.ones(T, args...) : CuArray(ones_cpu(T, args...)))
   rand_gpu(T::DataType, args...) = CuArray(rand_cpu(T, args...))
 falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
  trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
