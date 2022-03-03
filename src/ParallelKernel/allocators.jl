@@ -127,6 +127,21 @@ macro fill(args...)
 end
 
 
+##
+const FILL!_DOC = """
+    @fill!(A, x)
+    @fill!(A, x)
+
+Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+
+# Arguments
+    - `A::Array|ArrayOfArray|TArray|TArrayOfArray`: the array to be filled with `x`.
+    - `x::Number|Enum|Collection{Number|Enum, celldims}`: the content to fill `A` with. If `A` is an ArrayOfArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
+"""
+@doc FILL!_DOC
+macro fill!(args...) check_initialized(); esc(_fill!(args...)); end
+
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
@@ -135,12 +150,14 @@ macro rand_cuda(args...)      check_initialized(); esc(_rand(args...; package=PK
 macro falses_cuda(args...)    check_initialized(); esc(_falses(args...; package=PKG_CUDA)); end
 macro trues_cuda(args...)     check_initialized(); esc(_trues(args...; package=PKG_CUDA)); end
 macro fill_cuda(args...)      check_initialized(); esc(_fill(args...; package=PKG_CUDA)); end
+macro fill!_cuda(args...)     check_initialized(); esc(_fill!(args...; package=PKG_CUDA)); end
 macro zeros_threads(args...)  check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
 macro ones_threads(args...)   check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
 macro rand_threads(args...)   check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
 macro falses_threads(args...) check_initialized(); esc(_falses(args...; package=PKG_THREADS)); end
 macro trues_threads(args...)  check_initialized(); esc(_trues(args...; package=PKG_THREADS)); end
 macro fill_threads(args...)   check_initialized(); esc(_fill(args...; package=PKG_THREADS)); end
+macro fill!_threads(args...)  check_initialized(); esc(_fill!(args...; package=PKG_THREADS)); end
 
 
 ## ALLOCATOR FUNCTIONS
@@ -193,6 +210,13 @@ function _fill(args...; eltype=nothing, celldims=nothing, package::Symbol=get_pa
     end
 end
 
+function _fill!(args...; package::Symbol=get_package())
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu!($(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
 function determine_celltype(eltype, celldims)
     if isnothing(eltype)
         eltype = get_numbertype()
@@ -230,17 +254,34 @@ falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
   fill_gpu(T::DataType, args...) = CuArray(fill_cpu(T, args...))
 
 function fill_cpu(T::DataType, x, args...)::Array{T}
-    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("@fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) `eltype` ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("@fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype(T, Bool, Enum)
     if T <: SArray
         if     (length(x) == length(T)) cell = convert(T, x)
-        elseif (length(x) == 1)         cell = T(fill(convert(eltype(T), x), size(T)))
-        else                            @ArgumentError("@fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by `celldims`.")
+        elseif (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+        else                            @ArgumentError("@fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
         end
     else
         cell = convert(T, x)
     end
     Base.fill(cell, args...)
+end
+
+fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
+fill_gpu!(A, x) = CUDA.fill!(A, construct_cell(A, x))
+
+function construct_cell(A, x)
+    T_cell = eltype(A)
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T_cell)) @ArgumentError("@fill!: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the type of the elements of 'A' ($(eltype(T_cell))); automatic conversion to $(eltype(T_cell)) is therefore not attempted. Pass an 'x' of a different (element) type.") end
+    if T_cell <: SArray
+        if     (length(x) == length(T_cell)) cell = convert(T_cell, x)
+        elseif (length(x) == 1)              cell = convert(T_cell, fill(convert(eltype(T_cell), x), size(T_cell)))
+        else                                 @ArgumentError("@fill!: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+        end
+    else
+        cell = convert(T_cell, x)
+    end
+    return cell
 end
 
 function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, UnionAll}...)
