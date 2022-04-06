@@ -68,7 +68,7 @@ end
         t = t + dt
         # Visualisation
         if mod(it,nout)==0
-            P_inn .= P[2:end-1,2:end-1,2:end-1]; gather!(P_inn, P_v)
+            P_inn .= Array(P[2:end-1,2:end-1,2:end-1]); gather!(P_inn, P_v)
             if (me==0) heatmap(Xi_g, Zi_g, P_v[:,y_sl,:]', aspect_ratio=1, xlims=(Xi_g[1],Xi_g[end]), ylims=(Zi_g[1],Zi_g[end]), c=:viridis, title="Pressure"); frame(anim) end
         end
     end

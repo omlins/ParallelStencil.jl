@@ -56,7 +56,7 @@ dt = min(dx^2,dy^2,dz^2)*cp_min/lam/8.1;                                        
 for it = 1:nt
     if (it == 11) tic(); end                                                              # Start measuring time.
     if mod(it, 1000) == 1                                                                 # Visualize only every 1000th time step
-        T_nohalo .= T[2:end-1,2:end-1,2:end-1];                                           # Copy data to CPU removing the halo.
+        T_nohalo .= Array(T[2:end-1,2:end-1,2:end-1]);                                    # Copy data to CPU removing the halo.
         gather!(T_nohalo, T_v)                                                            # Gather data on process 0 (could be interpolated/sampled first)
         if (me==0) heatmap(transpose(T_v[:,ny_v÷2,:]), aspect_ratio=1); frame(anim); end  # Visualize it on process 0.
     end
