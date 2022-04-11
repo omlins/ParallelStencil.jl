@@ -16,11 +16,11 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [Parallelization with one macro call](#parallelization-with-one-macro-call)
 * [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
 * [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
-* [50-lines multi-XPU example](#50-lines-multi-xpu-example)
+* [50-lines multi-xPU example](#50-lines-multi-xpu-example)
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
 * [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
-* [Concise single/multi-XPU miniapps](#concise-singlemulti-xpu-miniapps)
+* [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
 * [Installation](#installation)
 * [Questions, comments and discussions](#questions-comments-and-discussions)
@@ -125,8 +125,8 @@ diffusion3D()
 
 The corresponding file can be found [here](/examples/diffusion3D_novis_noperf.jl).
 
-## 50-lines multi-XPU example
-This concise multi-XPU 3-D heat diffusion solver uses ParallelStencil in conjunction with [ImplicitGlobalGrid.jl] and can be readily deployed on on a single CPU thread or on thousands of GPUs/CPUs. Again, a simple boolean `USE_GPU` defines whether it runs on GPU(s) or CPU(s) ([JULIA_NUM_THREADS] defines how many cores are used in the latter case). The solver can be run with any number of processes. [ImplicitGlobalGrid.jl] creates automatically an implicit global computational grid based on the number of processes the solver is run with (and based on the process topology, which can be explicitly chosen by the user or automatically determined). Please refer to the documentation of [ImplicitGlobalGrid.jl] for more information.
+## 50-lines multi-xPU example
+This concise multi-xPU 3-D heat diffusion solver uses ParallelStencil in conjunction with [ImplicitGlobalGrid.jl] and can be readily deployed on on a single CPU thread or on thousands of GPUs/CPUs. Again, a simple boolean `USE_GPU` defines whether it runs on GPU(s) or CPU(s) ([JULIA_NUM_THREADS] defines how many cores are used in the latter case). The solver can be run with any number of processes. [ImplicitGlobalGrid.jl] creates automatically an implicit global computational grid based on the number of processes the solver is run with (and based on the process topology, which can be explicitly chosen by the user or automatically determined). Please refer to the documentation of [ImplicitGlobalGrid.jl] for more information.
 
 ```julia
 const USE_GPU = true
@@ -186,7 +186,7 @@ diffusion3D()
 ```
 The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_novis_noperf.jl).
 
-Thanks to [ImplicitGlobalGrid.jl], only a few function calls had to be added in order to turn the previous single GPU/CPU solver into a multi-XPU solver (omitted unmodified lines are represented with `#(...)`):
+Thanks to [ImplicitGlobalGrid.jl], only a few function calls had to be added in order to turn the previous single GPU/CPU solver into a multi-xPU solver (omitted unmodified lines are represented with `#(...)`):
 ```julia
 #(...)
 using ImplicitGlobalGrid
@@ -231,7 +231,7 @@ Here is the resulting movie when running the application on 8 GPUs, solving 3-D 
 The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_hidecomm.jl).
 
 ## Seamless interoperability with communication packages and hiding communication
-The previous multi-XPU example shows that ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
+The previous multi-xPU example shows that ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
 
 Moreover, ParallelStencil enables hiding communication behind computation with as simple call to `@hide_communication`. In the following example, the communication performed by `update_halo!` (from the package [ImplicitGlobalGrid.jl]) is hidden behind the computations done with by `@parallel diffusion3D_step!`:
 ```julia
@@ -337,8 +337,8 @@ search: ParallelStencil @init_parallel_stencil
   To see a description of a macro or module type ?<macroname> (including the @) or ?<modulename>, respectively.
 ```
 
-## Concise single/multi-XPU miniapps
-The miniapps regroup a collection of various 2-D and 3-D codes that leverage ParallelStencil to implement architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. The miniapps target various challenging domain science case studies where multi-physics coupling and important nonlinearities challenge existing solving strategies. In most cases, second order pseudo-transient relaxation delivers implicit solutions of the differential equations. Some miniapps feature a multi-XPU version, which combines the capabilities of ParallelStencil and [ImplicitGlobalGrid.jl] in order to enable multi-GPU and multi-CPU executions, unleashing _Julia-at-scale_.
+## Concise single/multi-xPU miniapps
+The miniapps regroup a collection of various 2-D and 3-D codes that leverage ParallelStencil to implement architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. The miniapps target various challenging domain science case studies where multi-physics coupling and important nonlinearities challenge existing solving strategies. In most cases, second order pseudo-transient relaxation delivers implicit solutions of the differential equations. Some miniapps feature a multi-xPU version, which combines the capabilities of ParallelStencil and [ImplicitGlobalGrid.jl] in order to enable multi-GPU and multi-CPU executions, unleashing _Julia-at-scale_.
 
 #### Performance metric
 Many-core processors as GPUs are throughput-oriented systems that use their massive parallelism to hide latency. On the scientific application side, most algorithms require only a few operations or flops compared to the amount of numbers or bytes accessed from main memory, and thus are significantly memory bound. The Flop/s metric is no longer the most adequate for reporting the application performance of many modern applications. This  status  motivated us to develop a memory throughput-based performance evaluation metric, `T_eff`, to evaluate the performance of iterative stencil-based solvers \[[1][JuliaCon20a]\].
@@ -363,7 +363,7 @@ Using simple array broadcasting capabilities both with GPU and CPU arrays within
 
 All miniapp codes follow a similar structure and permit serial and threaded CPU as well as Nvidia GPU execution. The first line of each miniapp code permits to enable the CUDA GPU backend upon setting the `USE_GPU` flag to `true`.
 
-All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-XPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
+All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-xPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
 ```sh
 $ julia --project --check-bounds=no -O3 <miniapp_code>.jl
 ```
@@ -393,11 +393,11 @@ The viscous Stokes flow example solves the incompressible Stokes equations with 
 
 The viscous Stokes flow example solves the incompressible Stokes equations with linear shear rheology in 3-D. The model configuration represents a buoyant spherical inclusion within a less buoyant matrix:
 
-![viscous Stokes 3-D multi-XPU](/miniapps/stokes_multixpu/Stokes3D.gif)
+![viscous Stokes 3-D multi-xPU](/miniapps/stokes_multixpu/Stokes3D.gif)
 
-_The figure depicts vertically sliced cross-sections of - Upper panels: the dynamical pressure field, the vertical Vz velocity. Lower panels: the log10 of the vertical momentum balance residual Rz and the log10 of the error norm evolution as function of pseudo-transient iterations. **The numerical resolution is 252x252x252 grid points in 3-D on 8 GPUs (i.e. a local domain size of 127x127x127 per GPU).**_ The [Stokes3D.jl](/miniapps/Stokes3D.jl) and [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) are single- and multi-XPU implementations, respectively. The multi-XPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-XPU miniapp [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
+_The figure depicts vertically sliced cross-sections of - Upper panels: the dynamical pressure field, the vertical Vz velocity. Lower panels: the log10 of the vertical momentum balance residual Rz and the log10 of the error norm evolution as function of pseudo-transient iterations. **The numerical resolution is 252x252x252 grid points in 3-D on 8 GPUs (i.e. a local domain size of 127x127x127 per GPU).**_ The [Stokes3D.jl](/miniapps/Stokes3D.jl) and [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) are single- and multi-xPU implementations, respectively. The multi-xPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-xPU miniapp [Stokes3D_multixpu.jl](/miniapps/stokes_multixpu/Stokes3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
 
-This multi-XPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
+This multi-xPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
 
 #### Acoustic wave 2-D app
 > app: [acoustic2D.jl](/miniapps/acoustic2D.jl)
@@ -413,11 +413,11 @@ The acoustic wave example solves acoustic waves in 2-D using the split velocity-
 
 The acoustic wave examples solves acoustic waves in 3-D using the split velocity-pressure formulation:
 
-![Acoustic wave 3-D multi-XPU](/miniapps/acoustic_waves_multixpu/acoustic3D.gif)
+![Acoustic wave 3-D multi-xPU](/miniapps/acoustic_waves_multixpu/acoustic3D.gif)
 
-_The animation depicts the y-slice of the dynamical pressure field evolution as function of explicit time steps. **The achieved numerical resolution is 1020x1020x1020 grid points in 3-D on 8 GPUs (i.e. a local domain size of 511x511x511 per GPU).**_ The [acoustic3D.jl](/miniapps/acoustic3D.jl) and [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) are single- and multi-XPU implementation, respectively. The multi-XPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-XPU miniapp [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
+_The animation depicts the y-slice of the dynamical pressure field evolution as function of explicit time steps. **The achieved numerical resolution is 1020x1020x1020 grid points in 3-D on 8 GPUs (i.e. a local domain size of 511x511x511 per GPU).**_ The [acoustic3D.jl](/miniapps/acoustic3D.jl) and [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) are single- and multi-xPU implementation, respectively. The multi-xPU implementation demonstrates ParallelStencil's capabilities to hide computations behind communication, which is performed with [ImplicitGlobalGrid.jl] in this case. Results are obtained by running the multi-xPU miniapp [acoustic3D_multixpu.jl](/miniapps/acoustic_waves_multixpu/acoustic3D_multixpu.jl) on 8 Nvidia Titan Xm GPUs distributed across two physically distinct compute nodes.
 
-This multi-XPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
+This multi-xPU application permits to leverage distributed memory parallelisation to enable large-scale 3-D calculations.
 
 #### Scalar porosity waves 2-D app
 > app: [scalar_porowaves2D.jl](/miniapps/scalar_porowaves2D.jl)
