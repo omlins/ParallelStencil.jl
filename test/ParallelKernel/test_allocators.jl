@@ -46,17 +46,5 @@ end
             end;
             @reset_parallel_kernel()
         end;
-        # @testset "3. Exceptions (no default numbertype)" begin
-        #     @require !@is_initialized()
-        #     @init_parallel_kernel(package = $package)
-        #     @require @is_initialized()
-        #     @require @get_numbertype() == $NUMBERTYPE_NONE
-        #     @testset "no numbertype" begin
-        #         @test_throws ArgumentError @zeros(2,3)
-        #         @test_throws ArgumentError @ones(2,3)
-        #         @test_throws ArgumentError @rand(2,3)
-        #     end;
-        #     @reset_parallel_kernel()
-        # end;
     end;
 )) end == nothing || true;
