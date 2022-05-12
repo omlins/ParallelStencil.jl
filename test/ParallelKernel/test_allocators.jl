@@ -21,12 +21,18 @@ end
                 @test @ones(2,3)                 == parentmodule($package).ones(Float16,2,3)
                 @test @ones(2,3,eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
                 @static if $package == $PKG_CUDA
-                    @test typeof(@rand(2,3))                == typeof(CUDA.CuArray(rand(Float16,2,3)))
-                    @test typeof(@rand(2,3,eltype=Float64)) == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                    @test typeof(@rand(2,3))                   == typeof(CUDA.CuArray(rand(Float16,2,3)))
+                    @test typeof(@rand(2,3,eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                    @test typeof(@fill(9, 2,3))                == typeof(CUDA.CuArray(fill(convert(Float16, 9), 2,3)))
+                    @test typeof(@fill(9, 2,3,eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
                 else
-                    @test typeof(@rand(2,3))                == typeof(parentmodule($package).rand(Float16,2,3))
-                    @test typeof(@rand(2,3,eltype=Float64)) == typeof(parentmodule($package).rand(Float64,2,3))
+                    @test typeof(@rand(2,3))                   == typeof(parentmodule($package).rand(Float16,2,3))
+                    @test typeof(@rand(2,3,eltype=Float64))    == typeof(parentmodule($package).rand(Float64,2,3))
+                    @test typeof(@fill(9, 2,3))                == typeof(fill(convert(Float16, 9), 2,3))
+                    @test typeof(@fill(9, 2,3,eltype=Float64)) == typeof(fill(convert(Float64, 9), 2,3))
                 end
+                @test @falses(2,3) == parentmodule($package).falses(2,3)
+                @test @trues(2,3)  == parentmodule($package).trues(2,3)
             end;
             @reset_parallel_kernel()
         end;
@@ -39,10 +45,14 @@ end
                 @test @zeros(2,3,eltype=Float32) == parentmodule($package).zeros(Float32,2,3)
                 @test @ones(2,3,eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
                 @static if $package == $PKG_CUDA
-                    @test typeof(@rand(2,3,eltype=Float64)) == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                    @test typeof(@rand(2,3,eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                    @test typeof(@fill(9, 2,3,eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
                 else
-                    @test typeof(@rand(2,3,eltype=Float64)) == typeof(parentmodule($package).rand(Float64,2,3))
+                    @test typeof(@rand(2,3,eltype=Float64))    == typeof(parentmodule($package).rand(Float64,2,3))
+                    @test typeof(@fill(9, 2,3,eltype=Float64)) == typeof(fill(convert(Float64, 9), 2,3))
                 end
+                @test @falses(2,3) == parentmodule($package).falses(2,3)
+                @test @trues(2,3)  == parentmodule($package).trues(2,3)
             end;
             @reset_parallel_kernel()
         end;
