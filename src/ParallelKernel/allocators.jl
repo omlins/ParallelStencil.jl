@@ -135,8 +135,8 @@ const FILL!_DOC = """
 Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 # Arguments
-    - `A::Array|ArrayOfArray|TArray|TArrayOfArray`: the array to be filled with `x`.
-    - `x::Number|Enum|Collection{Number|Enum, celldims}`: the content to fill `A` with. If `A` is an ArrayOfArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
+    - `A::Array|CellArray|TArray|TCellArray`: the array to be filled with `x`.
+    - `x::Number|Enum|Collection{Number|Enum, celldims}`: the content to fill `A` with. If `A` is an CellArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
 """
 @doc FILL!_DOC
 macro fill!(args...) check_initialized(); esc(_fill!(args...)); end

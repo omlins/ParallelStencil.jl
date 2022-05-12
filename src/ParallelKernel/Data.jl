@@ -14,7 +14,7 @@ The type of numbers used by @zeros, @ones, @rand and @fill and in all array type
 Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.Array` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads and CUDA.CuArray or CUDA.CuDeviceArray for CUDA; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required).
 
 --------------------------------------------------------------------------------
-    Data.ArrayOfArray{ndims}
+    Data.CellArray{ndims}
 
 #TODO
 
@@ -28,7 +28,7 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
 
 --------------------------------------------------------------------------------
-        Data.DeviceArrayOfArray{ndims}
+        Data.DeviceCellArray{ndims}
 
     #TODO
 """
@@ -41,8 +41,8 @@ function Data_cuda(numbertype::DataType)
             DeviceArray{T, N}        = CUDA.CuDeviceArray{T, N}
             Cell{T, S}               = StaticArrays.SArray{S, T}
             DeviceCell{T, S}         = StaticArrays.SArray{S, T}
-            ArrayOfArray{T, N}       = CUDA.CuArray{<:Cell{T}, N}
-            DeviceArrayOfArray{T, N} = CUDA.CuDeviceArray{<:DeviceCell{T}, N}
+            CellArray{T, N}       = CUDA.CuArray{<:Cell{T}, N}
+            DeviceCellArray{T, N} = CUDA.CuDeviceArray{<:DeviceCell{T}, N}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -52,14 +52,14 @@ function Data_cuda(numbertype::DataType)
             DeviceArray{N}            = CUDA.CuDeviceArray{$numbertype, N}
             Cell{S}                   = StaticArrays.SArray{S, $numbertype}
             DeviceCell{S}             = StaticArrays.SArray{S, $numbertype}
-            ArrayOfArray{N}           = CUDA.CuArray{<:Cell, N}
-            DeviceArrayOfArray{N}     = CUDA.CuDeviceArray{<:DeviceCell, N}
+            CellArray{N}           = CUDA.CuArray{<:Cell, N}
+            DeviceCellArray{N}     = CUDA.CuDeviceArray{<:DeviceCell, N}
             TArray{T, N}              = CUDA.CuArray{T, N}
             DeviceTArray{T, N}        = CUDA.CuDeviceArray{T, N}
             TCell{T, S}               = StaticArrays.SArray{S, T}
             DeviceTCell{T, S}         = StaticArrays.SArray{S, T}
-            TArrayOfArray{T, N}       = CUDA.CuArray{<:TCell{T}, N}
-            DeviceTArrayOfArray{T, N} = CUDA.CuDeviceArray{<:DeviceTCell{T}, N}
+            TCellArray{T, N}       = CUDA.CuArray{<:TCell{T}, N}
+            DeviceTCellArray{T, N} = CUDA.CuDeviceArray{<:DeviceTCell{T}, N}
         end)
     end
 end
@@ -72,8 +72,8 @@ function Data_threads(numbertype::DataType)
             DeviceArray{T, N}        = Base.Array{T, N}
             Cell{T, S}               = StaticArrays.SArray{S, T}
             DeviceCell{T, S}         = StaticArrays.SArray{S, T}
-            ArrayOfArray{T, N}       = Base.Array{<:Cell{T}, N}
-            DeviceArrayOfArray{T, N} = Base.Array{<:DeviceCell{T}, N}
+            CellArray{T, N}       = Base.Array{<:Cell{T}, N}
+            DeviceCellArray{T, N} = Base.Array{<:DeviceCell{T}, N}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -83,14 +83,14 @@ function Data_threads(numbertype::DataType)
             DeviceArray{N}            = Base.Array{$numbertype, N}
             Cell{S}                   = StaticArrays.SArray{S, $numbertype}
             DeviceCell{S}             = StaticArrays.SArray{S, $numbertype}
-            ArrayOfArray{N}           = Base.Array{<:Cell, N}
-            DeviceArrayOfArray{N}     = Base.Array{<:DeviceCell, N}
+            CellArray{N}           = Base.Array{<:Cell, N}
+            DeviceCellArray{N}     = Base.Array{<:DeviceCell, N}
             TArray{T, N}              = Base.Array{T, N}
             DeviceTArray{T, N}        = Base.Array{T, N}
             TCell{T, S}               = StaticArrays.SArray{S, T}
             DeviceTCell{T, S}         = StaticArrays.SArray{S, T}
-            TArrayOfArray{T, N}       = Base.Array{<:TCell{T}, N}
-            DeviceTArrayOfArray{T, N} = Base.Array{<:DeviceTCell{T}, N}
+            TCellArray{T, N}       = Base.Array{<:TCell{T}, N}
+            DeviceTCellArray{T, N} = Base.Array{<:DeviceTCell{T}, N}
         end)
     end
 end

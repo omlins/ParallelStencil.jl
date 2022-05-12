@@ -59,10 +59,10 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if (package == PKG_CUDA)
         kernel = substitute(kernel, :(Data.Array),         :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),          :(Data.DeviceCell))
-        kernel = substitute(kernel, :(Data.ArrayOfArray),  :(Data.DeviceArrayOfArray))
+        kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
         kernel = substitute(kernel, :(Data.TArray),        :(Data.DeviceTArray))
         kernel = substitute(kernel, :(Data.TCell),         :(Data.DeviceTCell))
-        kernel = substitute(kernel, :(Data.TArrayOfArray), :(Data.DeviceTArrayOfArray))
+        kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)    int_type = INT_CUDA
