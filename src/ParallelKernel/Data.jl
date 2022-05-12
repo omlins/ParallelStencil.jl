@@ -36,30 +36,30 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
 function Data_cuda(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import CUDA, StaticArrays
-            Array{T, N}              = CUDA.CuArray{T, N}
-            DeviceArray{T, N}        = CUDA.CuDeviceArray{T, N}
-            Cell{T, S}               = StaticArrays.SArray{S, T}
-            DeviceCell{T, S}         = StaticArrays.SArray{S, T}
-            CellArray{T, N}       = CUDA.CuArray{<:Cell{T}, N}
-            DeviceCellArray{T, N} = CUDA.CuDeviceArray{<:DeviceCell{T}, N}
+            import CUDA, CellArrays, StaticArrays
+            Array{T, N}                 = CUDA.CuArray{T, N}
+            DeviceArray{T, N}           = CUDA.CuDeviceArray{T, N}
+            Cell{T, S}                  = StaticArrays.SArray{S, T}
+            DeviceCell{T, S}            = StaticArrays.SArray{S, T}
+            CellArray{T_elem, N}        = CellArrays.CuCellArray{<:Cell{T_elem},N,0,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
+            DeviceCellArray{T_elem, N}  = CellArrays.CellArray{CuDeviceArray,<:DeviceCell{T_elem},N,0,T_elem}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import CUDA, StaticArrays
-            Number                    = $numbertype
-            Array{N}                  = CUDA.CuArray{$numbertype, N}
-            DeviceArray{N}            = CUDA.CuDeviceArray{$numbertype, N}
-            Cell{S}                   = StaticArrays.SArray{S, $numbertype}
-            DeviceCell{S}             = StaticArrays.SArray{S, $numbertype}
-            CellArray{N}           = CUDA.CuArray{<:Cell, N}
-            DeviceCellArray{N}     = CUDA.CuDeviceArray{<:DeviceCell, N}
-            TArray{T, N}              = CUDA.CuArray{T, N}
-            DeviceTArray{T, N}        = CUDA.CuDeviceArray{T, N}
-            TCell{T, S}               = StaticArrays.SArray{S, T}
-            DeviceTCell{T, S}         = StaticArrays.SArray{S, T}
-            TCellArray{T, N}       = CUDA.CuArray{<:TCell{T}, N}
-            DeviceTCellArray{T, N} = CUDA.CuDeviceArray{<:DeviceTCell{T}, N}
+            import CUDA, CellArrays, StaticArrays
+            Number                      = $numbertype
+            Array{N}                    = CUDA.CuArray{$numbertype, N}
+            DeviceArray{N}              = CUDA.CuDeviceArray{$numbertype, N}
+            Cell{S}                     = StaticArrays.SArray{S, $numbertype}
+            DeviceCell{S}               = StaticArrays.SArray{S, $numbertype}
+            CellArray{N}                = CellArrays.CuCellArray{<:Cell,N,0,$numbertype}
+            DeviceCellArray{N}          = CellArrays.CellArray{CuDeviceArray,<:DeviceCell,N,0,$numbertype}
+            TArray{T, N}                = CUDA.CuArray{T, N}
+            DeviceTArray{T, N}          = CUDA.CuDeviceArray{T, N}
+            TCell{T, S}                 = StaticArrays.SArray{S, T}
+            DeviceTCell{T, S}           = StaticArrays.SArray{S, T}
+            TCellArray{T_elem, N}       = CellArrays.CuCellArray{<:TCell{T_elem},N,0,T_elem}
+            DeviceTCellArray{T_elem, N} = CellArrays.CellArray{CuDeviceArray,<:DeviceTCell{T_elem},N,0,T_elem}
         end)
     end
 end
@@ -67,30 +67,30 @@ end
 function Data_threads(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, StaticArrays
-            Array{T, N}              = Base.Array{T, N}
-            DeviceArray{T, N}        = Base.Array{T, N}
-            Cell{T, S}               = StaticArrays.SArray{S, T}
-            DeviceCell{T, S}         = StaticArrays.SArray{S, T}
-            CellArray{T, N}       = Base.Array{<:Cell{T}, N}
-            DeviceCellArray{T, N} = Base.Array{<:DeviceCell{T}, N}
+            import Base, CellArrays, StaticArrays
+            Array{T, N}                 = Base.Array{T, N}
+            DeviceArray{T, N}           = Base.Array{T, N}
+            Cell{T, S}                  = StaticArrays.SArray{S, T}
+            DeviceCell{T, S}            = StaticArrays.SArray{S, T}
+            CellArray{T_elem, N}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,0,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
+            DeviceCellArray{T_elem, N}  = CellArrays.CPUCellArray{<:DeviceCell{T_elem},N,0,T_elem}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, StaticArrays
-            Number                    = $numbertype
-            Array{N}                  = Base.Array{$numbertype, N}
-            DeviceArray{N}            = Base.Array{$numbertype, N}
-            Cell{S}                   = StaticArrays.SArray{S, $numbertype}
-            DeviceCell{S}             = StaticArrays.SArray{S, $numbertype}
-            CellArray{N}           = Base.Array{<:Cell, N}
-            DeviceCellArray{N}     = Base.Array{<:DeviceCell, N}
-            TArray{T, N}              = Base.Array{T, N}
-            DeviceTArray{T, N}        = Base.Array{T, N}
-            TCell{T, S}               = StaticArrays.SArray{S, T}
-            DeviceTCell{T, S}         = StaticArrays.SArray{S, T}
-            TCellArray{T, N}       = Base.Array{<:TCell{T}, N}
-            DeviceTCellArray{T, N} = Base.Array{<:DeviceTCell{T}, N}
+            import Base, CellArrays, StaticArrays
+            Number                      = $numbertype
+            Array{N}                    = Base.Array{$numbertype, N}
+            DeviceArray{N}              = Base.Array{$numbertype, N}
+            Cell{S}                     = StaticArrays.SArray{S, $numbertype}
+            DeviceCell{S}               = StaticArrays.SArray{S, $numbertype}
+            CellArray{N}                = CellArrays.CPUCellArray{<:Cell,N,0,$numbertype}
+            DeviceCellArray{N}          = CellArrays.CPUCellArray{<:DeviceCell,N,0,$numbertype}
+            TArray{T, N}                = Base.Array{T, N}
+            DeviceTArray{T, N}          = Base.Array{T, N}
+            TCell{T, S}                 = StaticArrays.SArray{S, T}
+            DeviceTCell{T, S}           = StaticArrays.SArray{S, T}
+            TCellArray{T_elem, N}       = CellArrays.CPUCellArray{<:TCell{T_elem},N,0,T_elem}
+            DeviceTCellArray{T_elem, N} = CellArrays.CPUCellArray{<:DeviceTCell{T_elem},N,0,T_elem}
         end)
     end
 end
