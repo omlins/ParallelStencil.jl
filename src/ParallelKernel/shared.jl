@@ -10,8 +10,7 @@ const PKG_NONE = :PKG_NONE
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
-using StaticArrays
-using MacroTools
+using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
