@@ -240,11 +240,11 @@ end
 
 ## RUNTIME ALLOCATOR FUNCTIONS
 
- zeros_cpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); Base.zeros(T, args...))
-  ones_cpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); fill_cpu(T, 1, args...))
-  rand_cpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
-falses_cpu(::Type{T}, args...) where {T<:Union{Number}}      = Base.zeros(T, args...)
- trues_cpu(::Type{T}, args...) where {T<:Union{Number}}      = fill_cpu(T, true, args...)
+ zeros_cpu(::Type{T}, args...) where {T<:Number}                   = (check_datatype(T); Base.zeros(T, args...))
+  ones_cpu(::Type{T}, args...) where {T<:Number}                   = (check_datatype(T); fill_cpu(T, 1, args...))
+  rand_cpu(::Type{T}, args...) where {T<:Union{Number,Enum}}       = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
+falses_cpu(::Type{T}, args...) where {T<:Bool}                     = Base.falses(args...)
+ trues_cpu(::Type{T}, args...) where {T<:Bool}                     = Base.trues(args...) #Note: an alternative would be: fill_cpu(T, true, args...)
 
  zeros_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_cpu(T, 0, args...))
   ones_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_cpu(T, 1, args...))
@@ -254,12 +254,12 @@ falses_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_cpu(T,
  trues_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_cpu(T, true, args...)
 
 
- zeros_gpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); CUDA.zeros(T, args...))
-  ones_gpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); CUDA.ones(T, args...))
-  rand_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = CuArray(rand_cpu(T, args...))
-falses_gpu(::Type{T}, args...) where {T<:Union{Number}}      = CuArray(falses_cpu(T, args...))
- trues_gpu(::Type{T}, args...) where {T<:Union{Number}}      = CuArray(trues_cpu(T, args...))
-  fill_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = CuArray(fill_cpu(T, args...))
+ zeros_gpu(::Type{T}, args...) where {T<:Number}                   = (check_datatype(T); CUDA.zeros(T, args...))
+  ones_gpu(::Type{T}, args...) where {T<:Number}                   = (check_datatype(T); CUDA.ones(T, args...))
+  rand_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}}       = CuArray(rand_cpu(T, args...))
+falses_gpu(::Type{T}, args...) where {T<:Bool}                     = CUDA.falses(args...)
+ trues_gpu(::Type{T}, args...) where {T<:Bool}                     = CUDA.trues(args...)
+  fill_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}}       = CuArray(fill_cpu(T, args...))
 
  zeros_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_gpu(T, 0, args...))
   ones_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_gpu(T, 1, args...))
