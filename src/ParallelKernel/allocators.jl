@@ -240,36 +240,68 @@ end
 
 ## RUNTIME ALLOCATOR FUNCTIONS
 
- zeros_cpu(T::DataType, args...) = (check_datatype(T); Base.zeros(T, args...))
-  ones_cpu(T::DataType, args...) = (check_datatype(T); fill_cpu(T, 1, args...))
-  rand_cpu(T::DataType, args...) = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
-falses_cpu(T::DataType, args...) = Base.zeros(T, args...)
- trues_cpu(T::DataType, args...) = fill_cpu(T, true, args...)
+ zeros_cpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); Base.zeros(T, args...))
+  ones_cpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); fill_cpu(T, 1, args...))
+  rand_cpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = (check_datatype(T, Bool, Enum); Base.rand(T, args...))
+falses_cpu(::Type{T}, args...) where {T<:Union{Number}}      = Base.zeros(T, args...)
+ trues_cpu(::Type{T}, args...) where {T<:Union{Number}}      = fill_cpu(T, true, args...)
 
- zeros_gpu(T::DataType, args...) = (check_datatype(T); (T <: Number) ? CUDA.zeros(T, args...) : CuArray(zeros_cpu(T, args...)))
-  ones_gpu(T::DataType, args...) = (check_datatype(T); (T <: Number) ? CUDA.ones(T, args...) : CuArray(ones_cpu(T, args...)))
-  rand_gpu(T::DataType, args...) = CuArray(rand_cpu(T, args...))
-falses_gpu(T::DataType, args...) = CuArray(falses_cpu(T, args...))
- trues_gpu(T::DataType, args...) = CuArray(trues_cpu(T, args...))
-  fill_gpu(T::DataType, args...) = CuArray(fill_cpu(T, args...))
+ zeros_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_cpu(T, 0, args...))
+  ones_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_cpu(T, 1, args...))
+  rand_cpu(::Type{T}, dims)    where {T<:Union{SArray,FieldArray}} = (check_datatype(T); CellArray{T,length(dims),0}(Base.rand(eltype(T), prod(dims), prod(size(T)), 1), dims)) # NOTE: blocklength (parameter B) is set to 0 in any case here. Later this can be generalized. A rand function could possibly be provided in CellArrays.
+  rand_cpu(::Type{T}, dims...) where {T<:Union{SArray,FieldArray}} = rand_cpu(T, dims)
+falses_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_cpu(T, false, args...)
+ trues_cpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_cpu(T, true, args...)
 
-function fill_cpu(T::DataType, x, args...)::Array{T}
-    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("@fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+
+ zeros_gpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); CUDA.zeros(T, args...))
+  ones_gpu(::Type{T}, args...) where {T<:Union{Number}}      = (check_datatype(T); CUDA.ones(T, args...))
+  rand_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = CuArray(rand_cpu(T, args...))
+falses_gpu(::Type{T}, args...) where {T<:Union{Number}}      = CuArray(falses_cpu(T, args...))
+ trues_gpu(::Type{T}, args...) where {T<:Union{Number}}      = CuArray(trues_cpu(T, args...))
+  fill_gpu(::Type{T}, args...) where {T<:Union{Number,Enum}} = CuArray(fill_cpu(T, args...))
+
+ zeros_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_gpu(T, 0, args...))
+  ones_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype(T); fill_gpu(T, 1, args...))
+  rand_gpu(::Type{T}, dims)    where {T<:Union{SArray,FieldArray}} = (check_datatype(T); CellArray{T,length(dims),0}(CUDA.rand(eltype(T), prod(dims), prod(size(T)), 1), dims)) # NOTE: blocklength (parameter B) is set to 0 in any case here. Later this can be generalized. A rand function could possibly be provided in CellArrays.
+  rand_gpu(::Type{T}, dims...) where {T<:Union{SArray,FieldArray}} = rand_gpu(T, dims)
+falses_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_gpu(T, false, args...)
+ trues_gpu(::Type{T}, args...) where {T<:Union{SArray,FieldArray}} = fill_gpu(T, true, args...)
+
+
+function fill_cpu(::Type{T}, x, args...) where {T <: Union{Number, Enum}}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype(T, Bool, Enum)
-    if T <: SArray
-        if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
-        elseif (length(x) == length(T)) cell = convert(T, x)
-        else                            @ArgumentError("@fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
-        end
-    else
-        cell = convert(T, x)
-    end
+    cell = convert(T, x)
     Base.fill(cell, args...)
+end
+
+function fill_cpu(::Type{T}, x, args...) where {T <: Union{SArray,FieldArray}}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype(T)
+    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+    elseif (length(x) == length(T)) cell = convert(T, x)
+    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+    end
+    cell = convert(T, x)
+    CellArrays.fill!(CPUCellArray{T}(undef, args...), cell)
+end
+
+function fill_gpu(::Type{T}, x, args...) where {T <: Union{SArray,FieldArray}}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype(T)
+    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+    elseif (length(x) == length(T)) cell = convert(T, x)
+    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+    end
+    cell = convert(T, x)
+    CellArrays.fill!(CuCellArray{T}(undef, args...), cell)
 end
 
 fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
 fill_gpu!(A, x) = CUDA.fill!(A, construct_cell(A, x))
 
+#TODO: eliminate nearly duplicate code starting from if T_cell I think...
 function construct_cell(A, x)
     T_cell = eltype(A)
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T_cell)) @ArgumentError("@fill!: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the type of the elements of 'A' ($(eltype(T_cell))); automatic conversion to $(eltype(T_cell)) is therefore not attempted. Pass an 'x' of a different (element) type.") end
