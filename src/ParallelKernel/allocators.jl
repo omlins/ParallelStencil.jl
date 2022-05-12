@@ -46,7 +46,7 @@ end
 ##
 const RAND_DOC = """
     @rand(args...)
-    @rand(args...; <keyword arguments>)
+    @rand(args..., <keyword arguments>)
 
 Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
@@ -107,7 +107,7 @@ end
 ##
 const FILL_DOC = """
     @fill(x, args...)
-    @fill(x, args...; <keyword arguments>)
+    @fill(x, args..., <keyword arguments>)
 
 Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
@@ -273,29 +273,27 @@ function fill_cpu(::Type{T}, x, args...) where {T <: Union{Number, Enum}}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype(T, Bool, Enum)
     cell = convert(T, x)
-    Base.fill(cell, args...)
+    return Base.fill(cell, args...)
 end
 
 function fill_cpu(::Type{T}, x, args...) where {T <: Union{SArray,FieldArray}}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T)
+    check_datatype(T, Bool)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
     end
-    cell = convert(T, x)
-    CellArrays.fill!(CPUCellArray{T}(undef, args...), cell)
+    return CellArrays.fill!(CPUCellArray{T}(undef, args...), cell)
 end
 
 function fill_gpu(::Type{T}, x, args...) where {T <: Union{SArray,FieldArray}}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T)
+    check_datatype(T, Bool)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
     end
-    cell = convert(T, x)
-    CellArrays.fill!(CuCellArray{T}(undef, args...), cell)
+    return CellArrays.fill!(CuCellArray{T}(undef, args...), cell)
 end
 
 fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
