@@ -42,7 +42,7 @@ function Data_cuda(numbertype::DataType)
             Cell{T, S}                  = StaticArrays.SArray{S, T}
             DeviceCell{T, S}            = StaticArrays.SArray{S, T}
             CellArray{T_elem, N}        = CellArrays.CuCellArray{<:Cell{T_elem},N,0,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
-            DeviceCellArray{T_elem, N}  = CellArrays.CellArray{CUDA.CuDeviceArray,<:DeviceCell{T_elem},N,0,T_elem}
+            DeviceCellArray{T_elem, N}  = CellArrays.CellArray{<:DeviceCell{T_elem},N,0,CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -53,13 +53,13 @@ function Data_cuda(numbertype::DataType)
             Cell{S}                     = StaticArrays.SArray{S, $numbertype}
             DeviceCell{S}               = StaticArrays.SArray{S, $numbertype}
             CellArray{N}                = CellArrays.CuCellArray{<:Cell,N,0,$numbertype}
-            DeviceCellArray{N}          = CellArrays.CellArray{CUDA.CuDeviceArray,<:DeviceCell,N,0,$numbertype}
+            DeviceCellArray{N}          = CellArrays.CellArray{<:DeviceCell,N,0,CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
             TArray{T, N}                = CUDA.CuArray{T, N}
             DeviceTArray{T, N}          = CUDA.CuDeviceArray{T, N}
             TCell{T, S}                 = StaticArrays.SArray{S, T}
             DeviceTCell{T, S}           = StaticArrays.SArray{S, T}
             TCellArray{T_elem, N}       = CellArrays.CuCellArray{<:TCell{T_elem},N,0,T_elem}
-            DeviceTCellArray{T_elem, N} = CellArrays.CellArray{CUDA.CuDeviceArray,<:DeviceTCell{T_elem},N,0,T_elem}
+            DeviceTCellArray{T_elem, N} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,0,CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     end
 end
