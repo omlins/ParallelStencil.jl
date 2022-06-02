@@ -11,13 +11,17 @@ Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` sel
 # Keyword arguments
     - `eltype::DataType`: the type of the elements (numbers).
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
 @doc ZEROS_DOC
 macro zeros(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@zeros")
-    esc(_zeros(posargs...; eltype=eltype, celldims=celldims))
+    eltype, celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@zeros")
+    esc(_zeros(posargs...; eltype=eltype, celldims=celldims, celltype=celltype))
 end
 
 
@@ -34,13 +38,17 @@ Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
     - `eltype::DataType`: the type of the elements (numbers).
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use cell field names. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@zeros`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
 @doc ONES_DOC
 macro ones(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@ones")
-    esc(_ones(posargs...; eltype=eltype, celldims=celldims))
+    eltype, celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@ones")
+    esc(_ones(posargs...; eltype=eltype, celldims=celldims, celltype=celltype))
 end
 
 ##
@@ -56,13 +64,17 @@ Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
     - `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use cell field names. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@zeros`](@ref), [`@ones`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
 @doc RAND_DOC
 macro rand(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@rand")
-    esc(_rand(posargs...; eltype=eltype, celldims=celldims))
+    eltype, celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@rand")
+    esc(_rand(posargs...; eltype=eltype, celldims=celldims, celltype=celltype))
 end
 
 
@@ -75,13 +87,17 @@ Call `falses(args...)`, where the function `falses` is chosen to be compatible w
 
 # Keyword arguments
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use cell field names. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
 @doc FALSES_DOC
 macro falses(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, = handle_kwargs_allocators(kwargs_expr, (:celldims, :eltype), "@falses")
-    esc(_falses(posargs...; celldims=celldims))
+    celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@falses")
+    esc(_falses(posargs...; celldims=celldims, celltype=celltype))
 end
 
 
@@ -94,13 +110,17 @@ Call `trues(args...)`, where the function `trues` is chosen to be compatible wit
 
 # Keyword arguments
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use cell field names. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
 @doc TRUES_DOC
 macro trues(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, = handle_kwargs_allocators(kwargs_expr, (:celldims, :eltype), "@trues")
-    esc(_trues(posargs...; celldims=celldims))
+    celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@trues")
+    esc(_trues(posargs...; celldims=celldims, celltype=celltype))
 end
 
 
@@ -117,13 +137,17 @@ Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numb
 # Keyword arguments
     - `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
     - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+    !!! note "Advanced"
+        - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use cell field names. Note that values can always be addressed with array indices, even when cell field names are defined.
+
+See also: [`@fill!`](@ref), [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@CellType`](@ref)
 """
 @doc FILL_DOC
 macro fill(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims), "@fill")
-    esc(_fill(posargs...; eltype=eltype, celldims=celldims))
+    eltype, celldims, celltype = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype), "@fill")
+    esc(_fill(posargs...; eltype=eltype, celldims=celldims, celltype=celltype))
 end
 
 
@@ -137,6 +161,8 @@ Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compat
 # Arguments
     - `A::Array|CellArray|TArray|TCellArray`: the array to be filled with `x`.
     - `x::Number|Enum|Collection{Number|Enum, celldims}`: the content to fill `A` with. If `A` is an CellArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
+
+See also: [`@fill`](@ref)
 """
 @doc FILL!_DOC
 macro fill!(args...) check_initialized(); esc(_fill!(args...)); end
@@ -162,48 +188,48 @@ macro fill!_threads(args...)  check_initialized(); esc(_fill!(args...; package=P
 
 ## ALLOCATOR FUNCTIONS
 
-function _zeros(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(eltype, celldims)
+function _zeros(args...; eltype=nothing, celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _ones(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(eltype, celldims)
+function _ones(args...; eltype=nothing, celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _rand(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(eltype, celldims)
+function _rand(args...; eltype=nothing, celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _falses(args...; celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(Bool, celldims)
+function _falses(args...; celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(Bool, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _trues(args...; celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(Bool, celldims)
+function _trues(args...; celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(Bool, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _fill(args...; eltype=nothing, celldims=nothing, package::Symbol=get_package())
-    celltype = determine_celltype(eltype, celldims)
+function _fill(args...; eltype=nothing, celldims=nothing, celltype=nothing, package::Symbol=get_package())
+    celltype = determine_celltype(eltype, celldims, celltype)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu($celltype, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -217,13 +243,17 @@ function _fill!(args...; package::Symbol=get_package())
     end
 end
 
-function determine_celltype(eltype, celldims)
-    if isnothing(eltype)
-        eltype = get_numbertype()
-        if (eltype == NUMBERTYPE_NONE) @ArgumentError("the keyword argument 'eltype' is mandatory in @zeros, @ones, @rand and @fill when no default is set.") end
-    end
-    if !isnothing(celldims) celltype = :(ParallelStencil.ParallelKernel.SArray{Tuple{$celldims...}, $eltype, length($celldims), prod($celldims)})
-    else                    celltype = eltype
+function determine_celltype(eltype, celldims, celltype)
+    if !isnothing(celltype)
+        if (!isnothing(celldims) || !isnothing(eltype)) @ArgumentError("the keyword argument 'celltype' is incompatible with the other keyword arguments.") end
+    else
+        if isnothing(eltype)
+            eltype = get_numbertype()
+            if (eltype == NUMBERTYPE_NONE) @ArgumentError("the keyword argument 'eltype' is mandatory in @zeros, @ones, @rand and @fill when no default is set.") end
+        end
+        if !isnothing(celldims) celltype = :(ParallelStencil.ParallelKernel.SArray{Tuple{$celldims...}, $eltype, length($celldims), prod($celldims)})
+        else                    celltype = eltype
+        end
     end
     return celltype
 end
@@ -303,10 +333,10 @@ fill_gpu!(A, x) = CUDA.fill!(A, construct_cell(A, x))
 function construct_cell(A, x)
     T_cell = eltype(A)
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T_cell)) @ArgumentError("@fill!: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the type of the elements of 'A' ($(eltype(T_cell))); automatic conversion to $(eltype(T_cell)) is therefore not attempted. Pass an 'x' of a different (element) type.") end
-    if T_cell <: SArray
+    if T_cell <: Union{SArray,FieldArray}
         if     (length(x) == 1)              cell = convert(T_cell, fill(convert(eltype(T_cell), x), size(T_cell)))
         elseif (length(x) == length(T_cell)) cell = convert(T_cell, x)
-        else                                 @ArgumentError("@fill!: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+        else                                 @ArgumentError("@fill!: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims' or 'celltype'.")
         end
     else
         cell = convert(T_cell, x)
