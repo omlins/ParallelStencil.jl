@@ -13,7 +13,7 @@ end
 #     return
 # end
 
-@parallel_indices (ix,iy,iz) function copy3D!(T2, T, Ci)
+@parallel_indices (ix,iy,iz) function copy3D!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
     T2[ix,iy,iz] = T[ix,iy,iz] + Ci[ix,iy,iz];
     return
 end
