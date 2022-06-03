@@ -168,6 +168,52 @@ See also: [`@fill`](@ref)
 macro fill!(args...) check_initialized(); esc(_fill!(args...)); end
 
 
+##
+const CELLTYPE_DOC = """
+    @CellType(name, <keyword arguments>)
+
+Create a cell type, which can then be passed to `@zeros`, `@ones`, `@rand`, `@falses`, `@trues` or `@fill` using the keyword argument `celltype`.
+
+!!! note "Advanced"
+    The element type `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory, except if `parametric=true` is set. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+
+# Arguments
+- `name`: the name of the cell type.
+
+# Keyword arguments
+- `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
+- `fieldnames::String|NTuple{N,String}`: the names of the fields of the cell. Note that cell values can always be addressed with array indices, even when field names are defined.
+- `dims::Integer|NTuple{N,Integer}=length(fieldnames)`: the dimensions the cell. A cell can contain a single value or an N-dimensional array of the specified dimensions. A valid dims argument must fullfill `prod(dims)==length(fieldnames)`. If `dims` is omitted, then it will be automatically set as `dims=length(fieldnames)`, defining the cell to contain a 1-D array of appropriate length.
+- `parametric::Bool=false`: whether the cell type has a fixed or parametrisable element type. If `parametric=true` is set, then the keyword argument `eltype` is invalid.
+
+# Examples
+    @Celltype SymmetricTensor2D fieldnames=(xx, zz, xz)
+    #(...)
+    A = @zeros(nx, ny, celltype=SymmetricTensor2D)
+
+    @Celltype SymmetricTensor3D fieldnames=(xx, yy, zz, yz, xz, xy)
+    #(...)
+    A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
+
+    @CellType Tensor2D fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(2,2,2,2)
+    #(...)
+    A = @zeros(nx, ny, celltype=Tensor2D)
+
+    @Celltype SymmetricTensor2D fieldnames=(xx, zz, xz) parametric=true
+    #(...)
+    A = @zeros(nx, ny, celltype=SymmetricTensor2D{Float32})
+
+See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref)
+"""
+@doc CELLTYPE_DOC
+macro CellType(args...)
+    check_initialized()
+    checkargs_CellType(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, fieldnames, dims, parametric = handle_kwargs_allocators(kwargs_expr, (:eltype, :fieldnames, :dims, :parametric), "@CellType")
+    esc(_CellType(posargs...; eltype=eltype, fieldnames=fieldnames, dims=dims, parametric=parametric))
+end
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
@@ -184,6 +230,17 @@ macro falses_threads(args...) check_initialized(); esc(_falses(args...; package=
 macro trues_threads(args...)  check_initialized(); esc(_trues(args...; package=PKG_THREADS)); end
 macro fill_threads(args...)   check_initialized(); esc(_fill(args...; package=PKG_THREADS)); end
 macro fill!_threads(args...)  check_initialized(); esc(_fill!(args...; package=PKG_THREADS)); end
+
+
+## ARGUMENT CHECKS
+
+function checkargs_CellType(args...)
+    if isempty(args) @ArgumentError("arguments missing.") end
+    posargs, kwargs_expr = split_args(args)
+    if length(posargs) != 1 @ArgumentError("exactly one positional argument is required.") end
+    if length(kwargs_expr) < 1 @ArgumentError("the fieldnames keyword argument is mandatory.") end
+    if length(kwargs_expr) > 4 @ArgumentError("too many keyword arguments.") end
+end
 
 
 ## ALLOCATOR FUNCTIONS
@@ -240,6 +297,53 @@ function _fill!(args...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu!($(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, parametric=nothing)
+    if isnothing(fieldnames) @ArgumentError("@CellType: the keyword argument 'fieldnames' is mandatory.") end
+    fieldnames = parse_kwargvalues(fieldnames)
+    if isnothing(dims)
+        dims = [length(fieldnames)]
+    else
+        dims = parse_kwargvalues(dims)
+    end
+    if isnothing(parametric) parametric=false end
+    if isnothing(eltype)
+        eltype = get_numbertype()
+        if (!parametric && eltype == NUMBERTYPE_NONE) @ArgumentError("@Celltype: the keyword argument 'eltype' is mandatory when no default is set (and the keyword argument `parametric=true` not set).") end
+    else
+        if (parametric) @ArgumentError("@Celltype: the keyword argument 'eltype' is invalid when `parametric=true` is set.") end
+    end
+    fields = Expr[]
+    if parametric
+        for fieldname in fieldnames
+            push!(fields, quote $fieldname::T end)
+        end
+        quote
+            struct $name{T} <: FieldArray{Tuple{$(dims...)}, T, length($dims)}
+                $(fields...)
+            end
+        end
+    else
+        for fieldname in fieldnames
+            push!(fields, quote $fieldname::$eltype end)
+        end
+        quote
+            struct $name <: FieldArray{Tuple{$(dims...)}, $eltype, length($dims)}
+                $(fields...)
+            end
+        end
+    end
+end
+
+is_symbol(arg) = isa(arg, Symbol)
+is_tuple(arg)  = isa(arg, Expr) && (arg.head==:tuple)
+
+function parse_kwargvalues(arg)
+    if    is_symbol(arg) return [arg]
+    elseif is_tuple(arg) return arg.args
+    else                 @ArgumentError("@CellType: the keyword argument value $arg is not valid. ")
     end
 end
 
