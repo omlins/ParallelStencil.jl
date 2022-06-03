@@ -183,8 +183,9 @@ Create a cell type, which can then be passed to `@zeros`, `@ones`, `@rand`, `@fa
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
 - `fieldnames::String|NTuple{N,String}`: the names of the fields of the cell. Note that cell values can always be addressed with array indices, even when field names are defined.
-- `dims::Integer|NTuple{N,Integer}=length(fieldnames)`: the dimensions the cell. A cell can contain a single value or an N-dimensional array of the specified dimensions. A valid dims argument must fullfill `prod(dims)==length(fieldnames)`. If `dims` is omitted, then it will be automatically set as `dims=length(fieldnames)`, defining the cell to contain a 1-D array of appropriate length.
-- `parametric::Bool=false`: whether the cell type has a fixed or parametrisable element type. If `parametric=true` is set, then the keyword argument `eltype` is invalid.
+- `dims::Integer|NTuple{N,Integer}=length(fieldnames)`: the dimensions of the cell. A cell can contain a single value or an N-dimensional array of the specified dimensions. A valid dims argument must fullfill `prod(dims)==length(fieldnames)`. If `dims` is omitted, then it will be automatically set as `dims=length(fieldnames)`, defining the cell to contain a 1-D array of appropriate length.
+!!! note "Advanced"
+    - `parametric::Bool=false`: whether the cell type has a fixed or parametrisable element type. If `parametric=true` is set, then the keyword argument `eltype` is invalid.
 
 # Examples
     @Celltype SymmetricTensor2D fieldnames=(xx, zz, xz)
