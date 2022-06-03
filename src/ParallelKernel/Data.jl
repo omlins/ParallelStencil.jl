@@ -16,7 +16,12 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
 --------------------------------------------------------------------------------
     Data.CellArray{ndims}
 
-#TODO
+Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.CellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads and CuCellArray or CuDeviceCellArray for CUDA; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required).
+
+--------------------------------------------------------------------------------
+    Data.Cell{S}
+
+Expands to ``Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S, numbertype}}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref).
 
 --------------------------------------------------------------------------------
 !!! note "Advanced"
@@ -27,10 +32,13 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
     !!! warning
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
 
---------------------------------------------------------------------------------
+    --------------------------------------------------------------------------------
         Data.DeviceCellArray{ndims}
 
-    #TODO
+    Expands to `Data.DeviceCellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.DeviceCellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads and CuDeviceCellArray for CUDA).
+
+    !!! warning
+        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
 """
 
 function Data_cuda(numbertype::DataType)
