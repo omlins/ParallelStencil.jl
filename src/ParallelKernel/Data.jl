@@ -21,7 +21,7 @@ Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the dataty
 --------------------------------------------------------------------------------
     Data.Cell{S}
 
-Expands to ``Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S, numbertype}}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref).
+Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S, numbertype}}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref).
 
 --------------------------------------------------------------------------------
 !!! note "Advanced"
@@ -36,6 +36,44 @@ Expands to ``Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S
         Data.DeviceCellArray{ndims}
 
     Expands to `Data.DeviceCellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.DeviceCellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads and CuDeviceCellArray for CUDA).
+
+    !!! warning
+        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
+"""
+
+const DATA_DOC_NUMBERTYPE_NONE = """
+    Module Data
+
+The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
+
+--------------------------------------------------------------------------------
+    Data.Array{numbertype, ndims}
+
+The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads and CUDA.CuArray or CUDA.CuDeviceArray for CUDA; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required).
+
+--------------------------------------------------------------------------------
+    Data.CellArray{numbertype, ndims}
+
+The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads and CuCellArray or CuDeviceCellArray for CUDA; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required).
+
+--------------------------------------------------------------------------------
+    Data.Cell{numbertype, S}
+
+Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S, numbertype}}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref).
+
+--------------------------------------------------------------------------------
+!!! note "Advanced"
+        Data.DeviceArray{numbertype, ndims}
+
+    The datatype `Data.DeviceArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads and CUDA.CuDeviceArray for CUDA).
+
+    !!! warning
+        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
+
+    --------------------------------------------------------------------------------
+        Data.DeviceCellArray{numbertype, ndims}
+
+    The datatype `Data.DeviceCellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads and CuDeviceCellArray for CUDA).
 
     !!! warning
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray automatically to CUDA.CuDeviceArray in kernels when required.
