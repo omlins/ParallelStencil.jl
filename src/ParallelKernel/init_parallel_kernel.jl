@@ -32,7 +32,11 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         import_cmd  = :()
     end
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
-        if (datadoc_call==:()) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data) end
+        if (datadoc_call==:())
+            if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
+            else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+            end
+        end
         @eval(caller, $data_module)
         @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
