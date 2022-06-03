@@ -14,11 +14,11 @@ end
 # end
 
 @parallel_indices (ix,iy,iz) function copy3D!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
-    T2[ix,iy,iz] = T[ix,iy,iz] + Ci[ix,iy,iz];
+    T2[ix,iy,iz] = T[ix,iy,iz] * Ci[ix,iy,iz];
     return
 end
 
-struct Stiffness{T} <: FieldArray{Tuple{4,4}, T, 4}
+struct Stiffness{T} <: FieldArray{Tuple{4,4}, T, 2}
     xxxx::T
     yxxx::T
     xyxx::T
@@ -37,6 +37,9 @@ struct Stiffness{T} <: FieldArray{Tuple{4,4}, T, 4}
     yyyy::T
 end
 
+@CellType Tensor2D fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4)
+@CellType Tensor2D_T fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4) parametric=true
+
 
 function memcopy3D()
 # Numerics
@@ -45,12 +48,18 @@ celldims   = (4,4)
 nt         = 100;                                                               # Number of time steps
 
 # Array initializations
-T  = @zeros(nx, ny, nz, celldims=celldims);
-T2 = @zeros(nx, ny, nz, celldims=celldims);
-Ci = @zeros(nx, ny, nz, celldims=celldims);
-# T  = @zeros(nx, ny, nz, celltype=Stiffness{Data.Number});
-# T2 = @zeros(nx, ny, nz, celltype=Stiffness{Data.Number});
-# Ci = @zeros(nx, ny, nz, celltype=Stiffness{Data.Number});
+# T  = @zeros(nx, ny, nz, celldims=celldims);
+# T2 = @zeros(nx, ny, nz, celldims=celldims);
+# Ci = @zeros(nx, ny, nz, celldims=celldims);
+# T  = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
+# T2 = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
+# Ci = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
+# T  = @zeros(nx, ny, nz, celltype=Tensor2D);
+# T2 = @zeros(nx, ny, nz, celltype=Tensor2D);
+# Ci = @zeros(nx, ny, nz, celltype=Tensor2D);
+T  = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
+T2 = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
+Ci = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
 
 # Initial conditions
 @fill!(Ci, 0.5);
