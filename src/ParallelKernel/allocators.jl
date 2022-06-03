@@ -215,6 +215,7 @@ macro CellType(args...)
     esc(_CellType(posargs...; eltype=eltype, fieldnames=fieldnames, dims=dims, parametric=parametric))
 end
 
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
