@@ -64,7 +64,7 @@ include("FiniteDifferences.jl")
 
 ## Exports (need to be after include of submodules as re-exports from them)
 export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D
-export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!
+export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println
 export PSNumber
 
