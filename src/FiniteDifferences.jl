@@ -54,7 +54,7 @@ macro     d2(A::Symbol)  esc(:( ($A[$ixi+1] - $A[$ixi])  -  ($A[$ixi] - $A[$ixi-
 macro    all(A::Symbol)  esc(:( $A[$ix  ] )) end
 macro    inn(A::Symbol)  esc(:( $A[$ixi ] )) end
 macro     av(A::Symbol)  esc(:(($A[$ix] + $A[$ix+1] )*0.5 )) end
-macro   harm(A::Symbol)  esc(:(2/(1/$A[$ix] + 1/$A[$ix+1]) )) end
+macro   harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix] + 1.0/$A[$ix+1])*2.0 )) end
 macro maxloc(A::Symbol)  esc(:( max( max($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 macro minloc(A::Symbol)  esc(:( min( min($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 
@@ -163,11 +163,11 @@ macro    av_xa(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] )*0.5 )) end
 macro    av_ya(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix  ,$iy+1] )*0.5 )) end
 macro    av_xi(A::Symbol)  esc(:(($A[$ix  ,$iyi ] + $A[$ix+1,$iyi ] )*0.5 )) end
 macro    av_yi(A::Symbol)  esc(:(($A[$ixi ,$iy  ] + $A[$ixi ,$iy+1] )*0.5 )) end
-macro     harm(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iy  ] + 1/$A[$ix+1,$iy  ] + 1/$A[$ix,$iy+1] + 1/$A[$ix+1,$iy+1]) )) end
-macro  harm_xa(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iy  ] + 1/$A[$ix+1,$iy  ] ) )) end
-macro  harm_ya(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iy  ] + 1/$A[$ix  ,$iy+1] ) )) end
-macro  harm_xi(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iyi ] + 1/$A[$ix+1,$iyi ] ) )) end
-macro  harm_yi(A::Symbol)  esc(:(2/(1/$A[$ixi ,$iy  ] + 1/$A[$ixi ,$iy+1] ) )) end
+macro     harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix+1,$iy  ] + 1.0/$A[$ix,$iy+1] + 1.0/$A[$ix+1,$iy+1])*4.0 )) end
+macro  harm_xa(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix+1,$iy  ] )*2.0 )) end
+macro  harm_ya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix  ,$iy+1] )*2.0 )) end
+macro  harm_xi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ] + 1.0/$A[$ix+1,$iyi ] )*2.0 )) end
+macro  harm_yi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ] + 1.0/$A[$ixi ,$iy+1] )*2.0 )) end
 macro   maxloc(A::Symbol)  esc(:( max( max( max($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
                                             max($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
 macro   minloc(A::Symbol)  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
@@ -350,28 +350,28 @@ macro   av_xzi(A::Symbol)   esc(:(($A[$ix  ,$iyi ,$iz  ] + $A[$ix+1,$iyi ,$iz  ]
                                    $A[$ix  ,$iyi ,$iz+1] + $A[$ix+1,$iyi ,$iz+1] )*0.25 )) end
 macro   av_yzi(A::Symbol)   esc(:(($A[$ixi ,$iy  ,$iz  ] + $A[$ixi ,$iy+1,$iz  ] +
                                    $A[$ixi ,$iy  ,$iz+1] + $A[$ixi ,$iy+1,$iz+1] )*0.25 )) end
-macro     harm(A::Symbol)  esc(:(8/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix+1,$iy  ,$iz  ] +
-                                    1/$A[$ix+1,$iy+1,$iz  ] + 1/$A[$ix+1,$iy+1,$iz+1] +
-                                    1/$A[$ix  ,$iy+1,$iz+1] + 1/$A[$ix  ,$iy  ,$iz+1] +
-                                    1/$A[$ix+1,$iy  ,$iz+1] + 1/$A[$ix  ,$iy+1,$iz  ] ))) end
-macro  harm_xa(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix+1,$iy  ,$iz  ] ) )) end
-macro  harm_ya(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix  ,$iy+1,$iz  ] ) )) end
-macro  harm_za(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix  ,$iy  ,$iz+1] ) )) end
-macro  harm_xi(A::Symbol)  esc(:(2/(1/$A[$ix  ,$iyi ,$izi ] + 1/$A[$ix+1,$iyi ,$izi ] ) )) end
-macro  harm_yi(A::Symbol)  esc(:(2/(1/$A[$ixi ,$iy  ,$izi ] + 1/$A[$ixi ,$iy+1,$izi ] ) )) end
-macro  harm_zi(A::Symbol)  esc(:(2/(1/$A[$ixi ,$iyi ,$iz  ] + 1/$A[$ixi ,$iyi ,$iz+1] ) )) end
-macro harm_xya(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix+1,$iy  ,$iz  ] +
-                                    1/$A[$ix  ,$iy+1,$iz  ] + 1/$A[$ix+1,$iy+1,$iz  ] ) )) end
-macro harm_xza(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix+1,$iy  ,$iz  ] +
-                                    1/$A[$ix  ,$iy  ,$iz+1] + 1/$A[$ix+1,$iy  ,$iz+1] ) )) end
-macro harm_yza(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iy  ,$iz  ] + 1/$A[$ix  ,$iy+1,$iz  ] +
-                                    1/$A[$ix  ,$iy  ,$iz+1] + 1/$A[$ix  ,$iy+1,$iz+1] ) )) end
-macro harm_xyi(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iy  ,$izi ] + 1/$A[$ix+1,$iy  ,$izi ] +
-                                    1/$A[$ix  ,$iy+1,$izi ] + 1/$A[$ix+1,$iy+1,$izi ] ) )) end
-macro harm_xzi(A::Symbol)  esc(:(4/(1/$A[$ix  ,$iyi ,$iz  ] + 1/$A[$ix+1,$iyi ,$iz  ] +
-                                    1/$A[$ix  ,$iyi ,$iz+1] + 1/$A[$ix+1,$iyi ,$iz+1] ) )) end
-macro harm_yzi(A::Symbol)  esc(:(4/(1/$A[$ixi ,$iy  ,$iz  ] + 1/$A[$ixi ,$iy+1,$iz  ] +
-                                    1/$A[$ixi ,$iy  ,$iz+1] + 1/$A[$ixi ,$iy+1,$iz+1] ) )) end
+macro     harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix+1,$iy+1,$iz  ] + 1.0/$A[$ix+1,$iy+1,$iz+1] +
+                                      1.0/$A[$ix  ,$iy+1,$iz+1] + 1.0/$A[$ix  ,$iy  ,$iz+1] +
+                                      1.0/$A[$ix+1,$iy  ,$iz+1] + 1.0/$A[$ix  ,$iy+1,$iz  ] )*8.0)) end
+macro  harm_xa(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] )*2.0 )) end
+macro  harm_ya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy+1,$iz  ] )*2.0 )) end
+macro  harm_za(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy  ,$iz+1] )*2.0 )) end
+macro  harm_xi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ,$izi ] + 1.0/$A[$ix+1,$iyi ,$izi ] )*2.0 )) end
+macro  harm_yi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ,$izi ] + 1.0/$A[$ixi ,$iy+1,$izi ] )*2.0 )) end
+macro  harm_zi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iyi ,$iz  ] + 1.0/$A[$ixi ,$iyi ,$iz+1] )*2.0 )) end
+macro harm_xya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix  ,$iy+1,$iz  ] + 1.0/$A[$ix+1,$iy+1,$iz  ] )*4.0 )) end
+macro harm_xza(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix  ,$iy  ,$iz+1] + 1.0/$A[$ix+1,$iy  ,$iz+1] )*4.0 )) end
+macro harm_yza(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy+1,$iz  ] +
+                                      1.0/$A[$ix  ,$iy  ,$iz+1] + 1.0/$A[$ix  ,$iy+1,$iz+1] )*4.0 )) end
+macro harm_xyi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$izi ] + 1.0/$A[$ix+1,$iy  ,$izi ] +
+                                      1.0/$A[$ix  ,$iy+1,$izi ] + 1.0/$A[$ix+1,$iy+1,$izi ] )*4.0 )) end
+macro harm_xzi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ,$iz  ] + 1.0/$A[$ix+1,$iyi ,$iz  ] +
+                                      1.0/$A[$ix  ,$iyi ,$iz+1] + 1.0/$A[$ix+1,$iyi ,$iz+1] )*4.0 )) end
+macro harm_yzi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ,$iz  ] + 1.0/$A[$ixi ,$iy+1,$iz  ] +
+                                      1.0/$A[$ixi ,$iy  ,$iz+1] + 1.0/$A[$ixi ,$iy+1,$iz+1] )*4.0 )) end
 macro   maxloc(A::Symbol)  esc(:( max( max( max( max($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
                                               max($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
                                               max($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
