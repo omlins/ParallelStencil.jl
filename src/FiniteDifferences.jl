@@ -19,6 +19,9 @@ Provides macros for 1-D finite differences computations. The dimensions x refers
 ###### Averages
 - [`@av`](@ref)
 
+###### Harmonic averages
+- [`@harm`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -38,6 +41,7 @@ export @within
 @doc "`@all(A)`: Select all elements of `A`. Corresponds to `A[:]`." :(@all)
 @doc "`@inn(A)`: Select the inner elements of `A`. Corresponds to `A[2:end-1]`" :(@inn)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A`." :(@av)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A`." :(@harm)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
@@ -96,6 +100,13 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 - [`@av_xi`](@ref)
 - [`@av_yi`](@ref)
 
+###### Harmonic verages
+- [`@harm`](@ref)
+- [`@harm_xa`](@ref)
+- [`@harm_ya`](@ref)
+- [`@harm_xi`](@ref)
+- [`@harm_yi`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -120,13 +131,16 @@ export @within
 @doc "`@inn(A)`: Select the inner elements of `A`. Corresponds to `A[2:end-1,2:end-1]`." :(@inn)
 @doc "`@inn_x(A)`: Select the inner elements of `A` in dimension x. Corresponds to `A[2:end-1,:]`." :(@inn_x)
 @doc "`@inn_y(A)`: Select the inner elements of `A` in dimension y. Corresponds to `A[:,2:end-1]`." :(@inn_y)
-@doc "`@idx_x(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[ix]`." :(@idx_x)
-@doc "`@idx_y(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iy]`." :(@idx_y)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y." :(@av)
 @doc "`@av_xa(A)`: Compute averages between adjacent elements of `A` along the dimension x." :(@av_xa)
 @doc "`@av_ya(A)`: Compute averages between adjacent elements of `A` along the dimension y." :(@av_ya)
 @doc "`@av_xi(A)`: Compute averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xa(A))`." :(@av_xi)
 @doc "`@av_yi(A)`: Compute averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_ya(A))`." :(@av_yi)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y." :(@harm)
+@doc "`@harm_xa(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x." :(@harm_xa)
+@doc "`@harm_ya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y." :(@harm_ya)
+@doc "`@harm_xi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@harm_xa(A))`." :(@harm_xi)
+@doc "`@harm_yi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@harm_ya(A))`." :(@harm_yi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
@@ -218,6 +232,21 @@ Provides macros for 3-D finite differences computations. The dimensions x, y and
 - [`@av_xzi`](@ref)
 - [`@av_yzi`](@ref)
 
+###### Harmonic verages
+- [`@harm`](@ref)
+- [`@harm_xa`](@ref)
+- [`@harm_ya`](@ref)
+- [`@harm_za`](@ref)
+- [`@harm_xi`](@ref)
+- [`@harm_yi`](@ref)
+- [`@harm_zi`](@ref)
+- [`@harm_xya`](@ref)
+- [`@harm_xza`](@ref)
+- [`@harm_yza`](@ref)
+- [`@harm_xyi`](@ref)
+- [`@harm_xzi`](@ref)
+- [`@harm_yzi`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -249,9 +278,6 @@ export @within
 @doc "`@inn_xy(A)`: Select the inner elements of `A` in dimensions x and y. Corresponds to `A[2:end-1,2:end-1,:]`." :(@inn_xy)
 @doc "`@inn_xz(A)`: Select the inner elements of `A` in dimensions x and z. Corresponds to `A[2:end-1,:,2:end-1]`." :(@inn_xz)
 @doc "`@inn_yz(A)`: Select the inner elements of `A` in dimensions y and z. Corresponds to `A[:,2:end-1,2:end-1]`." :(@inn_yz)
-@doc "`@idx_x(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[ix]`." :(@idx_x)
-@doc "`@idx_y(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iy]`." :(@idx_y)
-@doc "`@idx_z(A)`: Select the elements of `A` corresponding to the loop index in dimension x. Corresponds to `A[iz]`." :(@idx_z)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y and z." :(@av)
 @doc "`@av_xa(A)`: Compute averages between adjacent elements of `A` along the dimension x." :(@av_xa)
 @doc "`@av_ya(A)`: Compute averages between adjacent elements of `A` along the dimension y." :(@av_ya)
@@ -265,6 +291,19 @@ export @within
 @doc "`@av_xyi(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_z(@av_xya(A))`." :(@av_xyi)
 @doc "`@av_xzi(A)`: Compute averages between adjacent elements of `A` along the dimensions x and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xza(A))`." :(@av_xzi)
 @doc "`@av_yzi(A)`: Compute averages between adjacent elements of `A` along the dimensions y and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_yza(A))`." :(@av_yzi)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y and z." :(@harm)
+@doc "`@harm_xa(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x." :(@harm_xa)
+@doc "`@harm_ya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y." :(@harm_ya)
+@doc "`@harm_za(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension z." :(@harm_za)
+@doc "`@harm_xi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_yz(@harm_xa(A))`." :(@harm_xi)
+@doc "`@harm_yi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_xz(@harm_ya(A))`." :(@harm_yi)
+@doc "`@harm_zi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension z and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_xy(@harm_za(A))`." :(@harm_zi)
+@doc "`@harm_xya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y." :(@harm_xya)
+@doc "`@harm_xza(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and z." :(@harm_xza)
+@doc "`@harm_yza(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions y and z." :(@harm_yza)
+@doc "`@harm_xyi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_z(@harm_xya(A))`." :(@harm_xyi)
+@doc "`@harm_xzi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@harm_xza(A))`." :(@harm_xzi)
+@doc "`@harm_yzi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions y and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@harm_yza(A))`." :(@harm_yzi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
