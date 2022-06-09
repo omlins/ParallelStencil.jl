@@ -26,10 +26,6 @@ end
         Axxyy  =  @rand(nx+2, ny+2);
         R      = @zeros(nx,   ny  );
         Rxxyy  = @zeros(nx+2, ny+2);
-        x      = LinRange(zero(Data.Number), one(Data.Number), nx)
-        y      = LinRange(zero(Data.Number), one(Data.Number), ny)
-        xvec   = Data.Array(x)
-        yvec   = Data.Array(y)
         @testset "1. compute macros" begin
             @testset "differences" begin
                 @parallel  d_xa!(R, Ax)    = (@all(R) = @d_xa(Ax); return)
