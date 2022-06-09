@@ -37,6 +37,10 @@ end
                 @parallel av!(R, Ax) = (@all(R) = @av(Ax); return)
                 R.=0; @parallel av!(R, Ax);  @test all(R .== (Ax[1:end-1].+Ax[2:end]).*0.5)
             end;
+            @testset "harmonic averages" begin
+                @parallel harm!(R, Ax) = (@all(R) = @harm(Ax); return)
+                R.=0; @parallel harm!(R, Ax);  @test all(R .== 2 ./(1 ./Ax[1:end-1].+1 ./Ax[2:end]))
+            end;
             @testset "others" begin
                 @parallel maxloc!(R, Axx) = (@all(R) = @maxloc(Axx); return)
                 R.=0; @parallel maxloc!(R, Axx);  @test all(R .== max.(max.(Axx[3:end],Axx[2:end-1]),Axx[1:end-2]))
