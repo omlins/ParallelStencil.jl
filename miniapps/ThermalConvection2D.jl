@@ -18,7 +18,7 @@ end
     return
 end
 
-@parallel function compute_1!(RogT::Data.Array, Eta::Data.Array, ∇V::Data.Array, Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, σxy::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, dτPt::Data.Array, ρ0gα::Data.Number, η0::Data.Number, dη_dT::Data.Number, ΔT::Data.Number, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number)
+@parallel function compute_1!(RogT::Data.Array, Eta::Data.Array, ∇V::Data.Array, Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, σxy::Data.Array, T::Data.Array, Vx::Data.Array, Vy::Data.Array, ρ0gα::Data.Number, η0::Data.Number, dη_dT::Data.Number, ΔT::Data.Number, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number)
     @all(RogT) = ρ0gα*@all(T)
     @all(Eta)  = η0*(1.0 - dη_dT*(@all(T) + ΔT/2.0))
     @all(∇V)   = @d_xa(Vx)/dx + @d_ya(Vy)/dy
@@ -69,13 +69,13 @@ end
     return
 end
 
-@parallel_indices (ix,iy) function bc_x!(A::Data.Array)
+@parallel_indices (iy) function bc_x!(A::Data.Array)
     A[1  , iy] = A[2    , iy]
     A[end, iy] = A[end-1, iy]
     return
 end
 
-@parallel_indices (ix,iy) function bc_y!(A::Data.Array)
+@parallel_indices (ix) function bc_y!(A::Data.Array)
     A[ix, 1  ] = A[ix, 2    ]
     A[ix, end] = A[ix, end-1]
     return
@@ -121,7 +121,6 @@ end
     T[:,end] .= -ΔT/2.0
     T_old     = @zeros(nx  ,ny  )
     Pt        = @zeros(nx  ,ny  )
-    dτPt      = @zeros(nx  ,ny  )
     ∇V        = @zeros(nx  ,ny  )
     Vx        = @zeros(nx+1,ny  )
     Vy        = @zeros(nx  ,ny+1)
@@ -155,7 +154,7 @@ end
         while (errV > ε || errP > ε) && iter <= iterMax
             @parallel assign!(ErrV, Vy)
             @parallel assign!(ErrP, Pt)
-            @parallel compute_1!(RogT, Eta, ∇V, Pt, τxx, τyy, σxy, T, Vx, Vy, dτPt, ρ0gα, η0, dη_dT, ΔT, dτ_iter, β, dx, dy)
+            @parallel compute_1!(RogT, Eta, ∇V, Pt, τxx, τyy, σxy, T, Vx, Vy, ρ0gα, η0, dη_dT, ΔT, dτ_iter, β, dx, dy)
             @parallel compute_2!(Rx, Ry, dVxdτ, dVydτ, Pt, RogT, τxx, τyy, σxy, ρ, dampX, dampY, dτ_iter, dx, dy)
             @parallel update_V!(Vx, Vy, dVxdτ, dVydτ, dτ_iter)
             @parallel (1:size(Vx,1), 1:size(Vx,2)) bc_y!(Vx)
