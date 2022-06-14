@@ -157,8 +157,8 @@ end
             @parallel compute_1!(RogT, Eta, ∇V, Pt, τxx, τyy, σxy, T, Vx, Vy, ρ0gα, η0, dη_dT, ΔT, dτ_iter, β, dx, dy)
             @parallel compute_2!(Rx, Ry, dVxdτ, dVydτ, Pt, RogT, τxx, τyy, σxy, ρ, dampX, dampY, dτ_iter, dx, dy)
             @parallel update_V!(Vx, Vy, dVxdτ, dVydτ, dτ_iter)
-            @parallel (1:size(Vx,1), 1:size(Vx,2)) bc_y!(Vx)
-            @parallel (1:size(Vy,1), 1:size(Vy,2)) bc_x!(Vy)
+            @parallel (1:size(Vx,1)) bc_y!(Vx)
+            @parallel (1:size(Vy,2)) bc_x!(Vy)
             @parallel compute_error!(ErrV, Vy)
             @parallel compute_error!(ErrP, Pt)
             if mod(iter,nerr) == 0
