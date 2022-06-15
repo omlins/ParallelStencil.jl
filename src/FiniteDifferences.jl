@@ -19,6 +19,9 @@ Provides macros for 1-D finite differences computations. The dimensions x refers
 ###### Averages
 - [`@av`](@ref)
 
+###### Harmonic averages
+- [`@harm`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -29,6 +32,7 @@ module FiniteDifferences1D
 export @d, @d2
 export @all, @inn
 export @av
+export @harm
 export @maxloc, @minloc
 export @within
 
@@ -37,6 +41,7 @@ export @within
 @doc "`@all(A)`: Select all elements of `A`. Corresponds to `A[:]`." :(@all)
 @doc "`@inn(A)`: Select the inner elements of `A`. Corresponds to `A[2:end-1]`" :(@inn)
 @doc "`@av(A)`: Compute averages between adjacent elements of `A`." :(@av)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A`." :(@harm)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
@@ -49,6 +54,7 @@ macro     d2(A::Symbol)  esc(:( ($A[$ixi+1] - $A[$ixi])  -  ($A[$ixi] - $A[$ixi-
 macro    all(A::Symbol)  esc(:( $A[$ix  ] )) end
 macro    inn(A::Symbol)  esc(:( $A[$ixi ] )) end
 macro     av(A::Symbol)  esc(:(($A[$ix] + $A[$ix+1] )*0.5 )) end
+macro   harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix] + 1.0/$A[$ix+1])*2.0 )) end
 macro maxloc(A::Symbol)  esc(:( max( max($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 macro minloc(A::Symbol)  esc(:( min( min($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 
@@ -94,6 +100,13 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 - [`@av_xi`](@ref)
 - [`@av_yi`](@ref)
 
+###### Harmonic verages
+- [`@harm`](@ref)
+- [`@harm_xa`](@ref)
+- [`@harm_ya`](@ref)
+- [`@harm_xi`](@ref)
+- [`@harm_yi`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -104,6 +117,7 @@ module FiniteDifferences2D
 export @d_xa, @d_ya, @d_xi, @d_yi, @d2_xi, @d2_yi
 export @all, @inn, @inn_x, @inn_y
 export @av, @av_xa, @av_ya, @av_xi, @av_yi
+export @harm, @harm_xa, @harm_ya, @harm_xi, @harm_yi
 export @maxloc, @minloc
 export @within
 
@@ -122,6 +136,11 @@ export @within
 @doc "`@av_ya(A)`: Compute averages between adjacent elements of `A` along the dimension y." :(@av_ya)
 @doc "`@av_xi(A)`: Compute averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xa(A))`." :(@av_xi)
 @doc "`@av_yi(A)`: Compute averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_ya(A))`." :(@av_yi)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y." :(@harm)
+@doc "`@harm_xa(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x." :(@harm_xa)
+@doc "`@harm_ya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y." :(@harm_ya)
+@doc "`@harm_xi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@harm_xa(A))`." :(@harm_xi)
+@doc "`@harm_yi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@harm_ya(A))`." :(@harm_yi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
@@ -129,25 +148,30 @@ import ..ParallelStencil: INDICES, WITHIN_DOC
 ix, iy = INDICES[1], INDICES[2]
 ixi, iyi = :($ix+1), :($iy+1)
 
-macro   d_xa(A::Symbol)  esc(:( $A[$ix+1,$iy  ] - $A[$ix  ,$iy ] )) end
-macro   d_ya(A::Symbol)  esc(:( $A[$ix  ,$iy+1] - $A[$ix  ,$iy ] )) end
-macro   d_xi(A::Symbol)  esc(:( $A[$ix+1,$iyi ] - $A[$ix  ,$iyi] )) end
-macro   d_yi(A::Symbol)  esc(:( $A[$ixi ,$iy+1] - $A[$ixi ,$iy ] )) end
-macro  d2_xi(A::Symbol)  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi-1,$iyi  ]) )) end
-macro  d2_yi(A::Symbol)  esc(:( ($A[$ixi  ,$iyi+1] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi  ,$iyi-1]) )) end
-macro    all(A::Symbol)  esc(:( $A[$ix  ,$iy  ] )) end
-macro    inn(A::Symbol)  esc(:( $A[$ixi ,$iyi ] )) end
-macro  inn_x(A::Symbol)  esc(:( $A[$ixi ,$iy  ] )) end
-macro  inn_y(A::Symbol)  esc(:( $A[$ix  ,$iyi ] )) end
-macro     av(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] + $A[$ix,$iy+1] + $A[$ix+1,$iy+1])*0.25 )) end
-macro  av_xa(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] )*0.5 )) end
-macro  av_ya(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix  ,$iy+1] )*0.5 )) end
-macro  av_xi(A::Symbol)  esc(:(($A[$ix  ,$iyi ] + $A[$ix+1,$iyi ] )*0.5 )) end
-macro  av_yi(A::Symbol)  esc(:(($A[$ixi ,$iy  ] + $A[$ixi ,$iy+1] )*0.5 )) end
-macro maxloc(A::Symbol)  esc(:( max( max( max($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
-                                          max($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
-macro minloc(A::Symbol)  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
-                                          min($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
+macro     d_xa(A::Symbol)  esc(:( $A[$ix+1,$iy  ] - $A[$ix  ,$iy ] )) end
+macro     d_ya(A::Symbol)  esc(:( $A[$ix  ,$iy+1] - $A[$ix  ,$iy ] )) end
+macro     d_xi(A::Symbol)  esc(:( $A[$ix+1,$iyi ] - $A[$ix  ,$iyi] )) end
+macro     d_yi(A::Symbol)  esc(:( $A[$ixi ,$iy+1] - $A[$ixi ,$iy ] )) end
+macro    d2_xi(A::Symbol)  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi-1,$iyi  ]) )) end
+macro    d2_yi(A::Symbol)  esc(:( ($A[$ixi  ,$iyi+1] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi  ,$iyi-1]) )) end
+macro      all(A::Symbol)  esc(:( $A[$ix  ,$iy  ] )) end
+macro      inn(A::Symbol)  esc(:( $A[$ixi ,$iyi ] )) end
+macro    inn_x(A::Symbol)  esc(:( $A[$ixi ,$iy  ] )) end
+macro    inn_y(A::Symbol)  esc(:( $A[$ix  ,$iyi ] )) end
+macro       av(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] + $A[$ix,$iy+1] + $A[$ix+1,$iy+1])*0.25 )) end
+macro    av_xa(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix+1,$iy  ] )*0.5 )) end
+macro    av_ya(A::Symbol)  esc(:(($A[$ix  ,$iy  ] + $A[$ix  ,$iy+1] )*0.5 )) end
+macro    av_xi(A::Symbol)  esc(:(($A[$ix  ,$iyi ] + $A[$ix+1,$iyi ] )*0.5 )) end
+macro    av_yi(A::Symbol)  esc(:(($A[$ixi ,$iy  ] + $A[$ixi ,$iy+1] )*0.5 )) end
+macro     harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix+1,$iy  ] + 1.0/$A[$ix,$iy+1] + 1.0/$A[$ix+1,$iy+1])*4.0 )) end
+macro  harm_xa(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix+1,$iy  ] )*2.0 )) end
+macro  harm_ya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ] + 1.0/$A[$ix  ,$iy+1] )*2.0 )) end
+macro  harm_xi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ] + 1.0/$A[$ix+1,$iyi ] )*2.0 )) end
+macro  harm_yi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ] + 1.0/$A[$ixi ,$iy+1] )*2.0 )) end
+macro   maxloc(A::Symbol)  esc(:( max( max( max($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
+                                            max($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
+macro   minloc(A::Symbol)  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
+                                            min($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
 
 @doc WITHIN_DOC
 macro within(macroname::String, A::Symbol)
@@ -208,6 +232,21 @@ Provides macros for 3-D finite differences computations. The dimensions x, y and
 - [`@av_xzi`](@ref)
 - [`@av_yzi`](@ref)
 
+###### Harmonic verages
+- [`@harm`](@ref)
+- [`@harm_xa`](@ref)
+- [`@harm_ya`](@ref)
+- [`@harm_za`](@ref)
+- [`@harm_xi`](@ref)
+- [`@harm_yi`](@ref)
+- [`@harm_zi`](@ref)
+- [`@harm_xya`](@ref)
+- [`@harm_xza`](@ref)
+- [`@harm_yza`](@ref)
+- [`@harm_xyi`](@ref)
+- [`@harm_xzi`](@ref)
+- [`@harm_yzi`](@ref)
+
 ###### Others
 - [`@maxloc`](@ref)
 - [`@minloc`](@ref)
@@ -218,6 +257,7 @@ module FiniteDifferences3D
 export @d_xa, @d_ya, @d_za, @d_xi, @d_yi, @d_zi, @d2_xi, @d2_yi, @d2_zi
 export @all, @inn, @inn_x, @inn_y, @inn_z, @inn_xy, @inn_xz, @inn_yz
 export @av, @av_xa, @av_ya, @av_za, @av_xi, @av_yi, @av_zi, @av_xya, @av_xza, @av_yza, @av_xyi, @av_xzi, @av_yzi #, @av_xya2, @av_xza2, @av_yza2
+export @harm, @harm_xa, @harm_ya, @harm_za, @harm_xi, @harm_yi, @harm_zi, @harm_xya, @harm_xza, @harm_yza, @harm_xyi, @harm_xzi, @harm_yzi 
 export @maxloc, @minloc
 export @within
 
@@ -251,6 +291,19 @@ export @within
 @doc "`@av_xyi(A)`: Compute averages between adjacent elements of `A` along the dimensions x and y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_z(@av_xya(A))`." :(@av_xyi)
 @doc "`@av_xzi(A)`: Compute averages between adjacent elements of `A` along the dimensions x and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@av_xza(A))`." :(@av_xzi)
 @doc "`@av_yzi(A)`: Compute averages between adjacent elements of `A` along the dimensions y and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@av_yza(A))`." :(@av_yzi)
+@doc "`@harm(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y and z." :(@harm)
+@doc "`@harm_xa(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x." :(@harm_xa)
+@doc "`@harm_ya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y." :(@harm_ya)
+@doc "`@harm_za(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension z." :(@harm_za)
+@doc "`@harm_xi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_yz(@harm_xa(A))`." :(@harm_xi)
+@doc "`@harm_yi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_xz(@harm_ya(A))`." :(@harm_yi)
+@doc "`@harm_zi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimension z and select the inner elements of `A` in the remaining dimensions. Corresponds to `@inn_xy(@harm_za(A))`." :(@harm_zi)
+@doc "`@harm_xya(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y." :(@harm_xya)
+@doc "`@harm_xza(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and z." :(@harm_xza)
+@doc "`@harm_yza(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions y and z." :(@harm_yza)
+@doc "`@harm_xyi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_z(@harm_xya(A))`." :(@harm_xyi)
+@doc "`@harm_xzi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions x and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@harm_xza(A))`." :(@harm_xzi)
+@doc "`@harm_yzi(A)`: Compute harmonic averages between adjacent elements of `A` along the dimensions y and z and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@harm_yza(A))`." :(@harm_yzi)
 @doc "`@maxloc(A)`: Compute the maximum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@maxloc)
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
@@ -258,51 +311,73 @@ import ..ParallelStencil: INDICES, WITHIN_DOC
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = :($ix+1), :($iy+1), :($iz+1)
 
-macro   d_xa(A::Symbol)  esc(:( $A[$ix+1,$iy  ,$iz  ] - $A[$ix  ,$iy  ,$iz  ] )) end
-macro   d_ya(A::Symbol)  esc(:( $A[$ix  ,$iy+1,$iz  ] - $A[$ix  ,$iy  ,$iz  ] )) end
-macro   d_za(A::Symbol)  esc(:( $A[$ix  ,$iy  ,$iz+1] - $A[$ix  ,$iy  ,$iz  ] )) end
-macro   d_xi(A::Symbol)  esc(:( $A[$ix+1,$iyi ,$izi ] - $A[$ix  ,$iyi ,$izi ] )) end
-macro   d_yi(A::Symbol)  esc(:( $A[$ixi ,$iy+1,$izi ] - $A[$ixi ,$iy  ,$izi ] )) end
-macro   d_zi(A::Symbol)  esc(:( $A[$ixi ,$iyi ,$iz+1] - $A[$ixi ,$iyi ,$iz  ] )) end
-macro  d2_xi(A::Symbol)  esc(:( ($A[$ixi+1,$iyi  ,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi-1,$iyi  ,$izi  ]) )) end
-macro  d2_yi(A::Symbol)  esc(:( ($A[$ixi  ,$iyi+1,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi-1,$izi  ]) )) end
-macro  d2_zi(A::Symbol)  esc(:( ($A[$ixi  ,$iyi  ,$izi+1] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi  ,$izi-1]) )) end
-macro    all(A::Symbol)  esc(:( $A[$ix  ,$iy  ,$iz  ] )) end
-macro    inn(A::Symbol)  esc(:( $A[$ixi ,$iyi ,$izi ] )) end
-macro  inn_x(A::Symbol)  esc(:( $A[$ixi ,$iy  ,$iz  ] )) end
-macro  inn_y(A::Symbol)  esc(:( $A[$ix  ,$iyi ,$iz  ] )) end
-macro  inn_z(A::Symbol)  esc(:( $A[$ix  ,$iy  ,$izi ] )) end
-macro inn_xy(A::Symbol)  esc(:( $A[$ixi ,$iyi ,$iz  ] )) end
-macro inn_xz(A::Symbol)  esc(:( $A[$ixi ,$iy  ,$izi ] )) end
-macro inn_yz(A::Symbol)  esc(:( $A[$ix  ,$iyi ,$izi ] )) end
-macro     av(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
-                                $A[$ix+1,$iy+1,$iz  ] + $A[$ix+1,$iy+1,$iz+1] +
-                                $A[$ix  ,$iy+1,$iz+1] + $A[$ix  ,$iy  ,$iz+1] +
-                                $A[$ix+1,$iy  ,$iz+1] + $A[$ix  ,$iy+1,$iz  ] )*0.125)) end
-macro  av_xa(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] )*0.5 )) end
-macro  av_ya(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy+1,$iz  ] )*0.5 )) end
-macro  av_za(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy  ,$iz+1] )*0.5 )) end
-macro  av_xi(A::Symbol)  esc(:(($A[$ix  ,$iyi ,$izi ] + $A[$ix+1,$iyi ,$izi ] )*0.5 )) end
-macro  av_yi(A::Symbol)  esc(:(($A[$ixi ,$iy  ,$izi ] + $A[$ixi ,$iy+1,$izi ] )*0.5 )) end
-macro  av_zi(A::Symbol)  esc(:(($A[$ixi ,$iyi ,$iz  ] + $A[$ixi ,$iyi ,$iz+1] )*0.5 )) end
-macro av_xya(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
-                                $A[$ix  ,$iy+1,$iz  ] + $A[$ix+1,$iy+1,$iz  ] )*0.25 )) end
-macro av_xza(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
-                                $A[$ix  ,$iy  ,$iz+1] + $A[$ix+1,$iy  ,$iz+1] )*0.25 )) end
-macro av_yza(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy+1,$iz  ] +
-                                $A[$ix  ,$iy  ,$iz+1] + $A[$ix  ,$iy+1,$iz+1] )*0.25 )) end
-macro av_xyi(A::Symbol)  esc(:(($A[$ix  ,$iy  ,$izi ] + $A[$ix+1,$iy  ,$izi ] +
-                                $A[$ix  ,$iy+1,$izi ] + $A[$ix+1,$iy+1,$izi ] )*0.25 )) end
-macro av_xzi(A::Symbol)  esc(:(($A[$ix  ,$iyi ,$iz  ] + $A[$ix+1,$iyi ,$iz  ] +
-                                $A[$ix  ,$iyi ,$iz+1] + $A[$ix+1,$iyi ,$iz+1] )*0.25 )) end
-macro av_yzi(A::Symbol)  esc(:(($A[$ixi ,$iy  ,$iz  ] + $A[$ixi ,$iy+1,$iz  ] +
-                                $A[$ixi ,$iy  ,$iz+1] + $A[$ixi ,$iy+1,$iz+1] )*0.25 )) end
-macro maxloc(A::Symbol)  esc(:( max( max( max( max($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
-                                               max($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
-                                               max($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
-macro minloc(A::Symbol)  esc(:( min( min( min( min($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
-                                               min($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
-                                               min($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
+macro     d_xa(A::Symbol)   esc(:( $A[$ix+1,$iy  ,$iz  ] - $A[$ix  ,$iy  ,$iz  ] )) end
+macro     d_ya(A::Symbol)   esc(:( $A[$ix  ,$iy+1,$iz  ] - $A[$ix  ,$iy  ,$iz  ] )) end
+macro     d_za(A::Symbol)   esc(:( $A[$ix  ,$iy  ,$iz+1] - $A[$ix  ,$iy  ,$iz  ] )) end
+macro     d_xi(A::Symbol)   esc(:( $A[$ix+1,$iyi ,$izi ] - $A[$ix  ,$iyi ,$izi ] )) end
+macro     d_yi(A::Symbol)   esc(:( $A[$ixi ,$iy+1,$izi ] - $A[$ixi ,$iy  ,$izi ] )) end
+macro     d_zi(A::Symbol)   esc(:( $A[$ixi ,$iyi ,$iz+1] - $A[$ixi ,$iyi ,$iz  ] )) end
+macro    d2_xi(A::Symbol)   esc(:( ($A[$ixi+1,$iyi  ,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi-1,$iyi  ,$izi  ]) )) end
+macro    d2_yi(A::Symbol)   esc(:( ($A[$ixi  ,$iyi+1,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi-1,$izi  ]) )) end
+macro    d2_zi(A::Symbol)   esc(:( ($A[$ixi  ,$iyi  ,$izi+1] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi  ,$izi-1]) )) end
+macro      all(A::Symbol)   esc(:( $A[$ix  ,$iy  ,$iz  ] )) end
+macro      inn(A::Symbol)   esc(:( $A[$ixi ,$iyi ,$izi ] )) end
+macro    inn_x(A::Symbol)   esc(:( $A[$ixi ,$iy  ,$iz  ] )) end
+macro    inn_y(A::Symbol)   esc(:( $A[$ix  ,$iyi ,$iz  ] )) end
+macro    inn_z(A::Symbol)   esc(:( $A[$ix  ,$iy  ,$izi ] )) end
+macro   inn_xy(A::Symbol)   esc(:( $A[$ixi ,$iyi ,$iz  ] )) end
+macro   inn_xz(A::Symbol)   esc(:( $A[$ixi ,$iy  ,$izi ] )) end
+macro   inn_yz(A::Symbol)   esc(:( $A[$ix  ,$iyi ,$izi ] )) end
+macro       av(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
+                                   $A[$ix+1,$iy+1,$iz  ] + $A[$ix+1,$iy+1,$iz+1] +
+                                   $A[$ix  ,$iy+1,$iz+1] + $A[$ix  ,$iy  ,$iz+1] +
+                                   $A[$ix+1,$iy  ,$iz+1] + $A[$ix  ,$iy+1,$iz  ] )*0.125)) end
+macro    av_xa(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] )*0.5 )) end
+macro    av_ya(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy+1,$iz  ] )*0.5 )) end
+macro    av_za(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy  ,$iz+1] )*0.5 )) end
+macro    av_xi(A::Symbol)   esc(:(($A[$ix  ,$iyi ,$izi ] + $A[$ix+1,$iyi ,$izi ] )*0.5 )) end
+macro    av_yi(A::Symbol)   esc(:(($A[$ixi ,$iy  ,$izi ] + $A[$ixi ,$iy+1,$izi ] )*0.5 )) end
+macro    av_zi(A::Symbol)   esc(:(($A[$ixi ,$iyi ,$iz  ] + $A[$ixi ,$iyi ,$iz+1] )*0.5 )) end
+macro   av_xya(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
+                                   $A[$ix  ,$iy+1,$iz  ] + $A[$ix+1,$iy+1,$iz  ] )*0.25 )) end
+macro   av_xza(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix+1,$iy  ,$iz  ] +
+                                   $A[$ix  ,$iy  ,$iz+1] + $A[$ix+1,$iy  ,$iz+1] )*0.25 )) end
+macro   av_yza(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$iz  ] + $A[$ix  ,$iy+1,$iz  ] +
+                                   $A[$ix  ,$iy  ,$iz+1] + $A[$ix  ,$iy+1,$iz+1] )*0.25 )) end
+macro   av_xyi(A::Symbol)   esc(:(($A[$ix  ,$iy  ,$izi ] + $A[$ix+1,$iy  ,$izi ] +
+                                   $A[$ix  ,$iy+1,$izi ] + $A[$ix+1,$iy+1,$izi ] )*0.25 )) end
+macro   av_xzi(A::Symbol)   esc(:(($A[$ix  ,$iyi ,$iz  ] + $A[$ix+1,$iyi ,$iz  ] +
+                                   $A[$ix  ,$iyi ,$iz+1] + $A[$ix+1,$iyi ,$iz+1] )*0.25 )) end
+macro   av_yzi(A::Symbol)   esc(:(($A[$ixi ,$iy  ,$iz  ] + $A[$ixi ,$iy+1,$iz  ] +
+                                   $A[$ixi ,$iy  ,$iz+1] + $A[$ixi ,$iy+1,$iz+1] )*0.25 )) end
+macro     harm(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix+1,$iy+1,$iz  ] + 1.0/$A[$ix+1,$iy+1,$iz+1] +
+                                      1.0/$A[$ix  ,$iy+1,$iz+1] + 1.0/$A[$ix  ,$iy  ,$iz+1] +
+                                      1.0/$A[$ix+1,$iy  ,$iz+1] + 1.0/$A[$ix  ,$iy+1,$iz  ] )*8.0)) end
+macro  harm_xa(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] )*2.0 )) end
+macro  harm_ya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy+1,$iz  ] )*2.0 )) end
+macro  harm_za(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy  ,$iz+1] )*2.0 )) end
+macro  harm_xi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ,$izi ] + 1.0/$A[$ix+1,$iyi ,$izi ] )*2.0 )) end
+macro  harm_yi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ,$izi ] + 1.0/$A[$ixi ,$iy+1,$izi ] )*2.0 )) end
+macro  harm_zi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iyi ,$iz  ] + 1.0/$A[$ixi ,$iyi ,$iz+1] )*2.0 )) end
+macro harm_xya(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix  ,$iy+1,$iz  ] + 1.0/$A[$ix+1,$iy+1,$iz  ] )*4.0 )) end
+macro harm_xza(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix+1,$iy  ,$iz  ] +
+                                      1.0/$A[$ix  ,$iy  ,$iz+1] + 1.0/$A[$ix+1,$iy  ,$iz+1] )*4.0 )) end
+macro harm_yza(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$iz  ] + 1.0/$A[$ix  ,$iy+1,$iz  ] +
+                                      1.0/$A[$ix  ,$iy  ,$iz+1] + 1.0/$A[$ix  ,$iy+1,$iz+1] )*4.0 )) end
+macro harm_xyi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iy  ,$izi ] + 1.0/$A[$ix+1,$iy  ,$izi ] +
+                                      1.0/$A[$ix  ,$iy+1,$izi ] + 1.0/$A[$ix+1,$iy+1,$izi ] )*4.0 )) end
+macro harm_xzi(A::Symbol)  esc(:(1.0/(1.0/$A[$ix  ,$iyi ,$iz  ] + 1.0/$A[$ix+1,$iyi ,$iz  ] +
+                                      1.0/$A[$ix  ,$iyi ,$iz+1] + 1.0/$A[$ix+1,$iyi ,$iz+1] )*4.0 )) end
+macro harm_yzi(A::Symbol)  esc(:(1.0/(1.0/$A[$ixi ,$iy  ,$iz  ] + 1.0/$A[$ixi ,$iy+1,$iz  ] +
+                                      1.0/$A[$ixi ,$iy  ,$iz+1] + 1.0/$A[$ixi ,$iy+1,$iz+1] )*4.0 )) end
+macro   maxloc(A::Symbol)  esc(:( max( max( max( max($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
+                                              max($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
+                                              max($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
+macro   minloc(A::Symbol)  esc(:( min( min( min( min($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
+                                              min($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
+                                              min($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
 
 @doc WITHIN_DOC
 macro within(macroname::String, A::Symbol)
