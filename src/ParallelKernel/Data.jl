@@ -83,29 +83,29 @@ function Data_cuda(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import CUDA, CellArrays, StaticArrays
-            Array{T, N}                 = CUDA.CuArray{T, N}
-            DeviceArray{T, N}           = CUDA.CuDeviceArray{T, N}
-            Cell{T, S}                  = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            DeviceCell{T, S}            = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            CellArray{T_elem, N}        = CellArrays.CuCellArray{<:Cell{T_elem},N,0,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
-            DeviceCellArray{T_elem, N}  = CellArrays.CellArray{<:DeviceCell{T_elem},N,0,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+            Array{T, N}                   = CUDA.CuArray{T, N}
+            DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
+            Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            CellArray{T_elem, N, B}       = CellArrays.CuCellArray{<:Cell{T_elem},N,B,T_elem}
+            DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import CUDA, CellArrays, StaticArrays
-            Number                      = $numbertype
-            Array{N}                    = CUDA.CuArray{$numbertype, N}
-            DeviceArray{N}              = CUDA.CuDeviceArray{$numbertype, N}
-            Cell{S}                     = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            DeviceCell{S}               = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            CellArray{N}                = CellArrays.CuCellArray{<:Cell,N,0,$numbertype}
-            DeviceCellArray{N}          = CellArrays.CellArray{<:DeviceCell,N,0,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
-            TArray{T, N}                = CUDA.CuArray{T, N}
-            DeviceTArray{T, N}          = CUDA.CuDeviceArray{T, N}
-            TCell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            DeviceTCell{T, S}           = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            TCellArray{T_elem, N}       = CellArrays.CuCellArray{<:TCell{T_elem},N,0,T_elem}
-            DeviceTCellArray{T_elem, N} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,0,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+            Number                         = $numbertype
+            Array{N}                       = CUDA.CuArray{$numbertype, N}
+            DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
+            Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            CellArray{N, B}                = CellArrays.CuCellArray{<:Cell,N,B,$numbertype}
+            DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
+            TArray{T, N}                   = CUDA.CuArray{T, N}
+            DeviceTArray{T, N}             = CUDA.CuDeviceArray{T, N}
+            TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            TCellArray{T_elem, N, B}       = CellArrays.CuCellArray{<:TCell{T_elem},N,B,T_elem}
+            DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     end
 end
@@ -114,29 +114,29 @@ function Data_threads(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CellArrays, StaticArrays
-            Array{T, N}                 = Base.Array{T, N}
-            DeviceArray{T, N}           = Base.Array{T, N}
-            Cell{T, S}                  = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            DeviceCell{T, S}            = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            CellArray{T_elem, N}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,0,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
-            DeviceCellArray{T_elem, N}  = CellArrays.CPUCellArray{<:DeviceCell{T_elem},N,0,T_elem}
+            Array{T, N}                    = Base.Array{T, N}
+            DeviceArray{T, N}              = Base.Array{T, N}
+            Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            DeviceCell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem} # Note: B is currently fixed to 0. This can be generalized later.
+            DeviceCellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:DeviceCell{T_elem},N,B,T_elem}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CellArrays, StaticArrays
-            Number                      = $numbertype
-            Array{N}                    = Base.Array{$numbertype, N}
-            DeviceArray{N}              = Base.Array{$numbertype, N}
-            Cell{S}                     = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            DeviceCell{S}               = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            CellArray{N}                = CellArrays.CPUCellArray{<:Cell,N,0,$numbertype}
-            DeviceCellArray{N}          = CellArrays.CPUCellArray{<:DeviceCell,N,0,$numbertype}
-            TArray{T, N}                = Base.Array{T, N}
-            DeviceTArray{T, N}          = Base.Array{T, N}
-            TCell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            DeviceTCell{T, S}           = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            TCellArray{T_elem, N}       = CellArrays.CPUCellArray{<:TCell{T_elem},N,0,T_elem}
-            DeviceTCellArray{T_elem, N} = CellArrays.CPUCellArray{<:DeviceTCell{T_elem},N,0,T_elem}
+            Number                         = $numbertype
+            Array{N}                       = Base.Array{$numbertype, N}
+            DeviceArray{N}                 = Base.Array{$numbertype, N}
+            Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            CellArray{N, B}                = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
+            DeviceCellArray{N, B}          = CellArrays.CPUCellArray{<:DeviceCell,N,B,$numbertype}
+            TArray{T, N}                   = Base.Array{T, N}
+            DeviceTArray{T, N}             = Base.Array{T, N}
+            TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            TCellArray{T_elem, N, B}       = CellArrays.CPUCellArray{<:TCell{T_elem},N,B,T_elem}
+            DeviceTCellArray{T_elem, N, B} = CellArrays.CPUCellArray{<:DeviceTCell{T_elem},N,B,T_elem}
         end)
     end
 end
