@@ -16,10 +16,12 @@ end
             @init_parallel_kernel($package, Float16)
             @require @is_initialized()
             @testset "mapping to package" begin
-                @test @zeros(2,3)         == parentmodule($package).zeros(Float16,2,3)
-                @test @zeros(Float32,2,3) == parentmodule($package).zeros(Float32,2,3)
-                @test @ones(2,3)          == parentmodule($package).ones(Float16,2,3)
-                @test @ones(Float32,2,3)  == parentmodule($package).ones(Float32,2,3)
+                @test @zeros(2,3)           == parentmodule($package).zeros(Float16,2,3)
+                @test @zeros(Float32,2,3)   == parentmodule($package).zeros(Float32,2,3)
+                @test @ones(2,3)            == parentmodule($package).ones(Float16,2,3)
+                @test @ones(Float32,2,3)    == parentmodule($package).ones(Float32,2,3)
+                @test @fill(1,2,3)          == parentmodule($package).fill(Float16,2,3)
+                @test @fill(Float32,1,2,3)  == parentmodule($package).fill(Float32,2,3)
                 @static if $package == $PKG_CUDA
                     @test typeof(@rand(2,3))         == typeof(CUDA.CuArray(rand(Float16,2,3)))
                     @test typeof(@rand(Float64,2,3)) == typeof(CUDA.CuArray(rand(Float64,2,3)))
@@ -55,6 +57,8 @@ end
                 @test_throws ArgumentError @zeros(2,3)
                 @test_throws ArgumentError @ones(2,3)
                 @test_throws ArgumentError @rand(2,3)
+                @test_throws ArgumentError @fill(2,2,3)
+                @test_throws ArgumentError @alloc(2,2)
             end;
             @reset_parallel_kernel()
         end;

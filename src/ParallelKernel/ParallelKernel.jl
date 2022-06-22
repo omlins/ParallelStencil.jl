@@ -13,6 +13,8 @@ Enables writing parallel high-performance kernels and whole applications that ca
 - [`@zeros`](@ref)
 - [`@ones`](@ref)
 - [`@rand`](@ref)
+- [`@fill`](@ref)
+- [`@alloc`](@ref)
 !!! note "Advanced"
     - [`@parallel_indices`](@ref)
     - [`@parallel_async`](@ref)
@@ -53,7 +55,7 @@ include("parallel.jl")
 include("reset_parallel_kernel.jl")
 
 ## Exports
-export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand
+export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @fill, @alloc
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println
 export PKNumber
 
