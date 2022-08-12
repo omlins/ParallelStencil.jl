@@ -100,7 +100,7 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 - [`@av_xi`](@ref)
 - [`@av_yi`](@ref)
 
-###### Harmonic verages
+###### Harmonic averages
 - [`@harm`](@ref)
 - [`@harm_xa`](@ref)
 - [`@harm_ya`](@ref)
@@ -232,7 +232,7 @@ Provides macros for 3-D finite differences computations. The dimensions x, y and
 - [`@av_xzi`](@ref)
 - [`@av_yzi`](@ref)
 
-###### Harmonic verages
+###### Harmonic averages
 - [`@harm`](@ref)
 - [`@harm_xa`](@ref)
 - [`@harm_ya`](@ref)
