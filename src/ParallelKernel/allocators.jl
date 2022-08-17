@@ -91,7 +91,6 @@ Call `falses(args...)`, where the function `falses` is chosen to be compatible w
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
-    - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
 See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
@@ -100,8 +99,8 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), 
 macro falses(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :celltype, :blocklength), "@falses")
-    esc(_falses(posargs...; celldims=celldims, celltype=celltype, blocklength=blocklength))
+    celldims, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :blocklength), "@falses")
+    esc(_falses(posargs...; celldims=celldims, blocklength=blocklength))
 end
 
 
@@ -115,7 +114,6 @@ Call `trues(args...)`, where the function `trues` is chosen to be compatible wit
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
-    - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
 See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
@@ -124,8 +122,8 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref),
 macro trues(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :celltype, :blocklength), "@trues")
-    esc(_trues(posargs...; celldims=celldims, celltype=celltype, blocklength=blocklength))
+    celldims, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :blocklength), "@trues")
+    esc(_trues(posargs...; celldims=celldims, blocklength=blocklength))
 end
 
 
@@ -194,11 +192,11 @@ Create a cell type, which can then be passed to `@zeros`, `@ones`, `@rand`, `@fa
     - `parametric::Bool=false`: whether the cell type has a fixed or parametrisable element type. If `parametric=true` is set, then the keyword argument `eltype` is invalid.
 
 # Examples
-    @Celltype SymmetricTensor2D fieldnames=(xx, zz, xz)
+    @CellType SymmetricTensor2D fieldnames=(xx, zz, xz)
     #(...)
     A = @zeros(nx, ny, celltype=SymmetricTensor2D)
 
-    @Celltype SymmetricTensor3D fieldnames=(xx, yy, zz, yz, xz, xy)
+    @CellType SymmetricTensor3D fieldnames=(xx, yy, zz, yz, xz, xy)
     #(...)
     A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
 
@@ -206,9 +204,13 @@ Create a cell type, which can then be passed to `@zeros`, `@ones`, `@rand`, `@fa
     #(...)
     A = @zeros(nx, ny, celltype=Tensor2D)
 
-    @Celltype SymmetricTensor2D fieldnames=(xx, zz, xz) parametric=true
+    @CellType SymmetricTensor2D fieldnames=(xx, zz, xz) parametric=true
     #(...)
     A = @zeros(nx, ny, celltype=SymmetricTensor2D{Float32})
+
+    @CellType SymmetricTensor2D fieldnames=(xx, zz, xz) eltype=Float32
+    #(...)
+    A = @zeros(nx, ny, celltype=SymmetricTensor2D)
 
 See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref)
 """
@@ -280,8 +282,8 @@ function _rand(args...; eltype=nothing, celldims=nothing, celltype=nothing, bloc
     end
 end
 
-function _falses(args...; celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(Bool, celldims, celltype)
+function _falses(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
+    celltype    = determine_celltype(Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_gpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
@@ -289,8 +291,8 @@ function _falses(args...; celldims=nothing, celltype=nothing, blocklength=nothin
     end
 end
 
-function _trues(args...; celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(Bool, celldims, celltype)
+function _trues(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
+    celltype    = determine_celltype(Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_gpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
@@ -325,9 +327,9 @@ function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, param
     if isnothing(parametric) parametric=false end
     if isnothing(eltype)
         eltype = get_numbertype()
-        if (!parametric && eltype == NUMBERTYPE_NONE) @ArgumentError("@Celltype: the keyword argument 'eltype' is mandatory when no default is set (and the keyword argument `parametric=true` not set).") end
+        if (!parametric && eltype == NUMBERTYPE_NONE) @ArgumentError("@CellType: the keyword argument 'eltype' is mandatory when no default is set (and the keyword argument `parametric=true` not set).") end
     else
-        if (parametric) @ArgumentError("@Celltype: the keyword argument 'eltype' is invalid when `parametric=true` is set.") end
+        if (parametric) @ArgumentError("@CellType: the keyword argument 'eltype' is invalid when `parametric=true` is set.") end
     end
     fields = Expr[]
     if parametric
@@ -335,7 +337,7 @@ function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, param
             push!(fields, quote $fieldname::T end)
         end
         quote
-            struct $name{T} <: FieldArray{Tuple{$(dims...)}, T, length($dims)}
+            struct $name{T} <: ParallelStencil.ParallelKernel.FieldArray{Tuple{$(dims...)}, T, length($dims)}
                 $(fields...)
             end
         end
@@ -344,7 +346,7 @@ function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, param
             push!(fields, quote $fieldname::$eltype end)
         end
         quote
-            struct $name <: FieldArray{Tuple{$(dims...)}, $eltype, length($dims)}
+            struct $name <: ParallelStencil.ParallelKernel.FieldArray{Tuple{$(dims...)}, $eltype, length($dims)}
                 $(fields...)
             end
         end
@@ -400,7 +402,7 @@ falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 
  zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 0, args...))
   ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))
-  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); CellArray{T,length(dims),B}(Base.rand(eltype(T), B, prod(size(T)), ceil(Int,prod(dims)/B)), dims))
+  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
   rand_cpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cpu(T, blocklength, dims)
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
