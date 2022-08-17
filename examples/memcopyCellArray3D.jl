@@ -1,5 +1,4 @@
 const USE_GPU = true
-using CellArrays, StaticArrays
 using ParallelStencil
 using ParallelStencil.FiniteDifferences3D
 @static if USE_GPU
@@ -8,58 +7,39 @@ else
     @init_parallel_stencil(Threads, Float64, 3);
 end
 
-# @parallel function copy3D!(T2, T, Ci)
-#     @all(T2) = @all(T) + @all(Ci);
-#     return
-# end
-
-@parallel_indices (ix,iy,iz) function copy3D!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
-    T2[ix,iy,iz] = T[ix,iy,iz] * Ci[ix,iy,iz];
+@parallel function copy3D!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
+    @all(T2) = @all(T) + @all(Ci);
     return
 end
 
-struct Stiffness{T} <: FieldArray{Tuple{4,4}, T, 2}
-    xxxx::T
-    yxxx::T
-    xyxx::T
-    yyxx::T
-    xxyx::T
-    yxyx::T
-    xyyx::T
-    yyyx::T
-    xxxy::T
-    yxxy::T
-    xyxy::T
-    yyxy::T
-    xxyy::T
-    yxyy::T
-    xyyy::T
-    yyyy::T
+@parallel_indices (ix,iy,iz) function copy3D_explicit!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
+    T2[ix,iy,iz] = T[ix,iy,iz] + Ci[ix,iy,iz]
+    return
 end
 
-@CellType Tensor2D fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4)
-@CellType Tensor2D_T fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4) parametric=true
+using CellArrays
+@parallel_indices (ix,iy,iz) function copy3D_large_cells!(T2::Data.CellArray, T::Data.CellArray, Ci::Data.CellArray)
+    for cy = 1:cellsize(T2,2), cx = 1:cellsize(T2,1)
+        field(T2,cx,cy)[ix,iy,iz] = field(T,cx,cy)[ix,iy,iz] + field(Ci,cx,cy)[ix,iy,iz]
+    end
+    return
+end
+
+
+@CellType Cell4x4 fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4)
+@CellType TCell4x4 fieldnames=(xxxx, yxxx, xyxx, yyxx, xxyx, yxyx, xyyx, yyyx, xxxy, yxxy, xyxy, yyxy, xxyy, yxyy, xyyy, yyyy) dims=(4,4) parametric=true
 
 
 function memcopy3D()
 # Numerics
-nx, ny, nz = 128, 128, 1024                                                     # Number of gridpoints in dimensions x, y and z
+nx, ny, nz = 128,128,1024 #CPU:128,128,128                                      # Number of gridpoints in dimensions x, y and z
 celldims   = (4,4)
 nt         = 100;                                                               # Number of time steps
 
 # Array initializations
-# T  = @zeros(nx, ny, nz, celldims=celldims);
-# T2 = @zeros(nx, ny, nz, celldims=celldims);
-# Ci = @zeros(nx, ny, nz, celldims=celldims);
-# T  = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
-# T2 = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
-# Ci = @zeros(nx, ny, nz, celltype=Stiffness{Float64});
-# T  = @zeros(nx, ny, nz, celltype=Tensor2D);
-# T2 = @zeros(nx, ny, nz, celltype=Tensor2D);
-# Ci = @zeros(nx, ny, nz, celltype=Tensor2D);
-T  = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
-T2 = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
-Ci = @zeros(nx, ny, nz, celltype=Tensor2D_T{Float64});
+T  = @zeros(nx, ny, nz, celltype=Cell4x4);  # or: celltype=TCell4x4{Float64}
+T2 = @zeros(nx, ny, nz, celltype=Cell4x4);  # or: celltype=TCell4x4{Float64}
+Ci = @zeros(nx, ny, nz, celldims=celldims);
 
 # Initial conditions
 @fill!(Ci, 0.5);
@@ -69,7 +49,7 @@ copy!(T2.data, T.data);
 # Time loop
 for it = 1:nt
     if (it == 11) global t0=time(); end  # Start measuring time.
-    @parallel copy3D!(T2, T, Ci);
+    @parallel copy3D!(T2, T, Ci);        # or: @parallel copy3D_explicit!(T2, T, Ci);  or: @parallel copy3D_large_cells!(T2, T, Ci);
     T, T2 = T2, T;
 end
 time_s=time()-t0
