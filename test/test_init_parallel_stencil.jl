@@ -26,7 +26,17 @@ end
                 @test length(@symbols($(@__MODULE__), Data)) > 1
                 @test Symbol("Number") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
+                @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
                 @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("TArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("TCell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("TCellArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceTArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceTCell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceTCellArray") in @symbols($(@__MODULE__), Data)
             end;
             @reset_parallel_stencil()
         end;
@@ -44,7 +54,11 @@ end
                 @test length(@symbols($(@__MODULE__), Data)) > 1
                 @test !(Symbol("Number") in @symbols($(@__MODULE__), Data))
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
+                @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
                 @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
+                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
             end;
             @reset_parallel_stencil()
         end;
