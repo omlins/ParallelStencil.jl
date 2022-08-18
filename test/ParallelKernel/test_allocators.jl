@@ -302,7 +302,28 @@ end
             end;
             @reset_parallel_kernel()
         end;
-        @testset "5. Exceptions" begin
+        @testset "5. Enums" begin
+            @require !@is_initialized()
+            @init_parallel_kernel($package, Float16)
+            @require @is_initialized()
+            @enum Phase air fluid solid
+            T_Phase = SMatrix{(3,4)..., Phase, prod((3,4))}
+            @static if $package == $PKG_CUDA
+                CUDA.allowscalar(true)
+                @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(CUDA.CuArray(rand(Phase, 2,3)))
+                @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(CuCellArray{T_Phase,0}(undef,2,3))
+                @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(CuCellArray{T_Phase,0}(undef,2,3))
+                @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(CuCellArray{T_Phase,0}(undef,2,3))
+                CUDA.allowscalar(false)
+            else
+                @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(rand(Phase, 2,3))
+                @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(CPUCellArray{T_Phase,1}(undef,2,3))
+                @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(CPUCellArray{T_Phase,1}(undef,2,3))
+                @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(CPUCellArray{T_Phase,1}(undef,2,3))
+            end
+            @reset_parallel_kernel()
+        end;
+        @testset "6. Exceptions" begin
             @require !@is_initialized()
             @init_parallel_kernel(package = $package)
             @require @is_initialized
