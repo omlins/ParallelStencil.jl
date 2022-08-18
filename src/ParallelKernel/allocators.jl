@@ -402,7 +402,7 @@ falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 
  zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 0, args...))
   ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))
-  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
+  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
   rand_cpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cpu(T, blocklength, dims)
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
@@ -417,7 +417,7 @@ falses_gpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 
  zeros_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_gpu(T, blocklength, 0, args...))
   ones_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_gpu(T, blocklength, 1, args...))
-  rand_gpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+  rand_gpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
   rand_gpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_gpu(T, blocklength, dims)
 falses_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_gpu(T, blocklength, false, args...)
  trues_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_gpu(T, blocklength, true, args...)
@@ -432,7 +432,7 @@ end
 
 function fill_cpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool)
+    check_datatype(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -442,7 +442,7 @@ end
 
 function fill_gpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool)
+    check_datatype(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
