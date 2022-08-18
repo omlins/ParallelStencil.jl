@@ -50,6 +50,36 @@ end
                             @test occursin("f(A::Data.DeviceArray, B::Data.DeviceArray,", expansion)
                     end
                 end
+                @testset "Data.Cell to Data.DeviceCell" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.Cell, B::Data.Cell, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceCell, B::Data.DeviceCell,", expansion)
+                    end
+                end
+                @testset "Data.CellArray to Data.DeviceCellArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.CellArray, B::Data.CellArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
+                    end
+                end
+                @testset "Data.TArray to Data.DeviceTArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceTArray, B::Data.DeviceTArray,", expansion)
+                    end
+                end
+                @testset "Data.TCell to Data.DeviceTCell" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.TCell, B::Data.TCell, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceTCell, B::Data.DeviceTCell,", expansion)
+                    end
+                end
+                @testset "Data.TCellArray to Data.DeviceTCellArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
+                    end
+                end
                 @testset "@parallel kernel (3D)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel function write_indices!(A)
@@ -75,6 +105,18 @@ end
                 @static if $package == $PKG_CUDA
                     expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c<:Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
+                end
+            end
+            @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
+                @static if $package == $PKG_CUDA
+                    expansion = @prettystring(1, @parallel f(A::Data.Cell{T}, B::Data.Cell{T}, c<:Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
+                end
+            end
+            @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
+                @static if $package == $PKG_CUDA
+                    expansion = @prettystring(1, @parallel f(A::Data.CellArray{T}, B::Data.CellArray{T}, c<:Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
             end
             @reset_parallel_stencil()

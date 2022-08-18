@@ -49,6 +49,36 @@ end
                             @test occursin("f(A::Data.DeviceArray, B::Data.DeviceArray,", expansion)
                     end
                 end
+                @testset "Data.Cell to Data.DeviceCell" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Cell, B::Data.Cell, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::Data.DeviceCell, B::Data.DeviceCell,", expansion)
+                    end
+                end
+                @testset "Data.CellArray to Data.DeviceCellArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArray, B::Data.CellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
+                    end
+                end
+                @testset "Data.TArray to Data.DeviceTArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::Data.DeviceTArray, B::Data.DeviceTArray,", expansion)
+                    end
+                end
+                @testset "Data.TCell to Data.DeviceTCell" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCell, B::Data.TCell, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::Data.DeviceTCell, B::Data.DeviceTCell,", expansion)
+                    end
+                end
+                @testset "Data.TCellArray to Data.DeviceTCellArray" begin
+                    @static if $package == $PKG_CUDA
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
+                    end
+                end
                 @testset "@parallel_indices (1D)" begin
                     A  = @zeros(4)
                     @parallel_indices (ix) function write_indices!(A)
@@ -168,6 +198,18 @@ end
                         @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
             end
+            @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
+                @static if $package == $PKG_CUDA
+                        expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Cell{T}, B::Data.Cell{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
+                        @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
+                end
+            end
+            @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
+                @static if $package == $PKG_CUDA
+                        expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArray{T}, B::Data.CellArray{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
+                        @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
+                end
+            end
             @reset_parallel_kernel()
         end
         @testset "4. Exceptions" begin
@@ -178,7 +220,7 @@ end
                 @test_throws ArgumentError checkargs_parallel();                                                    # Error: isempty(args)
                 @test_throws ArgumentError checkargs_parallel(:(f()), :(something));                                # Error: last arg is not function call.
                 @test_throws ArgumentError checkargs_parallel(:(f()=99));                                           # Error: last arg is not function call.
-                #TODO: Here I am: kw for calls look very different: head :kw - fix in parallel.jl/shared.jl
+                #TODO: kw for calls look very different: head :kw - fix in parallel.jl/shared.jl
                 @test_throws ArgumentError checkargs_parallel(:(f(;s=1)));                                          # Error: function call with keyword argument.
                 @test_throws ArgumentError checkargs_parallel(:ranges, :nblocks, :nthreads, :something, :(f()));    # Error: length(posargs) > 3
                 @test_throws KeywordArgumentError checkargs_parallel(:(blocks=blocks), :(f()));                     # Error: blocks keyword argument is not allowed
