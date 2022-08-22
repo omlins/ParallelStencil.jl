@@ -57,7 +57,7 @@ macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args.
 
 
 ##
-macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(args...)); end
+macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(__module__, args...)); end
 
 
 ## ARGUMENT CHECKS
@@ -169,10 +169,10 @@ end
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
 #TODO: maybe gensym with macro @gensym
-function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Symbol=get_package())
+function loopopt(caller::Module, dim::Integer, indices, loopsize, halosize, A, body; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if isa(indices,Expr) indices = indices.args else indices = [indices] end
-    if isa(halosize,Expr) halosize = halosize.args else halosize = [halosize] end
+    halosize = eval_arg(caller, halosize)
     noexpr = :(begin end)
     if dim == 3
         hx, hy       = halosize
@@ -234,7 +234,9 @@ $(shmem ? quote           @sync_threads()
                 end
                 @sync_threads()
 end : noexpr)
-                $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
+$(shmem ?     :($A_ix_iy_izp1 = $A_izp1[$tx,$ty]) :
+              :($A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1)
+)
                 $body
 $(hx>0 ?      :($A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]) : noexpr)
 $(hx>0 ?      :($A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]) : noexpr)
@@ -253,7 +255,7 @@ end
 function loopopt(indices, A, body; package::Symbol=get_package())
     dim      = isa(indices,Expr) ? length(indices.args) : 1
     loopsize = LOOPSIZE
-    halosize = (dim == 3) ? :((1,1)) : (dim == 2) ? :(1) : :(0)
+    halosize = (dim == 3) ? (1,1) : (dim == 2) ? 1 : 0
     return loopopt(dim, indices, loopsize, halosize, A, body; package=package)
 end
 
