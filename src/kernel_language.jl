@@ -239,7 +239,8 @@ $(shmem ? quote
                         end
                         @sync_threads()
           end : 
-noexpr)
+          noexpr
+)
 $(shmem ? :(            $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
            ) :
           :(            $A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1
