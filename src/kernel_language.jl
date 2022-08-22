@@ -60,6 +60,10 @@ macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args.
 macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(__module__, args...)); end
 
 
+##
+macro shortif(args...) check_initialized(); checktwoargs(args...); esc(shortif(args...)); end
+
+
 ## ARGUMENT CHECKS
 
 function checknoargs(args...)
@@ -261,6 +265,14 @@ function loopopt(caller::Module, indices, A, body; package::Symbol=get_package()
     loopsize = LOOPSIZE
     halosize = (dim == 3) ? (1,1) : (dim == 2) ? 1 : 0
     return loopopt(caller, dim, indices, loopsize, halosize, A, body; package=package)
+end
+
+
+function shortif(else_val, if_expr; package::Symbol=get_package())
+    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
+    @capture(if_expr, if condition_ body_ end) || @ArgumentError("@shortif: the second argument must be an if statement.")
+    @capture(body, lhs_ = rhs_) || @ArgumentError("@shortif: the if statement body must contain a assignement.")
+    return :($lhs = $condition ? $rhs : $else_val)
 end
 
 
