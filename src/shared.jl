@@ -3,6 +3,7 @@ import .ParallelKernel: ENABLE_CUDA  # ENABLE_CUDA must also always be accessibl
 @static if ENABLE_CUDA
     using CUDA
 end
+import MacroTools: @capture
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world
 import .ParallelKernel: PKG_CUDA, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_THREADS, INDICES, PKNumber
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
