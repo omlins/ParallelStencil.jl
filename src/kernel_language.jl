@@ -157,14 +157,15 @@ end
 
 ## FUNCTIONS FOR PERFORMANCE OPTIMSATIONS
 
-#TODO: name mangling for generated vars as loopoffset, i.
 function loop(dim::Integer, index::Symbol, loopsize, body; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     dimvar = (:x,:y,:z)[dim]
+    loopoffset = gensym_world("loopoffset", @__MODULE__)
+    i          = gensym_world("i", @__MODULE__)
     return quote
-        loopoffset = (@blockIdx().$dimvar-1)*$loopsize
-        for i = 1:$loopsize
-            $index = i + loopoffset
+        $loopoffset = (@blockIdx().$dimvar-1)*$loopsize
+        for $i = 1:$loopsize
+            $index = $i + $loopoffset
             $body
         end
     end
