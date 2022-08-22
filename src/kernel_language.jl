@@ -208,43 +208,47 @@ function loopopt(caller::Module, dim::Integer, indices, loopsize, halosize, A, b
         end
         
         return quote
-            $tx            = @threadIdx().x + $hx
-            $ty            = @threadIdx().y + $hy
-            $ix_h          = @ix_h($hx)  #(@blockIdx().x-1)*@blockDim().x + @tx_h()  - SHMEM_HALO_X
-            $ix_h2         = @ix_h2($hx, $hy) #(@blockIdx().x-1)*@blockDim().x + @tx_h2() - SHMEM_HALO_X
-            $iy_h          = @iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
-            $iy_h2         = @iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
-            $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-$(shmem ? :($A_izp1        = @sharedMem(eltype($A), (@nx_l($hx), @ny_l($hy)))) : noexpr)
-            $A_ix_iy_izm1  = 0.0
-            $A_ix_iy_iz    = $A[$ix,$iy,1+$loopoffset]
-            $A_ix_iy_izp1  = 0.0
-$(hx>0 ?  :($A_ixm1_iy_iz  = 0.0) : noexpr)
-$(hx>0 ?  :($A_ixp1_iy_iz  = 0.0) : noexpr)
-$(hy>0 ?  :($A_ix_iym1_iz  = 0.0) : noexpr)
-$(hy>0 ?  :($A_ix_iyp1_iz  = 0.0) : noexpr)
-            for $i = 1:$loopsize
-                $iz = $i + $loopoffset
-$(shmem ? quote           @sync_threads()
-                if (@t_h() <= cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
-                    $A_izp1[@tx_h($hx),@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
-                end
-                if (@t_h2($hx, $hy) > cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
-                    $A_izp1[@tx_h2($hx, $hy),@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
-                end
-                @sync_threads()
-end : noexpr)
-$(shmem ?     :($A_ix_iy_izp1 = $A_izp1[$tx,$ty]) :
-              :($A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1)
+                    $tx            = @threadIdx().x + $hx
+                    $ty            = @threadIdx().y + $hy
+                    $ix_h          = @ix_h($hx)  #(@blockIdx().x-1)*@blockDim().x + @tx_h()  - SHMEM_HALO_X
+                    $ix_h2         = @ix_h2($hx, $hy) #(@blockIdx().x-1)*@blockDim().x + @tx_h2() - SHMEM_HALO_X
+                    $iy_h          = @iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
+                    $iy_h2         = @iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
+                    $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
+$(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), (@nx_l($hx), @ny_l($hy)))    ) : noexpr)
+                    $A_ix_iy_izm1  = 0.0
+                    $A_ix_iy_iz    = $A[$ix,$iy,1+$loopoffset]
+                    $A_ix_iy_izp1  = 0.0
+$(hx>0 ?  :(        $A_ixm1_iy_iz  = 0.0                                                 ) : noexpr)
+$(hx>0 ?  :(        $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
+$(hy>0 ?  :(        $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
+$(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
+                    for $i = 1:$loopsize
+                        $iz = $i + $loopoffset
+$(shmem ? quote           
+                        @sync_threads()
+                        if (@t_h() <= cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[@tx_h($hx),@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
+                        end
+                        if (@t_h2($hx, $hy) > cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[@tx_h2($hx, $hy),@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
+                        end
+                        @sync_threads()
+          end : 
+noexpr)
+$(shmem ? :(            $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
+           ) :
+          :(            $A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1
+           )
 )
-                $body
-$(hx>0 ?      :($A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]) : noexpr)
-$(hx>0 ?      :($A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]) : noexpr)
-$(hy>0 ?      :($A_ix_iym1_iz = $A_izp1[$tx,$ty-1]) : noexpr)
-$(hy>0 ?      :($A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]) : noexpr)
-                $A_ix_iy_izm1 = $A_ix_iy_iz
-                $A_ix_iy_iz   = $A_ix_iy_izp1
-            end
+                        $body
+$(hx>0 ? :(             $A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]                                ) : noexpr)
+$(hx>0 ? :(             $A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]                                ) : noexpr)
+$(hy>0 ? :(             $A_ix_iym1_iz = $A_izp1[$tx,$ty-1]                                ) : noexpr)
+$(hy>0 ? :(             $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                                ) : noexpr)
+                        $A_ix_iy_izm1 = $A_ix_iy_iz
+                        $A_ix_iy_iz   = $A_ix_iy_izp1
+                    end
         end
     else
         @ArgumentError("@loopopt: only dim=3 is currently supported.")
