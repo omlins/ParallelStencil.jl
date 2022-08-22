@@ -57,7 +57,7 @@ macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args.
 
 
 ##
-macro loopopt(args...) check_initialized(); checkargs_onchipmemopt(args...); esc(loopopt(args...)); end
+macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(args...)); end
 
 
 ## ARGUMENT CHECKS
@@ -78,8 +78,8 @@ function checkargs_loop(args...)
     if (length(args) != 4) @ArgumentError("wrong number of arguments.") end
 end
 
-function checkargs_onchipmemopt(args...)
-    if (length(args) != 6) @ArgumentError("wrong number of arguments.") end
+function checkargs_loopopt(args...)
+    if (length(args) != 6 && length(args) != 3) @ArgumentError("wrong number of arguments.") end
 end
 
 
@@ -240,6 +240,14 @@ function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Sy
     else
         @ArgumentError("@loopopt: only dim=3 is currently supported.")
     end
+end
+
+
+function loopopt(indices, A, body; package::Symbol=get_package())
+    dim      = isa(indices,Expr) ? length(indices.args) : 1
+    loopsize = LOOPSIZE
+    halosize = (dim == 3) ? :((1,1)) : (dim == 2) ? :(1) : :(0)
+    return loopopt(dim, indices, loopsize, halosize, A, body; package=package)
 end
 
 
