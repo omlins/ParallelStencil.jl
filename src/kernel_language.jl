@@ -256,11 +256,11 @@ $(hy>0 ? :(             $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                      
 end
 
 
-function loopopt(indices, A, body; package::Symbol=get_package())
+function loopopt(caller::Module, indices, A, body; package::Symbol=get_package())
     dim      = isa(indices,Expr) ? length(indices.args) : 1
     loopsize = LOOPSIZE
     halosize = (dim == 3) ? (1,1) : (dim == 2) ? 1 : 0
-    return loopopt(dim, indices, loopsize, halosize, A, body; package=package)
+    return loopopt(caller, dim, indices, loopsize, halosize, A, body; package=package)
 end
 
 
