@@ -24,6 +24,7 @@ const NDIMS_NONE                = 0
 const ERRMSG_KERNEL_UNSUPPORTED = "unsupported kernel statements in @parallel kernel definition: @parallel is only applicable to kernels that contain exclusively array assignments using macros from FiniteDifferences{1|2|3}D or from another compatible computation submodule. @parallel_indices supports any kind of statements in the kernels."
 const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable containing the ndims) and has to be one of the following: $(join(SUPPORTED_NDIMS,", "))"
 const PSNumber                  = PKNumber
+const LOOPSIZE                  = 16
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS
