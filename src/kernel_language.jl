@@ -173,8 +173,10 @@ function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Sy
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if isa(indices,Expr) indices = indices.args else indices = [indices] end
     if isa(halosize,Expr) halosize = halosize.args else halosize = [halosize] end
+    noexpr = :(begin end)
     if dim == 3
         hx, hy       = halosize
+        shmem        = (hx>0 || hy>0)
         ix, iy, iz   = indices
         i            = gensym_world("i", @__MODULE__)
         tx           = gensym_world("tx", @__MODULE__)
@@ -196,10 +198,14 @@ function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Sy
         body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1)
         body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
         body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1)
-        body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz)
-        body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz)
-        body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz)
-        body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz)
+        if hx > 0
+            body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz)
+            body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz)
+        end
+        if hy > 0
+            body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz)
+            body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz)
+        end
         
         return quote
             $tx            = @threadIdx().x + $hx
@@ -209,17 +215,17 @@ function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Sy
             $iy_h          = @iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
             $iy_h2         = @iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
             $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-            $A_izp1        = @sharedMem(eltype($A), (@nx_l($hx), @ny_l($hy)))
+$(shmem ? :($A_izp1        = @sharedMem(eltype($A), (@nx_l($hx), @ny_l($hy)))) : noexpr)
             $A_ix_iy_izm1  = 0.0
             $A_ix_iy_iz    = $A[$ix,$iy,1+$loopoffset]
             $A_ix_iy_izp1  = 0.0
-            $A_ixm1_iy_iz  = 0.0
-            $A_ixp1_iy_iz  = 0.0
-            $A_ix_iym1_iz  = 0.0
-            $A_ix_iyp1_iz  = 0.0
+$(hx>0 ?  :($A_ixm1_iy_iz  = 0.0) : noexpr)
+$(hx>0 ?  :($A_ixp1_iy_iz  = 0.0) : noexpr)
+$(hy>0 ?  :($A_ix_iym1_iz  = 0.0) : noexpr)
+$(hy>0 ?  :($A_ix_iyp1_iz  = 0.0) : noexpr)
             for $i = 1:$loopsize
                 $iz = $i + $loopoffset
-                @sync_threads()
+$(shmem ? quote           @sync_threads()
                 if (@t_h() <= cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
                     $A_izp1[@tx_h($hx),@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
                 end
@@ -227,12 +233,13 @@ function loopopt(dim::Integer, indices, loopsize, halosize, A, body; package::Sy
                     $A_izp1[@tx_h2($hx, $hy),@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
                 end
                 @sync_threads()
+end : noexpr)
                 $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
                 $body
-                $A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]
-                $A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]
-                $A_ix_iym1_iz = $A_izp1[$tx,$ty-1]
-                $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]
+$(hx>0 ?      :($A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]) : noexpr)
+$(hx>0 ?      :($A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]) : noexpr)
+$(hy>0 ?      :($A_ix_iym1_iz = $A_izp1[$tx,$ty-1]) : noexpr)
+$(hy>0 ?      :($A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]) : noexpr)
                 $A_ix_iy_izm1 = $A_ix_iy_iz
                 $A_ix_iy_iz   = $A_ix_iy_izp1
             end
