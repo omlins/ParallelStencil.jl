@@ -127,8 +127,14 @@ function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String
     end
 end
 
-function extract_kwargvalues(kwargs::Dict, valid_kwargs::Tuple)
+function extract_values(kwargs::Dict, valid_kwargs::Tuple)
     return ((k in keys(kwargs)) ? kwargs[k] : nothing for k in valid_kwargs)
+end
+
+function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
+    kwargs = split_kwargs(kwargs_expr)
+    validate_kwargkeys(kwargs, valid_kwargs, macroname)
+    return extract_values(kwargs, valid_kwargs)
 end
 
 function split_parallel_args(args)

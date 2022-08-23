@@ -21,7 +21,7 @@ See also: [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref),
 macro zeros(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros")
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros")
     esc(_zeros(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
@@ -49,7 +49,7 @@ See also: [`@zeros`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 macro ones(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones")
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones")
     esc(_ones(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
@@ -76,7 +76,7 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 macro rand(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand")
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand")
     esc(_rand(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
@@ -99,7 +99,7 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), 
 macro falses(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :blocklength), "@falses")
+    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@falses")
     esc(_falses(posargs...; celldims=celldims, blocklength=blocklength))
 end
 
@@ -122,7 +122,7 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref),
 macro trues(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = handle_kwargs_allocators(kwargs_expr, (:celldims, :blocklength), "@trues")
+    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues")
     esc(_trues(posargs...; celldims=celldims, blocklength=blocklength))
 end
 
@@ -150,7 +150,7 @@ See also: [`@fill!`](@ref), [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), 
 macro fill(args...)
     check_initialized()
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = handle_kwargs_allocators(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@fill")
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@fill")
     esc(_fill(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
@@ -219,7 +219,7 @@ macro CellType(args...)
     check_initialized()
     checkargs_CellType(args...)
     posargs, kwargs_expr = split_args(args)
-    eltype, fieldnames, dims, parametric = handle_kwargs_allocators(kwargs_expr, (:eltype, :fieldnames, :dims, :parametric), "@CellType")
+    eltype, fieldnames, dims, parametric = extract_kwargvalues(kwargs_expr, (:eltype, :fieldnames, :dims, :parametric), "@CellType")
     esc(_CellType(posargs...; eltype=eltype, fieldnames=fieldnames, dims=dims, parametric=parametric))
 end
 
@@ -381,14 +381,6 @@ end
 function determine_blocklength(blocklength, package)
     if isnothing(blocklength) blocklength = CELLARRAY_BLOCKLENGTH[package] end
     return Val(blocklength)
-end
-
-## MACRO ARGUMENT HANDLER FUNCTIONS
-
-function handle_kwargs_allocators(kwargs_expr, valid_kwargs, macroname)
-    kwargs = split_kwargs(kwargs_expr)
-    validate_kwargkeys(kwargs, valid_kwargs, macroname)
-    return extract_kwargvalues(kwargs, valid_kwargs)
 end
 
 
