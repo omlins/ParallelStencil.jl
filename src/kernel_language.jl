@@ -157,9 +157,9 @@ end
 
 ## FUNCTIONS FOR PERFORMANCE OPTIMSATIONS
 
-function loop(dim::Integer, index::Symbol, loopsize, body; package::Symbol=get_package())
+function loop(index::Symbol, optdim::Integer, loopsize, body; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    dimvar = (:x,:y,:z)[dim]
+    dimvar = (:x,:y,:z)[optdim]
     loopoffset = gensym_world("loopoffset", @__MODULE__)
     i          = gensym_world("i", @__MODULE__)
     return quote
@@ -171,15 +171,19 @@ function loop(dim::Integer, index::Symbol, loopsize, body; package::Symbol=get_p
     end
 end
 
+
+#function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N})
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
 #TODO: maybe gensym with macro @gensym
-function loopopt(caller::Module, dim::Integer, indices, loopsize, halosize, A, body; package::Symbol=get_package())
+function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, halosize, body; package::Symbol=get_package())
+    if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
+    A = optvars 
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    if isa(indices,Expr) indices = indices.args else indices = [indices] end
+    if isa(indices,Expr) indices = indices.args else indices = (indices,) end
     halosize = eval_arg(caller, halosize)
     noexpr = :(begin end)
-    if dim == 3
+    if optdim == 3
         hx, hy       = halosize
         shmem        = (hx>0 || hy>0)
         ix, iy, iz   = indices
@@ -257,16 +261,16 @@ $(hy>0 ? :(             $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                      
                     end
         end
     else
-        @ArgumentError("@loopopt: only dim=3 is currently supported.")
+        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
 end
 
 
-function loopopt(caller::Module, indices, A, body; package::Symbol=get_package())
-    dim      = isa(indices,Expr) ? length(indices.args) : 1
+function loopopt(caller::Module, indices, optvars, body; package::Symbol=get_package())
+    optdim   = isa(indices,Expr) ? length(indices.args) : 1
     loopsize = LOOPSIZE
-    halosize = (dim == 3) ? (1,1) : (dim == 2) ? 1 : 0
-    return loopopt(caller, dim, indices, loopsize, halosize, A, body; package=package)
+    halosize = (optdim == 3) ? (1,1) : (optdim == 2) ? 1 : 0
+    return loopopt(caller, indices, optvars, optdim, loopsize, halosize, body; package=package)
 end
 
 
