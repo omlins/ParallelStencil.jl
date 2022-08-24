@@ -1,4 +1,4 @@
-import .ParallelKernel: get_body, set_body!, add_return, remove_return, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES
+import .ParallelKernel: get_body, set_body!, add_return, remove_return, extract_kwargs, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES
 
 const PARALLEL_DOC = """
     @parallel kernel
@@ -14,10 +14,19 @@ $(replace(ParallelKernel.PARALLEL_DOC, "@init_parallel_kernel" => "@init_paralle
 macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...)); end
 
 
+const PARALLEL_INDICES_DOC = """
+$(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
+"""
+@doc PARALLEL_INDICES_DOC
+macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
+
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
 macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
@@ -35,6 +44,11 @@ function checkargs_parallel(args...)
     end
 end
 
+function checkargs_parallel_indices(args...)
+    posargs, = split_args(args)
+    ParallelKernel.checkargs_parallel_indices(posargs...)
+end
+
 
 ## GATEWAY FUNCTIONS
 
@@ -44,12 +58,35 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
         ndims      = get_ndims()
         parallel_kernel(caller, package, numbertype, ndims, args...)
     elseif is_call(args[end])
-        ParallelKernel.parallel(args...)
+        ParallelKernel.parallel(args...; package=package)
+    end
+end
+
+function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+    numbertype = get_numbertype()
+    posargs, kwargs_expr = split_args(args)
+    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel_indices"; eval_args=(:loopopt, :optdim, :halosize))
+    if haskey(kwargs, :loopopt) && kwargs.loopopt 
+        parallel_kernel_loopopt(package, numbertype, posargs...; kwargs...)
+    else
+        ParallelKernel.parallel_indices(posargs...; package=package)
     end
 end
 
 
 ## @PARALLEL KERNEL FUNCTIONS
+
+function parallel_kernel_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=:(()), optdim::Integer=(isa(indices,Expr) ? length(indices.args) : 1), loopsize::Union{Expr,Symbol,Integer}=16, halosize::Union{Integer,NTuple{N,Integer} where N}=(1,1,1))
+    if (!loopopt) @ModuleInternalError("parallel_kernel_loopopt: called with `loopopt=false` which should never happen.") end
+    if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
+    indices = extract_tuple(indices)
+    body = get_body(kernel)
+    body = remove_return(body)
+    body = add_loopopt(body, indices, optvars, optdim, loopsize, halosize)
+    body = add_return(body)
+    set_body!(kernel, body)
+    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+end
 
 function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr)
     indices = get_indices_expr(ndims).args
@@ -86,6 +123,19 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body = add_return(body)
     set_body!(kernel, body)
     return kernel
+end
+
+
+## FUNCTIONS FOR APPLYING OPTIMSATIONS
+
+function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N})
+    # TODO: change later order of @loopopt 3 (ix,iy,iz) LOOPSIZE (SHMEM_HALO_X, SHMEM_HALO_Y) T begin
+    if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
+    quote
+        ParallelStencil.@loopopt $optdim $(Expr(:tuple, indices...)) $loopsize $(Expr(:tuple, halosize...)) $optvars begin
+            $body
+        end
+    end
 end
 
 
