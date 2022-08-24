@@ -137,6 +137,15 @@ function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
     return extract_values(kwargs, valid_kwargs)
 end
 
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
+    kwargs = split_kwargs(kwargs_expr)
+    validate_kwargkeys(kwargs, valid_kwargs, macroname)
+    for k in keys(kwargs)
+        if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
+    end
+    return NamedTuple(kwargs)
+end
+
 function split_parallel_args(args)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
@@ -173,6 +182,16 @@ function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
         return x
     end
     return found
+end
+
+Base.unquoted(s::Symbol) = s
+
+function extract_tuple(t::Union{Expr,Symbol}) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
+    if isa(t, Expr) 
+        return Base.unquoted.(t.args)
+    else 
+        return [t]
+    end
 end
 
 
