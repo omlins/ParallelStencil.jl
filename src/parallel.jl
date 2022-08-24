@@ -129,10 +129,9 @@ end
 ## FUNCTIONS FOR APPLYING OPTIMSATIONS
 
 function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N})
-    # TODO: change later order of @loopopt 3 (ix,iy,iz) LOOPSIZE (SHMEM_HALO_X, SHMEM_HALO_Y) T begin
     if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
     quote
-        ParallelStencil.@loopopt $optdim $(Expr(:tuple, indices...)) $loopsize $(Expr(:tuple, halosize...)) $optvars begin
+        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, halosize...)) begin
             $body
         end
     end
