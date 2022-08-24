@@ -111,47 +111,47 @@ end
 
 function t_h2(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(@t_h() + @nx_l($hx)*@ny_l($hy) - @blockDim().x*@blockDim().y)
+    return :(ParallelStencil.@t_h() + ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy) - @blockDim().x*@blockDim().y)
 end
 
 function tx_h(hx; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@t_h() -1) % @nx_l($hx) + 1)
+    return :((ParallelStencil.@t_h() -1) % ParallelStencil.@nx_l($hx) + 1)
 end
 
 function ty_h(hx; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@t_h() -1) ÷ @nx_l($hx) + 1)
+    return :((ParallelStencil.@t_h() -1) ÷ ParallelStencil.@nx_l($hx) + 1)
 end
 
 function tx_h2(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@t_h2($hx, $hy)-1) % @nx_l($hx) + 1)
+    return :((ParallelStencil.@t_h2($hx, $hy)-1) % ParallelStencil.@nx_l($hx) + 1)
 end
 
 function ty_h2(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@t_h2($hx, $hy)-1) ÷ @nx_l($hx) + 1)
+    return :((ParallelStencil.@t_h2($hx, $hy)-1) ÷ ParallelStencil.@nx_l($hx) + 1)
 end
 
 function ix_h(hx; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().x-1)*@blockDim().x + @tx_h($hx)  - $hx)
+    return :((@blockIdx().x-1)*@blockDim().x + ParallelStencil.@tx_h($hx)  - $hx)
 end
 
 function iy_h(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().y-1)*@blockDim().y + @ty_h($hx)  - $hy)
+    return :((@blockIdx().y-1)*@blockDim().y + ParallelStencil.@ty_h($hx)  - $hy)
 end
 
 function ix_h2(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().x-1)*@blockDim().x + @tx_h2($hx, $hy) - $hx)
+    return :((@blockIdx().x-1)*@blockDim().x + ParallelStencil.@tx_h2($hx, $hy) - $hx)
 end
 
 function iy_h2(hx, hy; package::Symbol=get_package())
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().y-1)*@blockDim().y + @ty_h2($hx, $hy) - $hy)
+    return :((@blockIdx().y-1)*@blockDim().y + ParallelStencil.@ty_h2($hx, $hy) - $hy)
 end
 
 
@@ -219,12 +219,12 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         return quote
                     $tx            = @threadIdx().x + $hx
                     $ty            = @threadIdx().y + $hy
-                    $ix_h          = @ix_h($hx)  #(@blockIdx().x-1)*@blockDim().x + @tx_h()  - SHMEM_HALO_X
-                    $ix_h2         = @ix_h2($hx, $hy) #(@blockIdx().x-1)*@blockDim().x + @tx_h2() - SHMEM_HALO_X
-                    $iy_h          = @iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
-                    $iy_h2         = @iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
+                    $ix_h          = ParallelStencil.@ix_h($hx)  #(@blockIdx().x-1)*@blockDim().x + @tx_h()  - SHMEM_HALO_X
+                    $ix_h2         = ParallelStencil.@ix_h2($hx, $hy) #(@blockIdx().x-1)*@blockDim().x + @tx_h2() - SHMEM_HALO_X
+                    $iy_h          = ParallelStencil.@iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
+                    $iy_h2         = ParallelStencil.@iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-$(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), (@nx_l($hx), @ny_l($hy)))    ) : noexpr)
+$(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), (ParallelStencil.@nx_l($hx), ParallelStencil.@ny_l($hy)))    ) : noexpr)
                     $A_ix_iy_izm1  = 0.0
                     $A_ix_iy_iz    = $A[$ix,$iy,1+$loopoffset]
                     $A_ix_iy_izp1  = 0.0
@@ -236,11 +236,11 @@ $(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                        
                         $iz = $i + $loopoffset
 $(shmem ? quote           
                         @sync_threads()
-                        if (@t_h() <= cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
-                            $A_izp1[@tx_h($hx),@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
+                        if (ParallelStencil.@t_h() <= cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[ParallelStencil.@tx_h($hx),ParallelStencil.@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
                         end
-                        if (@t_h2($hx, $hy) > cld(@nx_l($hx)*@ny_l($hy),2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
-                            $A_izp1[@tx_h2($hx, $hy),@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
+                        if (ParallelStencil.@t_h2($hx, $hy) > cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[ParallelStencil.@tx_h2($hx, $hy),ParallelStencil.@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
                         end
                         @sync_threads()
           end : 
