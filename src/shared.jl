@@ -26,6 +26,7 @@ const ERRMSG_KERNEL_UNSUPPORTED = "unsupported kernel statements in @parallel ke
 const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable containing the ndims) and has to be one of the following: $(join(SUPPORTED_NDIMS,", "))"
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
+const NTHREADS_MAX_LOOPOPT      = 128
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS
