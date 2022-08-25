@@ -1,4 +1,4 @@
-# NOTE: @parallel and @parallel_indices do not appear in the following as they are extended and therefore defined in parallel.jl
+# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore defined in parallel.jl
 @doc replace(ParallelKernel.HIDE_COMMUNICATION_DOC, "@init_parallel_kernel" => "@init_parallel_stencil") macro hide_communication(args...) check_initialized(); esc(:(ParallelStencil.ParallelKernel.@hide_communication($(args...)))); end
 @doc replace(ParallelKernel.ZEROS_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro zeros(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@zeros($(args...)))); end
 @doc replace(ParallelKernel.ONES_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro ones(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@ones($(args...)))); end
@@ -8,7 +8,6 @@
 @doc replace(ParallelKernel.FILL_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro fill(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@fill($(args...)))); end
 @doc replace(ParallelKernel.FILL!_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro fill!(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@fill!($(args...)))); end
 @doc replace(ParallelKernel.CELLTYPE_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro CellType(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@CellType($(args...)))); end
-@doc replace(ParallelKernel.PARALLEL_ASYNC_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_async(args...)     check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_async($(args...)))); end
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
 @doc replace(ParallelKernel.GRIDDIM_DOC,            "@init_parallel_kernel" => "@init_parallel_stencil") macro gridDim(args...)            check_initialized(); esc(:(ParallelStencil.ParallelKernel.@gridDim($(args...)))); end
 @doc replace(ParallelKernel.BLOCKIDX_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockIdx(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@blockIdx($(args...)))); end
