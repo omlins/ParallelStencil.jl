@@ -423,11 +423,11 @@ function compute_ranges(maxsize)
     return (1:maxsize[1], 1:maxsize[2], 1:maxsize[3])
 end
 
-function compute_nthreads(maxsize) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
+function compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
     maxsize = promote_maxsize(maxsize)
     nthreads_x = min(32, maxsize[1])
-    nthreads_y = min(ceil(Int,NTHREADS_MAX/nthreads_x), maxsize[2])
-    nthreads_z = min(ceil(Int,NTHREADS_MAX/(nthreads_x*nthreads_y)), maxsize[3])
+    nthreads_y = min(ceil(Int,nthreads_max/nthreads_x), maxsize[2])
+    nthreads_z = min(ceil(Int,nthreads_max/(nthreads_x*nthreads_y)), maxsize[3])
     return (nthreads_x, nthreads_y , nthreads_z)
 end
 
