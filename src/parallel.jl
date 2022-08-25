@@ -1,4 +1,4 @@
-import .ParallelKernel: get_body, set_body!, add_return, remove_return, extract_kwargs, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES
+import .ParallelKernel: get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES
 
 const PARALLEL_DOC = """
     @parallel kernel
@@ -21,20 +21,30 @@ $(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init
 macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
 
 
+const PARALLEL_ASYNC_DOC = """
+$(replace(ParallelKernel.PARALLEL_ASYNC_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
+"""
+@doc PARALLEL_ASYNC_DOC
+macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...)); end
+
+
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
 macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
 macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
+macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
+macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
 
 function checkargs_parallel(args...)
-    if isempty(args) @ArgumentError("arguments missing.") end
+    posargs, = split_args(args)
+    if isempty(posargs) @ArgumentError("arguments missing.") end
     if is_kernel(args[end])  # Case: @parallel kernel
-        if (length(args) != 1) @ArgumentError("wrong number of arguments in @parallel kernel call.") end
+        if (length(posargs) != 1) @ArgumentError("wrong number of (positional) arguments in @parallel kernel call.") end
         kernel = args[end]
         if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed in the signature of @parallel kernels.") end
     elseif is_call(args[end])  # Case: @parallel <args...> kernelcall
@@ -52,21 +62,30 @@ end
 
 ## GATEWAY FUNCTIONS
 
-function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(caller, args...; package=package, async=true)
+
+function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+    posargs, kwargs_expr, kernelarg = split_parallel_args(args)
     if is_kernel(args[end])
         numbertype = get_numbertype()
         ndims      = get_ndims()
         parallel_kernel(caller, package, numbertype, ndims, args...)
     elseif is_call(args[end])
-        ParallelKernel.parallel(args...; package=package)
+        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel", true; eval_args=(:loopopt, :optdim, :halosize))
+        if haskey(kwargs, :loopopt) && kwargs.loopopt
+            parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+        else
+            ParallelKernel.parallel(args...; package=package)
+        end
     end
 end
+
 
 function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
     posargs, kwargs_expr = split_args(args)
     kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel_indices"; eval_args=(:loopopt, :optdim, :halosize))
-    if haskey(kwargs, :loopopt) && kwargs.loopopt 
+    if haskey(kwargs, :loopopt) && kwargs.loopopt
         parallel_kernel_loopopt(package, numbertype, posargs...; kwargs...)
     else
         ParallelKernel.parallel_indices(posargs...; package=package)
@@ -76,7 +95,7 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_kernel_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=:(()), optdim::Integer=(isa(indices,Expr) ? length(indices.args) : 1), loopsize::Union{Expr,Symbol,Integer}=16, halosize::Union{Integer,NTuple{N,Integer} where N}=(1,1,1))
+function parallel_kernel_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
     if (!loopopt) @ModuleInternalError("parallel_kernel_loopopt: called with `loopopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
@@ -94,11 +113,11 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body = remove_return(body)
     validate_body(body)
     if (package == PKG_CUDA)
-        kernel = substitute(kernel, :(Data.Array),         :(Data.DeviceArray))
-        kernel = substitute(kernel, :(Data.Cell),          :(Data.DeviceCell))
+        kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
+        kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
         kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
-        kernel = substitute(kernel, :(Data.TArray),        :(Data.DeviceTArray))
-        kernel = substitute(kernel, :(Data.TCell),         :(Data.DeviceTCell))
+        kernel = substitute(kernel, :(Data.TArray),     :(Data.DeviceTArray))
+        kernel = substitute(kernel, :(Data.TCell),      :(Data.DeviceTCell))
         kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
@@ -126,15 +145,62 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
 end
 
 
+## @PARALLEL CALL FUNCTIONS
+
+function parallel_call_loopopt(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
+    if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
+    if isa(optvars, Expr) @ArgumentError("parallel_call_loopopt: at present, one and only one variable is supported in argument `optvars`.") end
+    if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel: keyword `shmem` is not allowed when loopopt=true is set.") end
+    if     (optdim==3) loopsizes = :(1, 1, $loopsize)
+    elseif (optdim==2) loopsizes = :(1, $loopsize, 1)
+    elseif (optdim==1) loopsizes = :($loopsize, 1, 1)
+    end
+    maxsize   = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
+    nthreads  = :( ParallelStencil.compute_nthreads_loopopt($maxsize, $optdim, $halosize) )
+    nblocks   = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
+    numbertype = (optvars==Symbol("")) ? get_numbertype() : :(eltype(optvars))
+    if     (optdim==3) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[2]+2*$halosize[2])*sizeof($numbertype))
+    elseif (optdim==2) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
+    elseif (optdim==1) shmem = :(($nthreads[2]+2*$halosize[2])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
+    end
+    if (async) return :(@parallel_async $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+    else       return :(@parallel       $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
+    end
+end
+
+function parallel_call_loopopt(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
+    if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
+    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
+    parallel_call_loopopt(ranges, kernelcall, backend_kwargs_expr, async; loopopt=loopopt, optvars=optvars, optdim=optdim, loopsize=loopsize, halosize=halosize)
+end
+
+
 ## FUNCTIONS FOR APPLYING OPTIMSATIONS
 
 function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N})
+    if (optvars == Symbol("")) @KeywordArgumentError("@parallel: keyword argument `optvars` is mandatory when `loopopt=true` is set.") end
     if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
     quote
         ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, halosize...)) begin
             $body
         end
     end
+end
+
+
+## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
+
+compute_halosize() = return (1,1,0)  # TODO: A heuristic will be needed here too.
+compute_loopsize() = return LOOPSIZE
+determine_optdim() = get_ndims() # NOTE: in @parallel_indices kernels, this could be determined from the indices, but not in the @parallel calls (the heuristic must be the same...): determine_optdim(indices) = return (isa(indices,Expr) ? length(indices.args) : 1)
+
+
+## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
+
+function compute_nthreads_loopopt(maxsize, optdim, halosize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
+    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
+    if (prod(nthreads) < sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
+    return nthreads
 end
 
 
