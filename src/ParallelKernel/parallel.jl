@@ -409,7 +409,7 @@ promote_maxsize(maxsize)                        = @ModuleInternalError("maxsize 
 
 maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
 maxsize(a::T) where T<:Number        = (1, 1, 1)
-maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel call: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
+maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
 maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: maxsize is implemented as a recursive function, which results in optimal code; otherwise, the function is not performance-negligable for small problems.
 merge(a::Tuple, b::Tuple)            = max.(a,b)
 
@@ -448,7 +448,7 @@ function create_synccall_cuda(kwargs::Array)
         stream = kwarg_stream[1].args[2]
         synchronize_cuda(stream)
     else
-        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel call.")
+        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel <kernelcall>.")
     end
 end
 
