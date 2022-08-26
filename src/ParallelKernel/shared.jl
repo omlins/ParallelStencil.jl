@@ -106,7 +106,7 @@ extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_ke
 
 function is_kwarg(arg; in_kernelcall=false)
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == :(=)) )
+    else             return ( isa(arg, Expr) && (arg.head == :(=)) && isa(arg.args[1], Symbol))
     end
 end
 
