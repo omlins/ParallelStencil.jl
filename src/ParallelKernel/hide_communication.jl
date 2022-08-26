@@ -1,7 +1,7 @@
 const ERRMSG_HIDE_COMMUNICATION = "@hide_communication: the code block must start with exactly one @parallel computation call and be followed by code to set boundary conditions and to perform communication. Type `?@hide_communication` for more information."
-const ERRMSG_INVALID_STREAM = "@hide_communication: invalid keyword argument in @parallel: stream. Specifying the stream is not allowed in a @parallel call inside the code block argument of @hide_communication."
-const ERRMSG_INVALID_COMP = "@hide_communication: invalid positional arguments in @parallel: no positional argument is allowed in the @parallel call to perform computations inside the code block argument of @hide_communication."
-const ERRMSG_INVALID_BC_COMM = "@hide_communication: invalid positional arguments in @parallel: exactly one positional argument argument (ranges) must be passed in @parallel calls to set boundary conditions and to perform communication inside the code block argument of @hide_communication."
+const ERRMSG_INVALID_STREAM = "@hide_communication: invalid keyword argument in @parallel <kernelcall>: stream. Specifying the stream is not allowed in a @parallel call inside the code block argument of @hide_communication."
+const ERRMSG_INVALID_COMP = "@hide_communication: invalid positional arguments in @parallel <kernelcall>: no positional argument is allowed in the @parallel call to perform computations inside the code block argument of @hide_communication."
+const ERRMSG_INVALID_BC_COMM = "@hide_communication: invalid positional arguments in @parallel <kernelcall>: exactly one positional argument argument (ranges) must be passed in @parallel calls to set boundary conditions and to perform communication inside the code block argument of @hide_communication."
 
 ##
 const HIDE_COMMUNICATION_DOC = """
