@@ -161,10 +161,10 @@ function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; ev
     return kwargs_known
 end
 
-function split_parallel_args(args)
+function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
-    if any([x.args[1] in [:blocks, :threads] for x in kwargs]) @KeywordArgumentError("Invalid keyword argument in @parallel call: blocks / threads. They must be passed as positional arguments or been omited.") end
+    if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
     return posargs, kwargs, kernelarg
 end
 
