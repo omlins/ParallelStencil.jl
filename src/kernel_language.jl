@@ -184,6 +184,9 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
     halosize = eval_arg(caller, halosize)
     noexpr = :(begin end)
     if optdim == 3
+        ranges         = RANGES_VARNAME
+        rangelength_z  = RANGELENGTHS_VARNAMES[3]
+        tz_g           = THREADIDS_VARNAMES[3]
         hx, hy         = halosize
         shmem          = (hx>0 || hy>0)
         _ix, _iy, _iz  = indices
@@ -192,6 +195,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         iy             = (indices_shift[2] > 0) ? :(($_iy + $(indices_shift[2]))) : _iy
         iz             = (indices_shift[3] > 0) ? :(($_iz + $(indices_shift[3]))) : _iz
         i              = (indices_shift[3] > 0) ? :(($_i  - $(indices_shift[3]))) : _i
+        range_z        = (indices_shift[3] > 0) ? :(($ranges[3])[$tz_g] - $(indices_shift[3])) : :(($ranges[3])[$tz_g])
         tx             = gensym_world("tx", @__MODULE__)
         ty             = gensym_world("ty", @__MODULE__)
         ix_h           = gensym_world("ix_h", @__MODULE__)
@@ -230,10 +234,10 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         return quote
                     $tx            = @threadIdx().x + $hx
                     $ty            = @threadIdx().y + $hy
-                    $ix_h          = ParallelStencil.@ix_h($hx)  #(@blockIdx().x-1)*@blockDim().x + @tx_h()  - SHMEM_HALO_X
-                    $ix_h2         = ParallelStencil.@ix_h2($hx, $hy) #(@blockIdx().x-1)*@blockDim().x + @tx_h2() - SHMEM_HALO_X
-                    $iy_h          = ParallelStencil.@iy_h($hx, $hy)  #(@blockIdx().y-1)*@blockDim().y + @ty_h()  - SHMEM_HALO_Y
-                    $iy_h2         = ParallelStencil.@iy_h2($hx, $hy) #(@blockIdx().y-1)*@blockDim().y + @ty_h2() - SHMEM_HALO_Y
+                    $ix_h          = ParallelStencil.@ix_h($hx)
+                    $ix_h2         = ParallelStencil.@ix_h2($hx, $hy)
+                    $iy_h          = ParallelStencil.@iy_h($hx, $hy)
+                    $iy_h2         = ParallelStencil.@iy_h2($hx, $hy)
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
 $(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), (ParallelStencil.@nx_l($hx), ParallelStencil.@ny_l($hy)))    ) : noexpr)
                     $A_ix_iy_izm1  = 0.0
@@ -244,7 +248,9 @@ $(hx>0 ?  :(        $A_ixp1_iy_iz  = 0.0                                        
 $(hy>0 ?  :(        $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
 $(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
                     for $_i = 1:$loopsize
-                        $_iz = $i + $loopoffset
+                        $tz_g = $_i + $loopoffset
+                        if ($tz_g > $rangelength_z) return; end
+                        $_iz = $range_z
 $(shmem ? quote           
                         @sync_threads()
                         if (ParallelStencil.@t_h() <= cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
