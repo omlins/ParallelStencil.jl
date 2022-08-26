@@ -83,7 +83,7 @@ function checkargs_loop(args...)
 end
 
 function checkargs_loopopt(args...)
-    if (length(args) != 6 && length(args) != 3) @ArgumentError("wrong number of arguments.") end
+    if (length(args) != 7 && length(args) != 6 && length(args) != 3) @ArgumentError("wrong number of arguments.") end
 end
 
 
@@ -176,7 +176,7 @@ end
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
 #TODO: maybe gensym with macro @gensym
-function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, halosize, body; package::Symbol=get_package())
+function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, halosize, indices_shift, body; package::Symbol=get_package())
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
     A = optvars 
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
@@ -184,25 +184,29 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
     halosize = eval_arg(caller, halosize)
     noexpr = :(begin end)
     if optdim == 3
-        hx, hy       = halosize
-        shmem        = (hx>0 || hy>0)
-        ix, iy, iz   = indices
-        i            = gensym_world("i", @__MODULE__)
-        tx           = gensym_world("tx", @__MODULE__)
-        ty           = gensym_world("ty", @__MODULE__)
-        ix_h         = gensym_world("ix_h", @__MODULE__)
-        ix_h2        = gensym_world("ix_h2", @__MODULE__)
-        iy_h         = gensym_world("iy_h", @__MODULE__)
-        iy_h2        = gensym_world("iy_h2", @__MODULE__)
-        loopoffset   = gensym_world("loopoffset", @__MODULE__)
-        A_izp1       = gensym_world(string(A, "_izp1"), @__MODULE__)
-        A_ix_iy_izm1 = gensym_world(string(A, "_ix_iy_izm1"), @__MODULE__)
-        A_ix_iy_iz   = gensym_world(string(A, "_ix_iy_iz"), @__MODULE__)
-        A_ix_iy_izp1 = gensym_world(string(A, "_ix_iy_izp1"), @__MODULE__)
-        A_ixm1_iy_iz = gensym_world(string(A, "_ixm1_iy_iz"), @__MODULE__)
-        A_ixp1_iy_iz = gensym_world(string(A, "_ixp1_iy_iz"), @__MODULE__)
-        A_ix_iym1_iz = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
-        A_ix_iyp1_iz = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
+        hx, hy         = halosize
+        shmem          = (hx>0 || hy>0)
+        _ix, _iy, _iz  = indices
+        _i             = gensym_world("i", @__MODULE__)
+        ix             = (indices_shift[1] > 0) ? :(($_ix + $(indices_shift[1]))) : _ix
+        iy             = (indices_shift[2] > 0) ? :(($_iy + $(indices_shift[2]))) : _iy
+        iz             = (indices_shift[3] > 0) ? :(($_iz + $(indices_shift[3]))) : _iz
+        i              = (indices_shift[3] > 0) ? :(($_i  - $(indices_shift[3]))) : _i
+        tx             = gensym_world("tx", @__MODULE__)
+        ty             = gensym_world("ty", @__MODULE__)
+        ix_h           = gensym_world("ix_h", @__MODULE__)
+        ix_h2          = gensym_world("ix_h2", @__MODULE__)
+        iy_h           = gensym_world("iy_h", @__MODULE__)
+        iy_h2          = gensym_world("iy_h2", @__MODULE__)
+        loopoffset     = gensym_world("loopoffset", @__MODULE__)
+        A_izp1         = gensym_world(string(A, "_izp1"), @__MODULE__)
+        A_ix_iy_izm1   = gensym_world(string(A, "_ix_iy_izm1"), @__MODULE__)
+        A_ix_iy_iz     = gensym_world(string(A, "_ix_iy_iz"), @__MODULE__)
+        A_ix_iy_izp1   = gensym_world(string(A, "_ix_iy_izp1"), @__MODULE__)
+        A_ixm1_iy_iz   = gensym_world(string(A, "_ixm1_iy_iz"), @__MODULE__)
+        A_ixp1_iy_iz   = gensym_world(string(A, "_ixp1_iy_iz"), @__MODULE__)
+        A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
+        A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
 
         body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1)
         body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
@@ -215,7 +219,14 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
             body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz)
             body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz)
         end
-        
+        if indices_shift[3] > 0
+            body =  quote 
+                        if ($i > 0)
+                            $body
+                        end
+                    end
+        end
+
         return quote
                     $tx            = @threadIdx().x + $hx
                     $ty            = @threadIdx().y + $hy
@@ -232,8 +243,8 @@ $(hx>0 ?  :(        $A_ixm1_iy_iz  = 0.0                                        
 $(hx>0 ?  :(        $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
 $(hy>0 ?  :(        $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
 $(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
-                    for $i = 1:$loopsize
-                        $iz = $i + $loopoffset
+                    for $_i = 1:$loopsize
+                        $_iz = $i + $loopoffset
 $(shmem ? quote           
                         @sync_threads()
                         if (ParallelStencil.@t_h() <= cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
@@ -263,6 +274,12 @@ $(hy>0 ? :(             $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                      
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
+end
+
+
+function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, halosize, body; package::Symbol=get_package())
+    indices_shift = (0,0,0)
+    return loopopt(caller, indices, optvars, optdim, loopsize, halosize, indices_shift, body; package=package)
 end
 
 
