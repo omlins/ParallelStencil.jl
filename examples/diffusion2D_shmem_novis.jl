@@ -57,7 +57,7 @@ blocks  = (nx, ny) .÷ threads
 # Time loop
 dt   = min(dx^2,dy^2)/lam/maximum(Ci)/4.1;               # Time step for 2D Heat diffusion
 for it = 1:nt
-    if (it == 11) GC.gc(true); global t_tic=time(); end      # Start measuring time.
+    if (it == 11) GC.gc(); global t_tic=time(); end      # Start measuring time.
     @parallel blocks threads shmem=prod(threads.+2)*sizeof(Float64) diffusion2D_step!(T2, T, Ci, lam, dt, _dx, _dy);
     T, T2 = T2, T;
 end
