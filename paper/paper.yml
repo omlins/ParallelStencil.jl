@@ -1,0 +1,27 @@
+title: "High-performance xPU Stencil Computations in Julia"
+keywords:
+  - Julia
+  - xPU
+  - GPU
+  - Stencil Computations
+  - Code Generation
+  - Architecture-agnostic
+  - Shared Memory Parallelization
+  - Communication-Computation Overlap
+  - Supercomputing
+authors:
+  - name: Samuel Omlin
+    orcid: 0000-0000-0000-000X
+    affiliation: 1
+  - name: Ludovic R\"ass
+    orcid: 0000-0002-1136-899X
+    affiliation: 2, 3
+affiliations:
+  - name: Swiss National Supercomputing Centre (CSCS), ETH Zurich, Lugano, Switzerland
+    index: 1
+  - name: Laboratory of Hydraulics, Hydrology and Glaciology (VAW), ETH Zurich, Zurich, Switzerland
+    index: 2
+  - name: Swiss Federal Institute for Forest, Snow and Landscape Research (WSL), Birmensdorf, Switzerland
+    index: 3
+date: June 2022
+bibliography: ref.bib

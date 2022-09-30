@@ -1,0 +1,32 @@
+\begin{thebibliography}{1}
+
+\bibitem{besard2018effective}
+T.~Besard, C.~Foket, and B.~De~Sutter.
+Effective extensible programming: unleashing {J}ulia on {GPUs}.
+{\em IEEE Transactions on Parallel and Distributed Systems}, 30(4):827--841,
+  2018.
+
+\bibitem{pasc21}
+S.~Omlin, L.~R{\"{a}}ss, N.~Keepfer, G.~Kwasniewski, B.~Malvoisin, and Y.~Y.
+  Podladchikov.
+{Solving Nonlinear Partial Differential Equations on GPU Supercomputers Using
+  Julia}.
+PASC21 conference, 2021.
+
+\bibitem{implicitglobalgrid2022}
+S.~Omlin, L.~R{\"{a}}ss, and I.~Utkin.
+{D}istributed {P}arallelization of x{PU} {S}tencil {C}omputations in {J}ulia.
+{\em Proc. JuliaCon Conf.}, ?:2, 2022.
+
+\bibitem{pasc22}
+S.~Omlin, L.~R{\"{a}}ss, I.~Utkin, V.~Narayanan, and M.~Senden.
+{Development of Multi-GPU Solvers for Nonlinear Multi-Physics with Julia}.
+PASC22 conference, 2022.
+
+\bibitem{rass2022assessing}
+L.~R\"ass, I.~Utkin, T.~Duretz, S.~Omlin, and Y.~Y. Podladchikov.
+Assessing the robustness and scalability of the accelerated pseudo-transient
+  method.
+{\em Geoscientific Model Development}, 15(14):5757--5786, 2022.
+
+\end{thebibliography}
