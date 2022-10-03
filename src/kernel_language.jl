@@ -229,7 +229,14 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
                             $body
                         end
                     end
+        else
+            body =  quote 
+                        if ($_i > 0)
+                            $body
+                        end
+                    end
         end
+        loopstart = 0 #TODO: if in z neighbors beyond iz-1 are accessed, then this needs to be bigger. NOTE: not the same as halosize which is for shmemhalo
 
         return quote
                     $tx            = @threadIdx().x + $hx
@@ -247,7 +254,8 @@ $(hx>0 ?  :(        $A_ixm1_iy_iz  = 0.0                                        
 $(hx>0 ?  :(        $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
 $(hy>0 ?  :(        $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
 $(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
-                    for $_i = 1:$loopsize
+
+                    for $_i = $loopstart:$loopsize
                         $tz_g = $_i + $loopoffset
                         if ($tz_g > $rangelength_z) return; end
                         $_iz = $range_z
