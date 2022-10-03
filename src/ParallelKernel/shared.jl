@@ -106,8 +106,15 @@ extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_ke
 
 function is_kwarg(arg; in_kernelcall=false)
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == :(=)) )
+    else             return ( isa(arg, Expr) && (arg.head == :(=)) && isa(arg.args[1], Symbol))
     end
+end
+
+Base.haskey(::Array{Union{}}, ::Symbol) = return false
+    
+function Base.haskey(kwargs_expr::Array{Expr}, key::Symbol)
+    kwargs = split_kwargs(kwargs_expr)
+    return key in keys(kwargs)
 end
 
 function split_args(args; in_kernelcall=false)
@@ -127,14 +134,37 @@ function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String
     end
 end
 
-function extract_kwargvalues(kwargs::Dict, valid_kwargs::Tuple)
+function extract_values(kwargs::Dict, valid_kwargs::Tuple)
     return ((k in keys(kwargs)) ? kwargs[k] : nothing for k in valid_kwargs)
 end
 
-function split_parallel_args(args)
+function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
+    kwargs = split_kwargs(kwargs_expr)
+    validate_kwargkeys(kwargs, valid_kwargs, macroname)
+    return extract_values(kwargs, valid_kwargs)
+end
+
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=())
+    kwargs = split_kwargs(kwargs_expr)
+    if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
+    for k in keys(kwargs)
+        if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
+    end
+    kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
+    kwargs_unknown      = NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs))
+    kwargs_unknown_expr = [:($k = $(kwargs_unknown[k])) for k in keys(kwargs_unknown)]
+    return kwargs_known, kwargs_unknown_expr
+end
+
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
+    kwargs_known, = extract_kwargs(caller, kwargs_expr, valid_kwargs, macroname, false; eval_args=eval_args)
+    return kwargs_known
+end
+
+function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
-    if any([x.args[1] in [:blocks, :threads] for x in kwargs]) @KeywordArgumentError("Invalid keyword argument in @parallel call: blocks / threads. They must be passed as positional arguments or been omited.") end
+    if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
     return posargs, kwargs, kernelarg
 end
 
@@ -167,6 +197,16 @@ function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
         return x
     end
     return found
+end
+
+Base.unquoted(s::Symbol) = s
+
+function extract_tuple(t::Union{Expr,Symbol}) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
+    if isa(t, Expr) 
+        return Base.unquoted.(t.args)
+    else 
+        return [t]
+    end
 end
 
 

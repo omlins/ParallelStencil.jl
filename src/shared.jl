@@ -3,8 +3,9 @@ import .ParallelKernel: ENABLE_CUDA  # ENABLE_CUDA must also always be accessibl
 @static if ENABLE_CUDA
     using CUDA
 end
+import MacroTools: @capture
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world
-import .ParallelKernel: PKG_CUDA, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_THREADS, INDICES, PKNumber
+import .ParallelKernel: PKG_CUDA, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
 
 
@@ -24,6 +25,8 @@ const NDIMS_NONE                = 0
 const ERRMSG_KERNEL_UNSUPPORTED = "unsupported kernel statements in @parallel kernel definition: @parallel is only applicable to kernels that contain exclusively array assignments using macros from FiniteDifferences{1|2|3}D or from another compatible computation submodule. @parallel_indices supports any kind of statements in the kernels."
 const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable containing the ndims) and has to be one of the following: $(join(SUPPORTED_NDIMS,", "))"
 const PSNumber                  = PKNumber
+const LOOPSIZE                  = 16
+const NTHREADS_MAX_LOOPOPT      = 128
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS

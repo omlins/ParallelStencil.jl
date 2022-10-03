@@ -56,6 +56,7 @@ include("shared.jl")
 
 ## Alphabetical include of function files
 include("init_parallel_stencil.jl")
+include("kernel_language.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
 

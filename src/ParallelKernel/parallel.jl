@@ -93,7 +93,7 @@ function checkargs_parallel(args...)
 end
 
 function checkargs_parallel_indices(args...)
-    if (length(args) != 2) @ArgumentError("wrong number of arguments.") end
+    if (length(args) != 2) @ArgumentError("wrong number of (positional) arguments.") end
     if !is_kernel(args[end]) @ArgumentError("the last argument must be a kernel definition (obtained: $(args[end])).") end
     kernel = args[end]
     if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed in the signature of @parallel_indices kernels.") end
@@ -112,7 +112,7 @@ function parallel(args::Union{Symbol,Expr}...; package::Symbol=get_package(), as
     end
 end
 
-function parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+function parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
     parallel_kernel(package, numbertype, args...)
 end
@@ -129,7 +129,7 @@ end
 
 function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
-    if isa(indices,Expr) indices = indices.args else indices = [indices] end
+    indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
     if (package == PKG_CUDA)
@@ -409,7 +409,7 @@ promote_maxsize(maxsize)                        = @ModuleInternalError("maxsize 
 
 maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
 maxsize(a::T) where T<:Number        = (1, 1, 1)
-maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel call: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
+maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
 maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: maxsize is implemented as a recursive function, which results in optimal code; otherwise, the function is not performance-negligable for small problems.
 merge(a::Tuple, b::Tuple)            = max.(a,b)
 
@@ -423,11 +423,11 @@ function compute_ranges(maxsize)
     return (1:maxsize[1], 1:maxsize[2], 1:maxsize[3])
 end
 
-function compute_nthreads(maxsize) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
+function compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX, flatdim=0) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
     maxsize = promote_maxsize(maxsize)
-    nthreads_x = min(32, maxsize[1])
-    nthreads_y = min(ceil(Int,NTHREADS_MAX/nthreads_x), maxsize[2])
-    nthreads_z = min(ceil(Int,NTHREADS_MAX/(nthreads_x*nthreads_y)), maxsize[3])
+    nthreads_x = min(32,                                             (flatdim==1) ? 1 : maxsize[1])
+    nthreads_y = min(ceil(Int,nthreads_max/nthreads_x),              (flatdim==2) ? 1 : maxsize[2])
+    nthreads_z = min(ceil(Int,nthreads_max/(nthreads_x*nthreads_y)), (flatdim==3) ? 1 : maxsize[3])
     return (nthreads_x, nthreads_y , nthreads_z)
 end
 
@@ -448,7 +448,7 @@ function create_synccall_cuda(kwargs::Array)
         stream = kwarg_stream[1].args[2]
         synchronize_cuda(stream)
     else
-        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel call.")
+        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel <kernelcall>.")
     end
 end
 
