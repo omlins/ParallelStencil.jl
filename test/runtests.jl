@@ -2,8 +2,9 @@
 push!(LOAD_PATH, "../src")
 
 import ParallelStencil # Precompile it.
-import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA
+import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 @static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
+@static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
 
 excludedfiles = [ "test_excluded.jl"];
 
@@ -18,6 +19,10 @@ function runtests()
 
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
         @warn "Test Skip: All CUDA tests will be skipped because CUDA is not functional (if this is unexpected type `import CUDA; CUDA.functional(true)` to debug your CUDA installation)."
+    end
+
+    if (PKG_AMDGPU in SUPPORTED_PACKAGES && !AMDGPU.functional())
+        @warn "Test Skip: All AMDGPU tests will be skipped because AMDGPU is not functional (if this is unexpected type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation)."
     end
 
     for f in testfiles
