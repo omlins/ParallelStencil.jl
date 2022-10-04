@@ -76,6 +76,7 @@ end
                 @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3)
                 @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3)
                 @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2)
+                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1)
                 set_initialized(false)
                 set_package(PKG_NONE)
                 set_numbertype(NUMBERTYPE_NONE)
