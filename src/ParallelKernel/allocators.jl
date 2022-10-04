@@ -40,37 +40,13 @@ macro rand_threads(args...)  check_initialized(); esc(_rand(args...; package=PKG
 
 ## ALLOCATOR FUNCTIONS
 
-# function _zeros(args...; package::Symbol=get_package())
-#     numbertype = get_numbertype()
-#     if     (package == PKG_CUDA)    return :(CUDA.zeros($numbertype, $(args...)))
-#     elseif (package == PKG_THREADS) return :(Base.zeros($numbertype, $(args...)))
-#     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-#     end
-# end
 function _zeros(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
     if     (package == PKG_CUDA)    return :(CUDA.zeros($numbertype, $(args...)))
-    elseif (package == PKG_THREADS)
-        return quote
-            arr = Array{$numbertype}(undef, $(args...))
-            Threads.@threads for i in eachindex(arr)
-                @inbounds arr[i] = zero($numbertype)
-            end
-            arr
-        end
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel._parallel_init(Base.zero, $numbertype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
-
-# macro asd(args...)
-#     quote
-#         tmp = Array{$numbertype}(undef, $(args...))
-#         Threads.@threads for i in eachindex(tmp)
-#             @inbounds tmp[i] = zero($numbertype)
-#         end
-#         tmp
-#     end
-# end
 
 function _ones(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
@@ -86,4 +62,13 @@ function _rand(args...; package::Symbol=get_package())
     elseif (package == PKG_THREADS) return :(Base.rand($numbertype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+end
+
+function _parallel_init(f::F, numbertype::D, args...) where {F, D<:DataType}
+    arr = Array{numbertype, length(args)}(undef, args...)
+    Threads.@threads :static for i in eachindex(arr)
+        # @inbounds arr[i] = f(numbertype)
+        @inbounds arr[i] = f(Float64)
+    end
+    return arr
 end
