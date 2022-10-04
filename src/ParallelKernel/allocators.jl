@@ -40,13 +40,37 @@ macro rand_threads(args...)  check_initialized(); esc(_rand(args...; package=PKG
 
 ## ALLOCATOR FUNCTIONS
 
+# function _zeros(args...; package::Symbol=get_package())
+#     numbertype = get_numbertype()
+#     if     (package == PKG_CUDA)    return :(CUDA.zeros($numbertype, $(args...)))
+#     elseif (package == PKG_THREADS) return :(Base.zeros($numbertype, $(args...)))
+#     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+#     end
+# end
 function _zeros(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
     if     (package == PKG_CUDA)    return :(CUDA.zeros($numbertype, $(args...)))
-    elseif (package == PKG_THREADS) return :(Base.zeros($numbertype, $(args...)))
+    elseif (package == PKG_THREADS)
+        return quote
+            arr = Array{$numbertype}(undef, $(args...))
+            Threads.@threads for i in eachindex(arr)
+                @inbounds arr[i] = zero($numbertype)
+            end
+            arr
+        end
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
+
+# macro asd(args...)
+#     quote
+#         tmp = Array{$numbertype}(undef, $(args...))
+#         Threads.@threads for i in eachindex(tmp)
+#             @inbounds tmp[i] = zero($numbertype)
+#         end
+#         tmp
+#     end
+# end
 
 function _ones(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
