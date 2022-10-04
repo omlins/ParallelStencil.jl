@@ -1,12 +1,22 @@
-# Enable CUDA if the CUDA package is installed (enables to use the package for CPU-only without requiring the CUDA package installed if the installation procedure allows it).
-const CUDA_IS_INSTALLED = (Base.find_package("CUDA")!==nothing)
-const ENABLE_CUDA       = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
-const PKG_CUDA          = :CUDA
-const PKG_THREADS       = :Threads
-const PKG_NONE          = :PKG_NONE
-@static if ENABLE_CUDA
+# Enable CUDA/AMDGPU if the CUDA/AMDGPU package is installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU package installed if the installation procedure allows it).
+const CUDA_IS_INSTALLED   = (Base.find_package("CUDA")!==nothing)
+const AMDGPU_IS_INSTALLED = (Base.find_package("AMDGPU")!==nothing)
+const ENABLE_CUDA         = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
+const ENABLE_AMDGPU       = true # NOTE: Can be set to AMDGPU_IS_INSTALLED, or to true or false independent of it.
+const PKG_CUDA            = :CUDA
+const PKG_AMDGPU          = :AMDGPU
+const PKG_THREADS         = :Threads
+const PKG_NONE            = :PKG_NONE
+@static if ENABLE_CUDA && ENABLE_AMDGPU
+    using CUDA
+    using AMDGPU
+    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA, AMDGPU]
+elseif ENABLE_CUDA 
     using CUDA
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
+elseif ENABLE_AMDGPU
+    using AMDGPU
+    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_AMDGPU]
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
@@ -22,6 +32,7 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
 const INT_CUDA                     = Int64
+const INT_AMDGPU                   = Int64
 const INT_THREADS                  = Int64
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
@@ -52,6 +63,7 @@ const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be on
 
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
                                    PKG_CUDA    => 0,
+                                   PKG_AMDGPU  => 0,
                                    PKG_THREADS => 1)
 
 struct Dim3
@@ -76,7 +88,7 @@ end
 
 function remove_return(body::Expr)
     if !(body.args[end] in [:(return), :(return nothing), :(nothing)])
-        @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any CUDA kernels.")
+        @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any GPU kernels.")
     end
     remainder = copy(body)
     remainder.args = body.args[1:end-2]
@@ -272,6 +284,11 @@ function simplify_varnames!(expr::Expr)
     end
     return expr
 end
+
+
+## FUNCTIONS FOR DIVERSE SYNTAX SUGAR
+
+isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
 
 
 ## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)
