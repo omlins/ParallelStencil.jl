@@ -400,18 +400,18 @@ end
 
 ## RUNTIME ALLOCATOR FUNCTIONS 
 
- zeros_cpu(::Type{T}, blocklength, args...) where {T<:Number}                       = (check_datatype(T); Base.zeros(T, args...))                # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_cpu(::Type{T}, blocklength, args...) where {T<:Number}                       = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))  # ...
-  rand_cpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}           = (check_datatype(T, Bool, Enum); Base.rand(T, args...))     # ...
-falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                         = Base.falses(args...)                                       # ...
- trues_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                         = Base.trues(args...)                                        # ...  #Note: an alternative would be: fill_cpu(T, true, args...)
+ zeros_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); Base.zeros(T, args...))                # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))  # ...
+  rand_cpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = (check_datatype(T, Bool, Enum); Base.rand(T, args...))     # ...
+falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.falses(args...)                                       # ...
+ trues_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.trues(args...)                                        # ...  #Note: an alternative would be: fill_cpu(T, true, args...)
 
- zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}     = (check_datatype(T); fill_cpu(T, blocklength, 0, args...))
-  ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}     = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))
-  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B}  = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
-  rand_cpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}     = rand_cpu(T, blocklength, dims)
-falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}     = fill_cpu(T, blocklength, false, args...)
- trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}     = fill_cpu(T, blocklength, true, args...)
+ zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 0, args...))
+  ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))
+  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
+  rand_cpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cpu(T, blocklength, dims)
+falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
+ trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
 
 
  zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
@@ -423,7 +423,7 @@ falses_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                    
 
  zeros_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 0, args...))
   ones_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 1, args...))
-  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
   rand_cuda(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cuda(T, blocklength, dims)
 falses_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, false, args...)
  trues_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, true, args...)
