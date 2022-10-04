@@ -13,12 +13,12 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA was selected with [`@init_parallel_kernel`](@ref).
-    - `kwargs...`: keyword arguments to be passed further to CUDA (ignored for Threads).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
-    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
 
 See also: [`@init_parallel_kernel`](@ref)
 """
@@ -72,12 +72,16 @@ macro synchronize(args...) check_initialized(); esc(synchronize(args...)); end
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(args...; package=PKG_AMDGPU)); end
 macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(args...; package=PKG_THREADS)); end
 macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_AMDGPU)); end
 macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_THREADS)); end
 macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...; package=PKG_AMDGPU)); end
 macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...; package=PKG_THREADS)); end
 macro synchronize_cuda(args...)         check_initialized(); esc(synchronize(args...; package=PKG_CUDA)); end
+macro synchronize_amdgpu(args...)         check_initialized(); esc(synchronize(args...; package=PKG_AMDGPU)); end
 macro synchronize_threads(args...)      check_initialized(); esc(synchronize(args...; package=PKG_THREADS)); end
 
 
@@ -132,7 +136,7 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    if (package == PKG_CUDA)
+    if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),         :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),          :(Data.DeviceCell))
         kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
@@ -142,13 +146,14 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_THREADS) int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-    if (package == PKG_CUDA)
+    if isgpu(package)
         body = add_threadids(indices, ranges, body)
         body = literaltypes(numbertype, body)
     elseif (package == PKG_THREADS)
@@ -292,7 +297,7 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $block
@@ -307,8 +312,8 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
-            $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
@@ -325,9 +330,9 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
-            $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
-            $tz = (CUDA.blockIdx().z-1) * CUDA.blockDim().z + CUDA.threadIdx().z;  # thread ID, dimension z
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+            $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
