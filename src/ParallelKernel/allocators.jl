@@ -51,7 +51,7 @@ end
 function _ones(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
     if     (package == PKG_CUDA)    return :(CUDA.ones($numbertype, $(args...)))
-    elseif (package == PKG_THREADS) return :(Base.ones($numbertype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel._parallel_init(Base.one, $numbertype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -59,16 +59,15 @@ end
 function _rand(args...; package::Symbol=get_package())
     numbertype = get_numbertype()
     if     (package == PKG_CUDA)    return :(CUDA.CuArray(rand($numbertype, $(args...))))
-    elseif (package == PKG_THREADS) return :(Base.rand($numbertype, $(args...)))
+    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel._parallel_init(Base.rand, $numbertype, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
-function _parallel_init(f::F, numbertype::D, args...) where {F, D<:DataType}
+function _parallel_init(f::F, numbertype::Type{T}, args...) where {F, T}
     arr = Array{numbertype, length(args)}(undef, args...)
     Threads.@threads :static for i in eachindex(arr)
-        # @inbounds arr[i] = f(numbertype)
-        @inbounds arr[i] = f(Float64)
+        @inbounds arr[i] = f(T)
     end
     return arr
 end
