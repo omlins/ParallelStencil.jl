@@ -80,7 +80,7 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
         if haskey(kwargs, :loopopt) && kwargs.loopopt
             parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
-            ParallelKernel.parallel(args...; package=package)
+            ParallelKernel.parallel(caller, args...; package=package)
         end
     end
 end
