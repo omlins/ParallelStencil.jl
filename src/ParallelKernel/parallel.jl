@@ -172,10 +172,13 @@ end
 
 function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool, package::Symbol)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
+    if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_THREADS) int_type = INT_AMDGPU
+    end
     push!(kernelcall.args, ranges)
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[1]))))
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[2]))))
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[3]))))
+    push!(kernelcall.args, :($int_type(length($ranges[1]))))
+    push!(kernelcall.args, :($int_type(length($ranges[2]))))
+    push!(kernelcall.args, :($int_type(length($ranges[3]))))
     return create_call(package, nblocks, nthreads, kernelcall, kwargs, async)
 end
 
