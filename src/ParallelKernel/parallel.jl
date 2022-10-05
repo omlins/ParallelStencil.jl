@@ -465,14 +465,11 @@ end
 
 function create_synccall_cuda(kwargs::Array)
     kwarg_stream = [x for x in kwargs if x.args[1]==:stream]
-    if length(kwarg_stream) == 0
-        synchronize_cuda(CUDA.stream())
-    elseif length(kwarg_stream) == 1
-        stream = kwarg_stream[1].args[2]
-        synchronize_cuda(stream)
-    else
-        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel <kernelcall>.")
+    if     (length(kwarg_stream) == 0) stream = :(CUDA.stream())  # Use the default stream of the task.
+    elseif (length(kwarg_stream) == 1) stream = kwarg_stream[1].args[2]
+    else                               @KeywordArgumentError("there can only be one keyword argument stream in a @parallel <kernelcall>.")
     end
+    synchronize_cuda(stream)
 end
 
 function create_synccall_threads(kwargs::Array)
