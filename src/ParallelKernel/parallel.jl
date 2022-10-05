@@ -110,7 +110,7 @@ parallel_async(args::Union{Symbol,Expr}...; package::Symbol=get_package()) = par
 
 function parallel(args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     posargs, kwargs, kernelarg = split_parallel_args(args)
-    if     (package == PKG_CUDA)    parallel_call_cuda(posargs..., kernelarg, kwargs, async)
+    if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, kwargs, async, package)
     elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async) # Ignore keyword args as they are not for the threads case (noted in doc).
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -170,32 +170,31 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_cuda(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool, package::Symbol)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     push!(kernelcall.args, ranges)
     push!(kernelcall.args, :($INT_CUDA(length($ranges[1]))))
     push!(kernelcall.args, :($INT_CUDA(length($ranges[2]))))
     push!(kernelcall.args, :($INT_CUDA(length($ranges[3]))))
-    synccall = async ? :(begin end) : create_synccall_cuda(kwargs)
-    return :( CUDA.@cuda blocks=$nblocks threads=$nthreads $(kwargs...) $kernelcall; $synccall )
+    return create_call(package, nblocks, nthreads, kernelcall, kwargs, async)
 end
 
-function parallel_call_cuda(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool, package::Symbol)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_cuda(ranges, nblocks, nthreads, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, kwargs, async, package)
 end
 
-function parallel_call_cuda(ranges::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool, package::Symbol)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    parallel_call_cuda(ranges, nblocks, nthreads, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, kwargs, async, package)
 end
 
-function parallel_call_cuda(kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(kernelcall::Expr, kwargs::Array, async::Bool, package::Symbol)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_cuda(ranges, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, kernelcall, kwargs, async, package)
 end
 
 
@@ -443,7 +442,23 @@ function compute_nblocks(maxsize, nthreads)
 end
 
 
-## FUNCTIONS TO CREATE SYNCHRONIZATION CALLS
+## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
+
+function create_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+    synccall = async ? :(begin end) : create_synccall(package, kwargs)
+    if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads $(kwargs...) $kernelcall; $synccall )
+    elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(kwargs...) $kernelcall; $synccall )
+    else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+    end
+end
+
+function create_synccall(package::Symbol, kwargs::Array)
+    if     (package == PKG_CUDA)    create_synccall_cuda(kwargs)
+    elseif (package == PKG_AMDGPU)  create_synccall_amdgpu(kwargs)
+    elseif (package == PKG_THREADS) create_synccall_threads(kwargs)
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
 
 function create_synccall_cuda(kwargs::Array)
     kwarg_stream = [x for x in kwargs if x.args[1]==:stream]
