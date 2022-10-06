@@ -117,10 +117,10 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
     bc_and_commcalls = process_bc_and_commcalls(bc_and_commcalls)
     quote
         for i in 1:length($ranges_outer)
-            ParallelStencil.@parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.@get_priority_stream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt.
+            @parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.@get_priority_stream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt (fixing it to ParallelStencil is also not possible as it assumes, else the ParalellKernel hide_communication unit tests fail).
         end
         for i in 1:length($ranges_inner)
-            ParallelStencil.@parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.@get_stream(i) $(kwargs...) $compkernelcall          #NOTE: ...
+            @parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.@get_stream(i) $(kwargs...) $compkernelcall          #NOTE: ...
         end
         for i in 1:length($ranges_outer) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_priority_stream(i)); end
         $bc_and_commcalls
