@@ -177,7 +177,7 @@ function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
     if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
-    if (is_call && any([x.args[1] in [:groupsize, :gridsize] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: groupsize / gridsize. CUDA nomenclature is to be used for @parallel calls (and kernels).") end
+    if (is_call && any([x.args[1] in [:groupsize, :gridsize, :queue] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: groupsize / gridsize / queue. CUDA nomenclature and concepts are to be used for @parallel calls (and kernels).") end
     return posargs, kwargs, kernelarg
 end
 
