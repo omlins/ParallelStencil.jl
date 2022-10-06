@@ -14,7 +14,7 @@ Hide the communication behind the computation within the code `block`.
 
 # Arguments
 - `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communcation performed.
-- `block`: code block wich starts with exactly one [`@parallel`](@ref) call to perform computations, followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations cannot contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default CUDA stream (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of `ranges_outer` are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
+- `block`: code block wich starts with exactly one [`@parallel`](@ref) call to perform computations, followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations cannot contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default stream in CUDA (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of `ranges_outer` are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
 
 !!! note "Advanced"
     - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communcation and boundary conditions performed.
@@ -86,7 +86,7 @@ end
 ## GATEWAY FUNCTIONS
 
 function hide_communication(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
-    if     (package == PKG_CUDA)    hide_communication_cuda(args...)
+    if     (package == PKG_CUDA)    hide_communication_gpu(args...)
     elseif (package == PKG_THREADS) hide_communication_threads(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -108,7 +108,7 @@ end
 
 ## @HIDE_COMMUNICATION FUNCTIONS
 
-function hide_communication_cuda(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr)
+function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr)
     compcall, bc_and_commcalls = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
     posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
@@ -133,7 +133,7 @@ function hide_communication_threads(ranges_outer::Union{Symbol,Expr}, ranges_inn
 end
 
 
-function hide_communication_cuda(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
+function hide_communication_gpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
     compcall, = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
     posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
@@ -227,8 +227,8 @@ function get_ranges_inner(boundary_width, ranges::RANGES_TYPE) where T <:Integer
     ms = length.(ranges)
     bw = boundary_width
     if     (ms[3] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], bw[3]+1:ms[3]-bw[3]), ) # 3D
-    elseif (ms[2] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], 1:1), ) # 2D
-    elseif (ms[1] > 1) return ( (bw[1]+1:ms[1]-bw[1], 1:1, 1:1), ) # 1D
+    elseif (ms[2] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], 1:1), )                 # 2D
+    elseif (ms[1] > 1) return ( (bw[1]+1:ms[1]-bw[1], 1:1, 1:1), )                                 # 1D
     else @ModuleInternalError("invalid argument 'ranges'.")
     end
 end
