@@ -234,6 +234,7 @@ end
 ## @SYNCHRONIZE FUNCTIONS
 
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...)))
+synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(ParallelStencil.ParallelKernel.synchronize_rocstream($(args...)))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 
 
@@ -448,11 +449,10 @@ end
 
 ## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
 
-# TODO: queue=$(stream.queue) equivalent must be done in @roc!
 function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr})
     synccall = async ? :(begin end) : create_synccall(package, stream)
     if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
-    elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) $kernelcall; $synccall )
+    elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -466,7 +466,7 @@ end
 
 function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
-    #elseif (package == PKG_AMDGPU)  :() #TODO 
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.get_default_rocstream())
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
