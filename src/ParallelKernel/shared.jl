@@ -73,6 +73,75 @@ struct Dim3
 end
 
 
+## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "ROCSTREAMS"
+
+@static if ENABLE_CUDA
+    let
+        global get_priority_custream, get_custream
+        priority_custreams = Array{CuStream}(undef, 0)
+        custreams          = Array{CuStream}(undef, 0)
+
+        function get_priority_custream(id::Integer)
+            while (id > length(priority_custreams)) push!(priority_custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[end])) end # CUDA.priority_range()[end] is max priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
+            return priority_custreams[id]
+        end
+
+        function get_custream(id::Integer)
+            while (id > length(custreams)) push!(custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[1])) end # CUDA.priority_range()[1] is min priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
+            return custreams[id]
+        end
+    end
+end
+
+@static if ENABLE_AMDGPU
+    ## Stream implementation for AMDGPU. It is the responsibility of the package developers to keep the ROCStreams consistent by pushing each signal received from a kernel launch on queue=stream.queue to the ROCStream using push_signal!. If ROCQueues are to be exposed to the users, then a macro should be implemented to automatize this (e.g. overwrite @roc to accept the kwarg stream...).
+    mutable struct ROCStream
+        queue::AMDGPU.ROCQueue
+        last_signal::AMDGPU.ROCKernelSignal
+
+        function ROCStream(device::ROCDevice; priority::Union{Nothing,Symbol}=nothing)
+            queue = ROCQueue(device; priority=priority)
+            new(queue, ROCSignal()) #TODO: see if nothing needed here - when doing sync on it OK?
+        end
+        function ROCStream(queue::ROCQueue)
+            new(queue, ROCSignal()) #TODO: see if nothing needed here - when doing sync on it OK?
+        end
+    end
+
+    function push_signal!(stream::ROCStream, signal::AMDGPU.ROCKernelSignal)
+        AMDGPU.barrier_and!(stream.queue, [signal])
+        stream.last_signal = signal
+    end
+
+    function synchronize_rocstream(stream::ROCStream)
+        AMDGPU.wait(stream.last_signal)
+    end
+
+    let
+        global get_priority_rocstream, get_rocstream
+        priority_rocstreams = Array{ROCStream}(undef, 0)
+        rocstreams          = Array{ROCStream}(undef, 0)
+        default_rocstreams  = Array{ROCStream}(undef, 0)
+
+        function get_priority_rocstream(id::Integer)
+            while (id > length(priority_rocstreams)) push!(priority_rocstreams, ROCStream(AMDGPU.default_device(); priority=:high)) end # :high is max priority.
+            return priority_rocstreams[id]
+        end
+
+        #TODO: check if set priority to normal!
+        function get_rocstream(id::Integer)
+            while (id > length(rocstreams)) push!(rocstreams, ROCStream(AMDGPU.default_device(); priority=:low)) end # :low min priority.
+            return rocstreams[id]
+        end
+
+        function get_default_rocstream()
+            if (length(default_rocstreams)==0) push!(default_rocstreams, ROCStream(AMDGPU.default_queue())) end # NOTE: this implementation is extensible to multiple defaults as available in CUDA for streams.
+            return rocstreams[1]
+        end
+    end
+end
+
+
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
 
 extract_kernel_args(kernel::Expr)   = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
