@@ -67,12 +67,19 @@ See also: [`@parallel`](@ref)
 @doc HIDE_COMMUNICATION_DOC
 macro hide_communication(args...) check_initialized(); checkargs_hide_communication(args...); esc(hide_communication(args...)); end
 
+macro get_priority_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_priority_stream(args...)); end
+macro get_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_stream(args...)); end
+
 
 ## ARGUMENT CHECKS
 
 function checkargs_hide_communication(args...)
     if (length(args) < 2 || length(args) > 3) @ArgumentError("wrong number of arguments.") end
     if !is_block(args[end]) @ArgumentError("the last argument must be a code block (obtained: $(args[end])).") end
+end
+
+function checkargs_get_stream(args...)
+    if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
 end
 
 
@@ -85,6 +92,19 @@ function hide_communication(args::Union{Integer,Symbol,Expr}...; package::Symbol
     end
 end
 
+function get_priority_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+    if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    end
+end
+
+function get_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+    if     (package == PKG_CUDA)    get_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    end
+end
 
 ## @HIDE_COMMUNICATION FUNCTIONS
 
@@ -97,14 +117,14 @@ function hide_communication_cuda(ranges_outer::Union{Symbol,Expr}, ranges_inner:
     bc_and_commcalls = process_bc_and_commcalls(bc_and_commcalls)
     quote
         for i in 1:length($ranges_outer)
-            ParallelStencil.@parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.get_priority_custream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt.
+            ParallelStencil.@parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.@get_priority_stream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt.
         end
         for i in 1:length($ranges_inner)
-            ParallelStencil.@parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.get_custream(i) $(kwargs...) $compkernelcall          #NOTE: ...
+            ParallelStencil.@parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.@get_stream(i) $(kwargs...) $compkernelcall          #NOTE: ...
         end
-        for i in 1:length($ranges_outer) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.get_priority_custream(i)); end
+        for i in 1:length($ranges_outer) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_priority_stream(i)); end
         $bc_and_commcalls
-        for i in 1:length($ranges_inner) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.get_custream(i)); end
+        for i in 1:length($ranges_inner) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream(i)); end
     end
 end
 
@@ -132,6 +152,14 @@ end
 function hide_communication_threads(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
     return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
 end
+
+
+# @GET_STREAM AND @GET_PRIORITY_STEAM FUNCTIONS
+
+get_priority_stream_cuda(id::Union{Integer,Symbol,Expr})   = return :(ParallelStencil.ParallelKernel.get_priority_custream($id))
+get_priority_stream_amdgpu(id::Union{Integer,Symbol,Expr}) = return :(ParallelStencil.ParallelKernel.get_priority_rocstream($id))
+get_stream_cuda(id::Union{Integer,Symbol,Expr})            = return :(ParallelStencil.ParallelKernel.get_custream($id))
+get_stream_amdgpu(id::Union{Integer,Symbol,Expr})          = return :(ParallelStencil.ParallelKernel.get_rocstream($id))
 
 
 ## FUNCTIONS TO EXTRACT AND PROCESS COMPUTATION AND BOUNDARY CONDITIONS CALLS / COMMUNICATION CALLS
@@ -212,26 +240,4 @@ function validate_ranges_args(boundary_width::Tuple{T,T,T}, ranges::RANGES_TYPE)
     if !all(maxsize .> 2 .* boundary_width) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be true: all(length.(ranges) .> 2 .* boundary_width) ") end # NOTE: this ensures among other things that if maxsize == 1, then boundary_width==0.
     if any((maxsize .> 1) .& (boundary_width .== 0)) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be false: any((length.(ranges) .> 1) .& (boundary_width .== 0)) ") end
     if all(maxsize .== 1) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be false: all(length.(ranges) .== 1)") end
-end
-
-
-## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "STREAMS"
-
-@static if ENABLE_CUDA
-    let
-        global get_priority_custream, get_custream
-        priority_custreams = Array{CuStream}(undef, 0)
-        custreams          = Array{CuStream}(undef, 0)
-
-        function get_priority_custream(id::Integer)
-            while (id > length(priority_custreams)) push!(priority_custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[end])) end # CUDA.priority_range()[end] is max priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return priority_custreams[id]
-        end
-
-        function get_custream(id::Integer)
-            priority_min =
-            while (id > length(custreams)) push!(custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[1])) end # CUDA.priority_range()[1] is min priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return custreams[id]
-        end
-    end
 end
