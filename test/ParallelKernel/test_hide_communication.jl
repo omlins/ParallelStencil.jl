@@ -2,8 +2,8 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring
-import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_cuda
+import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, isgpu
+import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -22,7 +22,7 @@ end
             @init_parallel_kernel($package, Float64)
             @require @is_initialized()
             @testset "@hide_communication boundary_width block (macro expansion)" begin
-                @static if $package == $PKG_CUDA
+                @static if isgpu($package)
                     block = string(@gorgeousexpand(1, @hide_communication(boundary_width, begin @parallel f(A, B); communication(); end)))
                     @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
                     @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
@@ -61,7 +61,7 @@ end
                     end
                     @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
-                @testset "@hide_communication boundary_width block" begin  # This test verifies that the results are correct even though in the current version (using CUDA.jl < v2.0), it cannot overlap
+                @testset "@hide_communication boundary_width block" begin  # This test verifies that the results are correct, even for CUDA.jl < v2.0, where it cannot overlap.
                     A  = @zeros(6, 7, 8)
                     @hide_communication (2,2,3) begin
                         @parallel add_indices!(A);
@@ -109,31 +109,31 @@ end
             @testset "arguments @hide_communication" begin
                 @test_throws ArgumentError checkargs_hide_communication(:boundary_width, :block)               # Error: the last argument must be a code block.
                 @test_throws ArgumentError checkargs_hide_communication(:ranges_outer, :ranges_inner, :block)  # Error: the last argument must be a code block.
-                @static if $package == $PKG_CUDA
-                    @test_throws ArgumentError hide_communication_cuda(:boundary_width, :(@parallel f()))                                                                      # Error: missing (bc and) communication code.
-                    @test_throws ArgumentError hide_communication_cuda(:boundary_width, :(communication()))                                                                    # Error: missing @parallel call.
-                    @test_throws ArgumentError hide_communication_cuda(:boundary_width, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
-                    @test_throws ArgumentError hide_communication_cuda(:boundary_width, :(begin communication(); end))                                                         # Error: missing @parallel call.
-                    block = :(begin do_something(); @parallel f(); communication(); end);          @test_throws ArgumentError hide_communication_cuda(:boundary_width, block)  # Error: block does not start with @parallel call
-                    block = :(begin @parallel stream=mystream f(); communication(); end);          @test_throws ArgumentError hide_communication_cuda(:boundary_width, block)  # Error: invalid keyword argument 'stream'.
-                    block = :(begin @parallel ranges f(); communication(); end);                   @test_throws ArgumentError hide_communication_cuda(:boundary_width, block)  # Error: invalid optional argument 'ranges'.
-                    block = :(begin @parallel nblocks nthreads f(); communication(); end);         @test_throws ArgumentError hide_communication_cuda(:boundary_width, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads'.
-                    block = :(begin @parallel ranges nblocks nthreads f(); communication(); end);  @test_throws ArgumentError hide_communication_cuda(:boundary_width, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads'.
+                @static if isgpu($package)
+                    @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(@parallel f()))                                                                      # Error: missing (bc and) communication code.
+                    @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(communication()))                                                                    # Error: missing @parallel call.
+                    @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
+                    @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(begin communication(); end))                                                         # Error: missing @parallel call.
+                    block = :(begin do_something(); @parallel f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: block does not start with @parallel call
+                    block = :(begin @parallel stream=mystream f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid keyword argument 'stream'.
+                    block = :(begin @parallel ranges f(); communication(); end);                   @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional argument 'ranges'.
+                    block = :(begin @parallel nblocks nthreads f(); communication(); end);         @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads'.
+                    block = :(begin @parallel ranges nblocks nthreads f(); communication(); end);  @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads'.
 
-                    @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, :(@parallel f()))                                                                      # Error: missing (bc and) communication code.
-                    @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, :(communication()))                                                                    # Error: missing @parallel call.
-                    @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
-                    @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, :(begin communication(); end))                                                         # Error: missing @parallel call.
-                    block = :(begin do_something(); @parallel f(); communication(); end);          @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: block does not start with @parallel call
-                    block = :(begin @parallel stream=mystream f(); communication(); end);          @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid keyword argument 'stream'.
-                    block = :(begin @parallel ranges f(); communication(); end);                   @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges'.
-                    block = :(begin @parallel nblocks nthreads f(); communication(); end);         @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads'.
-                    block = :(begin @parallel ranges nblocks nthreads f(); communication(); end);  @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads'.
+                    @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, :(@parallel f()))                                                                      # Error: missing (bc and) communication code.
+                    @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, :(communication()))                                                                    # Error: missing @parallel call.
+                    @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
+                    @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, :(begin communication(); end))                                                         # Error: missing @parallel call.
+                    block = :(begin do_something(); @parallel f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: block does not start with @parallel call
+                    block = :(begin @parallel stream=mystream f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid keyword argument 'stream'.
+                    block = :(begin @parallel ranges f(); communication(); end);                   @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges'.
+                    block = :(begin @parallel nblocks nthreads f(); communication(); end);         @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads'.
+                    block = :(begin @parallel ranges nblocks nthreads f(); communication(); end);  @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads'.
 
-                    block = :(begin @parallel f(); @parallel g(); communication(); end);                          @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: missing arguments 'ranges' in @parallel call for bc computations.
-                    block = :(begin @parallel f(); @parallel stream=mystream g(); communication(); end);          @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid keyword argument in @parallel call for bc computations.
-                    block = :(begin @parallel f(); @parallel nblocks nthreads g(); communication(); end);         @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads' in @parallel call for bc computations.
-                    block = :(begin @parallel f(); @parallel ranges nblocks nthreads g(); communication(); end);  @test_throws ArgumentError hide_communication_cuda(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads' in @parallel call for bc computations.
+                    block = :(begin @parallel f(); @parallel g(); communication(); end);                          @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: missing arguments 'ranges' in @parallel call for bc computations.
+                    block = :(begin @parallel f(); @parallel stream=mystream g(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid keyword argument in @parallel call for bc computations.
+                    block = :(begin @parallel f(); @parallel nblocks nthreads g(); communication(); end);         @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads' in @parallel call for bc computations.
+                    block = :(begin @parallel f(); @parallel ranges nblocks nthreads g(); communication(); end);  @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads' in @parallel call for bc computations.
                 end
             end;
             @reset_parallel_kernel()
