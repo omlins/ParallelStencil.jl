@@ -97,14 +97,14 @@ end
     ## Stream implementation for AMDGPU. It is the responsibility of the package developers to keep the ROCStreams consistent by pushing each signal received from a kernel launch on queue=stream.queue to the ROCStream using push_signal!. If ROCQueues are to be exposed to the users, then a macro should be implemented to automatize this (e.g. overwrite @roc to accept the kwarg stream...).
     mutable struct ROCStream
         queue::AMDGPU.ROCQueue
-        last_signal::AMDGPU.ROCKernelSignal
+        last_signal::Union{Nothing, AMDGPU.ROCKernelSignal}
 
         function ROCStream(device::ROCDevice; priority::Union{Nothing,Symbol}=nothing)
             queue = ROCQueue(device; priority=priority)
-            new(queue, ROCSignal()) #TODO: see if nothing needed here - when doing sync on it OK?
+            new(queue, nothing) #TODO: see if nothing needed here - when doing sync on it OK?
         end
         function ROCStream(queue::ROCQueue)
-            new(queue, ROCSignal()) #TODO: see if nothing needed here - when doing sync on it OK?
+            new(queue, nothing) #TODO: see if nothing needed here - when doing sync on it OK?
         end
     end
 
@@ -118,7 +118,7 @@ end
     end
 
     let
-        global get_priority_rocstream, get_rocstream
+        global get_priority_rocstream, get_rocstream, get_default_rocstream
         priority_rocstreams = Array{ROCStream}(undef, 0)
         rocstreams          = Array{ROCStream}(undef, 0)
         default_rocstreams  = Array{ROCStream}(undef, 0)
