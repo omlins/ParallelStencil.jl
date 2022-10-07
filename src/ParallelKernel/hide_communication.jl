@@ -179,7 +179,7 @@ function process_bc_and_commcalls(block::Expr)
         posargs, kwargs = split_parallel_args(args)
         if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM) end
         if (length(posargs) != 1) @ArgumentError(ERRMSG_INVALID_BC_COMM) end
-        return :(@parallel $(args[1:end-1]...) stream = ParallelStencil.ParallelKernel.get_priority_custream(1) $(args[end]))
+        return :(@parallel $(args[1:end-1]...) stream = ParallelStencil.ParallelKernel.@get_priority_stream(1) $(args[end]))
     end
 end
 
