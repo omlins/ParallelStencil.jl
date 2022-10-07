@@ -147,7 +147,7 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)    int_type = INT_CUDA
-    elseif (package == PKG_THREADS) int_type = INT_AMDGPU
+    elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
@@ -173,8 +173,8 @@ end
 
 function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
-    if     (package == PKG_CUDA)    int_type = INT_CUDA
-    elseif (package == PKG_THREADS) int_type = INT_AMDGPU
+    if     (package == PKG_CUDA)   int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
     end
     push!(kernelcall.args, ranges)
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
