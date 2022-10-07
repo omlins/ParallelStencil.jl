@@ -86,7 +86,7 @@ end
 ## GATEWAY FUNCTIONS
 
 function hide_communication(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
-    if     (package == PKG_CUDA)    hide_communication_gpu(args...)
+    if     isgpu(package)           hide_communication_gpu(args...)
     elseif (package == PKG_THREADS) hide_communication_threads(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
