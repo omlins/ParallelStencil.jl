@@ -124,6 +124,7 @@ end
 
 function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    synchronize_cuda(args...)
+    elseif (package == PKG_AMDGPU)  synchronize_amdgpu(args...)
     elseif (package == PKG_THREADS) synchronize_threads(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -234,7 +235,7 @@ end
 ## @SYNCHRONIZE FUNCTIONS
 
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...)))
-synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(ParallelStencil.ParallelKernel.synchronize_rocstream($(args...)))
+synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(ParallelStencil.ParallelKernel.synchronize_rocstream($(args...))) #TODO: this supports currently only stream synchronization. Whole GPU synchronization (all streams) should also be supported.
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 
 
