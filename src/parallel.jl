@@ -129,7 +129,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if !loopopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
         if     (package == PKG_CUDA)    int_type = INT_CUDA
-        elseif (package == PKG_THREADS) int_type = INT_AMDGPU
+        elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
         elseif (package == PKG_THREADS) int_type = INT_THREADS
         end
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
