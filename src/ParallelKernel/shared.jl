@@ -101,10 +101,10 @@ end
 
         function ROCStream(device::ROCDevice; priority::Union{Nothing,Symbol}=nothing)
             queue = ROCQueue(device; priority=priority)
-            new(queue, nothing) #TODO: see if nothing needed here - when doing sync on it OK?
+            new(queue, nothing)
         end
         function ROCStream(queue::ROCQueue)
-            new(queue, nothing) #TODO: see if nothing needed here - when doing sync on it OK?
+            new(queue, nothing)
         end
     end
 
@@ -136,7 +136,7 @@ end
 
         function get_default_rocstream()
             if (length(default_rocstreams)==0) push!(default_rocstreams, ROCStream(AMDGPU.default_queue())) end # NOTE: this implementation is extensible to multiple defaults as available in CUDA for streams.
-            return rocstreams[1]
+            return default_rocstreams[1]
         end
     end
 end
@@ -309,6 +309,7 @@ gorgeousstring(expr::Expr)                                         = string(simp
 longnameof(f)                                                      = "$(parentmodule(f)).$(nameof(f))"
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro symbols(eval_mod, mod)           symbols(eval_mod, mod) end
+macro isgpu(package)                   isgpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -356,7 +357,7 @@ function simplify_varnames!(expr::Expr)
 end
 
 
-## FUNCTIONS FOR DIVERSE SYNTAX SUGAR
+## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
 
