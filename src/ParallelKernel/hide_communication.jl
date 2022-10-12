@@ -192,7 +192,7 @@ promote_boundary_width(boundary_width::BOUNDARY_WIDTH_TYPE_2D)       = (boundary
 promote_boundary_width(boundary_width::BOUNDARY_WIDTH_TYPE)          = boundary_width
 promote_boundary_width(boundary_width)                               = @ArgumentError("@hide_communication: boundary_width must be a Tuple of Integer of size 1, 2 or 3 (obtained: $boundary_width; its type is: $(typeof(boundary_width))).")
 
-function get_ranges_outer(boundary_width, ranges::RANGES_TYPE) where T <:Integer
+function get_ranges_outer(boundary_width, ranges::RANGES_TYPE)
     boundary_width = promote_boundary_width(boundary_width)
     validate_ranges_args(boundary_width, ranges)
     ms = length.(ranges)
@@ -221,7 +221,7 @@ function get_ranges_outer(boundary_width, ranges::RANGES_TYPE) where T <:Integer
     return Tuple([r for r in ranges_outer if all(length.(r) .!= 0)])
 end
 
-function get_ranges_inner(boundary_width, ranges::RANGES_TYPE) where T <:Integer
+function get_ranges_inner(boundary_width, ranges::RANGES_TYPE)
     boundary_width = promote_boundary_width(boundary_width)
     validate_ranges_args(boundary_width, ranges)
     ms = length.(ranges)
