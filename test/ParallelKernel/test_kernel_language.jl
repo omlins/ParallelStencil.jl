@@ -31,6 +31,15 @@ end
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "CUDA.@cuDynamicSharedMem Float32 (2, 3)"
                     @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
+                elseif $package == $AMDGPU
+                    @test @prettystring(1, @gridDim()) == "AMDGPU.gridDimWG()"
+                    @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
+                    @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
+                    @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
+                    @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
+                    #@test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"  #TODO: not yet supported for AMDGPU
                 elseif $package == $PKG_THREADS
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"

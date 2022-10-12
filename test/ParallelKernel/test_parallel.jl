@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring
+import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -34,6 +34,18 @@ end
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = CUDA.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                elseif $package == $PKG_AMDGPU
+                    call = @prettystring(1, @parallel f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.push_signal!(ParallelStencil.ParallelKernel.get_default_rocstream(), AMDGPU.@roc(gridsize = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))))) .* ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))), groupsize = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))), queue = (ParallelStencil.ParallelKernel.get_default_rocstream()).queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))))", call)
+                    @test occursin("ParallelStencil.ParallelKernel.synchronize_rocstream(ParallelStencil.ParallelKernel.get_default_rocstream())", call)
+                    call = @prettystring(1, @parallel ranges f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.push_signal!(ParallelStencil.ParallelKernel.get_default_rocstream(), AMDGPU.@roc(gridsize = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)))) .* ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges))), groupsize = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges))), queue = (ParallelStencil.ParallelKernel.get_default_rocstream()).queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))))", call)
+                    call = @prettystring(1, @parallel nblocks nthreads f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.push_signal!(ParallelStencil.ParallelKernel.get_default_rocstream(), AMDGPU.@roc(gridsize = nblocks .* nthreads, groupsize = nthreads, queue = (ParallelStencil.ParallelKernel.get_default_rocstream()).queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))))", call)
+                    call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.push_signal!(ParallelStencil.ParallelKernel.get_default_rocstream(), AMDGPU.@roc(gridsize = nblocks .* nthreads, groupsize = nthreads, queue = (ParallelStencil.ParallelKernel.get_default_rocstream()).queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))))", call)
+                    call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.push_signal!(mystream, AMDGPU.@roc(gridsize = nblocks .* nthreads, groupsize = nthreads, queue = mystream.queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))))", call)
                 elseif $package == $PKG_THREADS
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
@@ -48,37 +60,37 @@ end
                     @test occursin("f(a::T, b::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
                 end
                 @testset "Data.Array to Data.DeviceArray" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Array, B::Data.Array, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceArray, B::Data.DeviceArray,", expansion)
                     end
                 end
                 @testset "Data.Cell to Data.DeviceCell" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Cell, B::Data.Cell, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceCell, B::Data.DeviceCell,", expansion)
                     end
                 end
                 @testset "Data.CellArray to Data.DeviceCellArray" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArray, B::Data.CellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
                     end
                 end
                 @testset "Data.TArray to Data.DeviceTArray" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceTArray, B::Data.DeviceTArray,", expansion)
                     end
                 end
                 @testset "Data.TCell to Data.DeviceTCell" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCell, B::Data.TCell, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceTCell, B::Data.DeviceTCell,", expansion)
                     end
                 end
                 @testset "Data.TCellArray to Data.DeviceTCellArray" begin
-                    @static if $package == $PKG_CUDA
+                    @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
                     end
@@ -130,15 +142,18 @@ end
                 end;
             end;
             @testset "@parallel_async" begin
-                @static if $package == $PKG_CUDA
+                @static if @isgpu($package)
                     call = @prettystring(1, @parallel_async f(A))
-                    @test !occursin("CUDA.synchronize", call)
+                    @test !occursin("synchronize", call)
                 end;
             end;
             @testset "@synchronize" begin
                 @static if $package == $PKG_CUDA
                     @test @prettystring(1, @synchronize()) == "CUDA.synchronize()"
-                    @test @prettystring(1, @synchronize(CUDA.Stream())) == "CUDA.synchronize(CUDA.Stream())"
+                    @test @prettystring(1, @synchronize(mystream)) == "CUDA.synchronize(mystream)"
+                elseif $package == $PKG_AMDGPU
+                    #@test @prettystring(1, @synchronize()) == "CUDA.synchronize()" # NOTE: not yet available for AMDGPU backend 
+                    @test @prettystring(1, @synchronize(mystream)) == "ParallelStencil.ParallelKernel.synchronize_rocstream(mystream)"
                 end;
             end;
             @reset_parallel_kernel()
@@ -198,19 +213,19 @@ end
             @init_parallel_kernel(package = $package)
             @require @is_initialized
             @testset "Data.Array{T} to Data.DeviceArray{T}" begin
-                @static if $package == $PKG_CUDA
+                @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Array{T}, B::Data.Array{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
             end
             @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
-                @static if $package == $PKG_CUDA
+                @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Cell{T}, B::Data.Cell{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
                 end
             end
             @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
-                @static if $package == $PKG_CUDA
+                @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArray{T}, B::Data.CellArray{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
