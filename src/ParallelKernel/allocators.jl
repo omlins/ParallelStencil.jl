@@ -438,7 +438,7 @@ falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                  
 
  zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 0, args...))
   ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 1, args...))
-  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
   rand_amdgpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_amdgpu(T, blocklength, dims)
 falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, false, args...)
  trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, true, args...)
