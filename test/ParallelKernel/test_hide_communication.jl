@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, isgpu
+import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -22,7 +22,7 @@ end
             @init_parallel_kernel($package, Float64)
             @require @is_initialized()
             @testset "@hide_communication boundary_width block (macro expansion)" begin
-                @static if isgpu($package)
+                @static if @isgpu($package)
                     block = string(@gorgeousexpand(1, @hide_communication(boundary_width, begin @parallel f(A, B); communication(); end)))
                     @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
                     @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
@@ -109,7 +109,7 @@ end
             @testset "arguments @hide_communication" begin
                 @test_throws ArgumentError checkargs_hide_communication(:boundary_width, :block)               # Error: the last argument must be a code block.
                 @test_throws ArgumentError checkargs_hide_communication(:ranges_outer, :ranges_inner, :block)  # Error: the last argument must be a code block.
-                @static if isgpu($package)
+                @static if @isgpu($package)
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(@parallel f()))                                                                      # Error: missing (bc and) communication code.
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(communication()))                                                                    # Error: missing @parallel call.
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
