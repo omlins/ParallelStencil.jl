@@ -22,7 +22,7 @@ end
                 @require !@is_initialized()
                 @init_parallel_kernel($package, Float64)
                 @require @is_initialized()
-                if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     @test @prettystring(1, @gridDim()) == "CUDA.gridDim()"
                     @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
                     @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
@@ -31,7 +31,7 @@ end
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "CUDA.@cuDynamicSharedMem Float32 (2, 3)"
                     @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
-                elseif $package == $AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(AMDGPU))
                     @test @prettystring(1, @gridDim()) == "AMDGPU.gridDimWG()"
                     @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
                     @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
@@ -40,7 +40,7 @@ end
                     #@test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"  #TODO: not yet supported for AMDGPU
-                elseif $package == $PKG_THREADS
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
                     @test @prettystring(1, @blockDim()) == "ParallelStencil.ParallelKernel.@blockDim_cpu"
@@ -52,7 +52,7 @@ end
                 end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @zeros(4)
                     @parallel_indices (ix) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 1, 1)
@@ -69,7 +69,7 @@ end
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (2D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @zeros(4, 5)
                     @parallel_indices (ix,iy) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 1)
@@ -86,7 +86,7 @@ end
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (3D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 6)
@@ -103,18 +103,18 @@ end
                 end
             end;
             @testset "sync_threads" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     @test @prettystring(ParallelStencil.ParallelKernel.@sync_threads_cpu()) == "begin\nend"
                 end;
             end;
             @testset "shared memory (allocation)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     @test typeof(@sharedMem(Float32,(2,3))) == typeof(ParallelStencil.ParallelKernel.MArray{Tuple{2,3},   Float32, length((2,3)),   prod((2,3))}(undef))
                     @test typeof(@sharedMem(Bool,(2,3,4)))  == typeof(ParallelStencil.ParallelKernel.MArray{Tuple{2,3,4}, Bool,    length((2,3,4)), prod((2,3,4))}(undef))
                 end;
             end;
             @testset "@sharedMem (1D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @rand(4)
                     B  = @zeros(4)
                     @parallel_indices (ix) function memcopy!(B, A)
@@ -130,7 +130,7 @@ end
                 end
             end;
             @testset "@sharedMem (2D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @rand(4,5)
                     B  = @zeros(4,5)
                     @parallel_indices (ix,iy) function memcopy!(B, A)
@@ -147,7 +147,7 @@ end
                 end
             end;
             @testset "@sharedMem (3D)" begin
-                @static if $package == $PKG_THREADS
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_THREADS))
                     A  = @rand(4,5,6)
                     B  = @zeros(4,5,6)
                     @parallel_indices (ix,iy,iz) function memcopy!(B, A)

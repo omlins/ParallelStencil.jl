@@ -16,7 +16,6 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 
-
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. @CellType macro" begin
@@ -97,12 +96,12 @@ end
                 @test @zeros(2,3, eltype=Float32) == parentmodule($package).zeros(Float32,2,3)
                 @test @ones(2,3)                  == parentmodule($package).ones(Float16,2,3)
                 @test @ones(2,3, eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     @test typeof(@rand(2,3))                    == typeof(CUDA.CuArray(rand(Float16,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3))                 == typeof(CUDA.CuArray(fill(convert(Float16, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     @test typeof(@rand(2,3))                    == typeof(AMDGPU.ROCArray(rand(Float16,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3))                 == typeof(AMDGPU.ROCArray(fill(convert(Float16, 9), 2,3)))
@@ -121,7 +120,7 @@ end
                 T_Float32 = SMatrix{(3,4)..., Float32, prod((3,4))}
                 T_Float64 = SMatrix{(3,4)..., Float64, prod((3,4))}
                 T_Bool    = SMatrix{(3,4)..., Bool,    prod((3,4))}
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
@@ -134,7 +133,7 @@ end
                     @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), falses((3,4)))
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true) #TODO: check how to do (everywhere) (for GPU, CellArray B is the same - could potentially be merged if not using type alias...)
                     @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
@@ -161,7 +160,7 @@ end
                 end
             end;
             @testset "mapping to package (with celltype)" begin
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CuCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -172,7 +171,7 @@ end
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -218,10 +217,10 @@ end
             @testset "mapping to package (no celldims/celltype)" begin
                 @test @zeros(2,3, eltype=Float32) == parentmodule($package).zeros(Float32,2,3)
                 @test @ones(2,3, eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
                 else
@@ -236,7 +235,7 @@ end
                 T_Float32 = SMatrix{(3,4)..., Float32, prod((3,4))}
                 T_Float64 = SMatrix{(3,4)..., Float64, prod((3,4))}
                 T_Bool    = SMatrix{(3,4)..., Bool,    prod((3,4))}
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                     @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
@@ -245,7 +244,7 @@ end
                     @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), falses((3,4)))
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true)
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                     @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
@@ -264,7 +263,7 @@ end
                 end
             end;
             @testset "mapping to package (with celltype)" begin
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CuCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -275,7 +274,7 @@ end
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -306,7 +305,7 @@ end
             T_Float16 = SMatrix{(3,4)..., Float16, prod((3,4))}
             T_Bool    = SMatrix{(3,4)..., Bool,    prod((3,4))}
             @testset "default" begin    
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test typeof(  @zeros(2,3, celldims=(3,4)))                 == typeof(CuCellArray{T_Float16,0}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4)))                 == typeof(CuCellArray{T_Float16,0}(undef,2,3))
@@ -315,7 +314,7 @@ end
                     @test typeof( @falses(2,3, celldims=(3,4)))                 == typeof(CuCellArray{T_Bool,   0}(undef,2,3))
                     @test typeof(  @trues(2,3, celldims=(3,4)))                 == typeof(CuCellArray{T_Bool,   0}(undef,2,3))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true)
                     @test typeof(  @zeros(2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
@@ -334,7 +333,7 @@ end
                 end
             end;
             @testset "custom" begin    
-                @static if $package == $PKG_CUDA
+                @static if $(QuoteNode(package)) == $(QuoteNode(PKG_CUDA))
                     CUDA.allowscalar(true)
                     @test typeof(  @zeros(2,3, celldims=(3,4), blocklength=1))  == typeof(CuCellArray{T_Float16,1}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4), blocklength=1))  == typeof(CuCellArray{T_Float16,1}(undef,2,3))
@@ -349,7 +348,7 @@ end
                     @test typeof( @falses(2,3, celldims=(3,4), blocklength=3))  == typeof(CuCellArray{T_Bool,   3}(undef,2,3))
                     @test typeof(  @trues(2,3, celldims=(3,4), blocklength=3))  == typeof(CuCellArray{T_Bool,   3}(undef,2,3))
                     CUDA.allowscalar(false)
-                elseif $package == $PKG_AMDGPU
+                elseif $(QuoteNode(package)) == $(QuoteNode(PKG_AMDGPU))
                     AMDGPU.allowscalar(true)
                     @test typeof(  @zeros(2,3, celldims=(3,4), blocklength=1))  == typeof(ROCCellArray{T_Float16,1}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4), blocklength=1))  == typeof(ROCCellArray{T_Float16,1}(undef,2,3))
