@@ -5,17 +5,19 @@ version = "0.6.0"
 
 [deps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
-CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
+Preferences = "21216c6a-2e73-6563-6e65-726566657250"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 AMDGPU = "0.4"
-CellArrays = "0.1"
 CUDA = "3.12"
+CellArrays = "0.1"
 MacroTools = "0.5"
+Preferences = "1"
 StaticArrays = "1"
 julia = "1.7"
 

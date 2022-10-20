@@ -1,24 +1,30 @@
 # Enable CUDA/AMDGPU if the CUDA/AMDGPU package is installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU package installed if the installation procedure allows it).
-const CUDA_IS_INSTALLED   = (Base.find_package("CUDA")!==nothing)
-const AMDGPU_IS_INSTALLED = (Base.find_package("AMDGPU")!==nothing)
-const ENABLE_CUDA         = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
-const ENABLE_AMDGPU       = true # NOTE: Can be set to AMDGPU_IS_INSTALLED, or to true or false independent of it.
+using Preferences
+const backends = @load_preference("backends", String[])
+function enable_backend!(name::String)
+    push!(backends, name)
+    @set_preferences!("backends" => backends)
+end
+function disable_backend!(name::String)
+    filter!(b -> b != name, backends)
+    @set_preferences!("backends" => backends)
+end
+const CUDA_IS_INSTALLED   = "cuda" in backends
+const AMDGPU_IS_INSTALLED = "amdgpu" in backends
+const ENABLE_CUDA         = CUDA_IS_INSTALLED # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
+const ENABLE_AMDGPU       = AMDGPU_IS_INSTALLED # NOTE: Can be set to AMDGPU_IS_INSTALLED, or to true or false independent of it.
 const PKG_CUDA            = :CUDA
 const PKG_AMDGPU          = :AMDGPU
 const PKG_THREADS         = :Threads
 const PKG_NONE            = :PKG_NONE
-@static if ENABLE_CUDA && ENABLE_AMDGPU
+const SUPPORTED_PACKAGES = [PKG_THREADS]
+@static if ENABLE_CUDA
     using CUDA
+    push!(SUPPORTED_PACKAGES, PKG_CUDA)
+end
+@static if ENABLE_AMDGPU
     using AMDGPU
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
-elseif ENABLE_CUDA 
-    using CUDA
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
-elseif ENABLE_AMDGPU
-    using AMDGPU
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_AMDGPU]
-else
-    const SUPPORTED_PACKAGES = [PKG_THREADS]
+    push!(SUPPORTED_PACKAGES, PKG_AMDGPU)
 end
 using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
