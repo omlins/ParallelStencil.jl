@@ -63,6 +63,18 @@ end
                 R.=0; @parallel av_xi!(R, Axyy);  @test all(R .== (Axyy[2:end  ,2:end-1].+Axyy[1:end-1,2:end-1]).*0.5)
                 R.=0; @parallel av_yi!(R, Axxy);  @test all(R .== (Axxy[2:end-1,2:end  ].+Axxy[2:end-1,1:end-1]).*0.5)
             end;
+            @testset "harmonic averages" begin
+                @parallel harm!(R, Axy)     = (@all(R) = @harm(Axy); return)
+                @parallel harm_xa!(R, Ax)   = (@all(R) = @harm_xa(Ax); return)
+                @parallel harm_ya!(R, Ay)   = (@all(R) = @harm_ya(Ay); return)
+                @parallel harm_xi!(R, Axyy) = (@all(R) = @harm_xi(Axyy); return)
+                @parallel harm_yi!(R, Axxy) = (@all(R) = @harm_yi(Axxy); return)
+                R.=0; @parallel harm!(R, Axy);      @test all(R .== 4 ./(1 ./Axy[1:end-1,1:end-1].+1 ./Axy[2:end,1:end-1].+1 ./Axy[1:end-1,2:end].+1 ./Axy[2:end,2:end]))
+                R.=0; @parallel harm_xa!(R, Ax);    @test all(R .== 2 ./(1 ./Ax[2:end,    :].+1 ./Ax[1:end-1,      :]))
+                R.=0; @parallel harm_ya!(R, Ay);    @test all(R .== 2 ./(1 ./Ay[    :,2:end].+1 ./Ay[      :,1:end-1]))
+                R.=0; @parallel harm_xi!(R, Axyy);  @test all(R .== 2 ./(1 ./Axyy[2:end  ,2:end-1].+1 ./Axyy[1:end-1,2:end-1]))
+                R.=0; @parallel harm_yi!(R, Axxy);  @test all(R .== 2 ./(1 ./Axxy[2:end-1,2:end  ].+1 ./Axxy[2:end-1,1:end-1]))
+            end;
             @testset "others" begin
                 @parallel maxloc!(R, Axxyy) = (@all(R) = @maxloc(Axxyy); return)
                 R.=0; @parallel maxloc!(R, Axxyy); @test all(R .== max.(max.(max.(max.(Axxyy[1:end-2,2:end-1],Axxyy[3:end,2:end-1]),Axxyy[2:end-1,2:end-1]),Axxyy[2:end-1,1:end-2]),Axxyy[2:end-1,3:end]))

@@ -12,9 +12,9 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.6' # Minimum required Julia version (due to CUDA 3 dependency).
-          - '1'   # Latest stable 1.x release of Julia
-          - 'nightly'
+          - '1.7' # Minimum required Julia version (due to CellArrays' AMDGPU dependency).
+          #- '1'   # Latest stable 1.x release of Julia
+          #- 'nightly'
         os:
           - ubuntu-latest
           - macOS-latest

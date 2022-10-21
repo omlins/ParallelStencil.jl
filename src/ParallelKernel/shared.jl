@@ -1,16 +1,16 @@
 # Enable CUDA if the CUDA package is installed (enables to use the package for CPU-only without requiring the CUDA package installed if the installation procedure allows it).
 const CUDA_IS_INSTALLED = (Base.find_package("CUDA")!==nothing)
-const ENABLE_CUDA = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
-const PKG_CUDA = :CUDA
-const PKG_THREADS = :Threads
-const PKG_NONE = :PKG_NONE
+const ENABLE_CUDA       = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
+const PKG_CUDA          = :CUDA
+const PKG_THREADS       = :Threads
+const PKG_NONE          = :PKG_NONE
 @static if ENABLE_CUDA
     using CUDA
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
-using MacroTools
+using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
@@ -21,34 +21,38 @@ const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
-const INT_CUDA = Int64
-const INT_THREADS = Int64
-const NTHREADS_MAX = 256
-const INDICES = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
-const RANGES_VARNAME = gensym_world("ranges", @__MODULE__)
-const RANGELENGTHS_VARNAMES = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
-const THREADIDS_VARNAMES = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
-const RANGES_TYPE_1D = UnitRange{}
-const RANGES_TYPE_1D_TUPLE = Tuple{UnitRange{}}
-const RANGES_TYPE_2D = Tuple{UnitRange{},UnitRange{}}
-const RANGES_TYPE = Tuple{UnitRange{},UnitRange{},UnitRange{}}
-const MAXSIZE_TYPE_1D = Integer
-const MAXSIZE_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
-const MAXSIZE_TYPE_2D = Tuple{T, T} where T <: Integer
-const MAXSIZE_TYPE = Tuple{T, T, T} where T <: Integer
-const BOUNDARY_WIDTH_TYPE_1D = Integer
+const INT_CUDA                     = Int64
+const INT_THREADS                  = Int64
+const NTHREADS_MAX                 = 256
+const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
+const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
+const RANGELENGTHS_VARNAMES        = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
+const THREADIDS_VARNAMES           = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
+const RANGES_TYPE_1D               = UnitRange{}
+const RANGES_TYPE_1D_TUPLE         = Tuple{UnitRange{}}
+const RANGES_TYPE_2D               = Tuple{UnitRange{},UnitRange{}}
+const RANGES_TYPE                  = Tuple{UnitRange{},UnitRange{},UnitRange{}}
+const MAXSIZE_TYPE_1D              = Integer
+const MAXSIZE_TYPE_1D_TUPLE        = Tuple{T} where T <: Integer
+const MAXSIZE_TYPE_2D              = Tuple{T, T} where T <: Integer
+const MAXSIZE_TYPE                 = Tuple{T, T, T} where T <: Integer
+const BOUNDARY_WIDTH_TYPE_1D       = Integer
 const BOUNDARY_WIDTH_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
-const BOUNDARY_WIDTH_TYPE_2D = Tuple{T, T} where T <: Integer
-const BOUNDARY_WIDTH_TYPE = Tuple{T, T, T} where T <: Integer
-const OPERATORS = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
-const SUPPORTED_LITERALTYPES =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
-const SUPPORTED_NUMBERTYPES  =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
-const PKNumber               = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
-const NUMBERTYPE_NONE = DataType
-const ERRMSG_UNSUPPORTED_PACKAGE = "unsupported package for parallelization"
-const ERRMSG_CHECK_PACKAGE  = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
-const ERRMSG_CHECK_NUMBERTYPE = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
-const ERRMSG_CHECK_LITERALTYPES = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
+const BOUNDARY_WIDTH_TYPE_2D       = Tuple{T, T} where T <: Integer
+const BOUNDARY_WIDTH_TYPE          = Tuple{T, T, T} where T <: Integer
+const OPERATORS                    = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
+const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
+const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
+const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
+const NUMBERTYPE_NONE              = DataType
+const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
+const ERRMSG_CHECK_PACKAGE         = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
+const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
+const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
+
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
+                                   PKG_CUDA    => 0,
+                                   PKG_THREADS => 1)
 
 struct Dim3
     x::INT_THREADS
@@ -102,8 +106,15 @@ extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_ke
 
 function is_kwarg(arg; in_kernelcall=false)
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == :(=)) )
+    else             return ( isa(arg, Expr) && (arg.head == :(=)) && isa(arg.args[1], Symbol))
     end
+end
+
+Base.haskey(::Array{Union{}}, ::Symbol) = return false
+    
+function Base.haskey(kwargs_expr::Array{Expr}, key::Symbol)
+    kwargs = split_kwargs(kwargs_expr)
+    return key in keys(kwargs)
 end
 
 function split_args(args; in_kernelcall=false)
@@ -117,10 +128,43 @@ function split_kwargs(kwargs)
     return Dict(x.args[1] => x.args[2] for x in kwargs)
 end
 
-function split_parallel_args(args)
+function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String)
+    for k in keys(kwargs)
+        if !(k in valid_kwargs) @KeywordArgumentError("Invalid keyword argument in $macroname call: `$k`. Valid keyword arguments are: `$(join(valid_kwargs, "`, `"))`.") end
+    end
+end
+
+function extract_values(kwargs::Dict, valid_kwargs::Tuple)
+    return ((k in keys(kwargs)) ? kwargs[k] : nothing for k in valid_kwargs)
+end
+
+function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
+    kwargs = split_kwargs(kwargs_expr)
+    validate_kwargkeys(kwargs, valid_kwargs, macroname)
+    return extract_values(kwargs, valid_kwargs)
+end
+
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=())
+    kwargs = split_kwargs(kwargs_expr)
+    if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
+    for k in keys(kwargs)
+        if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
+    end
+    kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
+    kwargs_unknown      = NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs))
+    kwargs_unknown_expr = [:($k = $(kwargs_unknown[k])) for k in keys(kwargs_unknown)]
+    return kwargs_known, kwargs_unknown_expr
+end
+
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
+    kwargs_known, = extract_kwargs(caller, kwargs_expr, valid_kwargs, macroname, false; eval_args=eval_args)
+    return kwargs_known
+end
+
+function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
-    if any([x.args[1] in [:blocks, :threads] for x in kwargs]) @KeywordArgumentError("Invalid keyword argument in @parallel call: blocks / threads. They must be passed as positional arguments or been omited.") end
+    if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
     return posargs, kwargs, kernelarg
 end
 
@@ -153,6 +197,16 @@ function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
         return x
     end
     return found
+end
+
+Base.unquoted(s::Symbol) = s
+
+function extract_tuple(t::Union{Expr,Symbol}) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
+    if isa(t, Expr) 
+        return Base.unquoted.(t.args)
+    else 
+        return [t]
+    end
 end
 
 

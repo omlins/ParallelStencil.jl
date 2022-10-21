@@ -2,8 +2,6 @@
 # The parallelization happens only over the blocks. Synchronization within a block is therefore not needed (as it contains only one thread).
 # "Shared" memory (which will belong to the only thread in the block) will be allocated directly in the loop (i.e., for each parallel index) as local variable.
 
-using StaticArrays
-
 ##
 const GRIDDIM_DOC = """
     @gridDim()

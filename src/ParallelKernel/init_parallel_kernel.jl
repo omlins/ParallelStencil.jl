@@ -1,11 +1,11 @@
 """
     @init_parallel_kernel(package, numbertype)
 
-Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types `Data.Number`, `Data.Array` and `Data.DeviceArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
+Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA or Threads).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
 
 See also: [`Data`](@ref)
 """
@@ -32,7 +32,11 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         import_cmd  = :()
     end
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
-        if (datadoc_call==:()) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data) end
+        if (datadoc_call==:())
+            if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
+            else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+            end
+        end
         @eval(caller, $data_module)
         @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)

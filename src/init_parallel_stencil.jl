@@ -1,11 +1,14 @@
+# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore defined in parallel.jl
 @doc replace(ParallelKernel.HIDE_COMMUNICATION_DOC, "@init_parallel_kernel" => "@init_parallel_stencil") macro hide_communication(args...) check_initialized(); esc(:(ParallelStencil.ParallelKernel.@hide_communication($(args...)))); end
 @doc replace(ParallelKernel.ZEROS_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro zeros(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@zeros($(args...)))); end
 @doc replace(ParallelKernel.ONES_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro ones(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@ones($(args...)))); end
 @doc replace(ParallelKernel.RAND_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro rand(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@rand($(args...)))); end
-@doc replace(ParallelKernel.PARALLEL_INDICES_DOC,   "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_indices(args...)   check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_indices($(args...)))); end
-@doc replace(ParallelKernel.PARALLEL_ASYNC_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil") macro parallel_async(args...)     check_initialized(); esc(:(ParallelStencil.ParallelKernel.@parallel_async($(args...)))); end
+@doc replace(ParallelKernel.FALSES_DOC,             "@init_parallel_kernel" => "@init_parallel_stencil") macro falses(args...)             check_initialized(); esc(:(ParallelStencil.ParallelKernel.@falses($(args...)))); end
+@doc replace(ParallelKernel.TRUES_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro trues(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@trues($(args...)))); end
+@doc replace(ParallelKernel.FILL_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro fill(args...)               check_initialized(); esc(:(ParallelStencil.ParallelKernel.@fill($(args...)))); end
+@doc replace(ParallelKernel.FILL!_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro fill!(args...)              check_initialized(); esc(:(ParallelStencil.ParallelKernel.@fill!($(args...)))); end
+@doc replace(ParallelKernel.CELLTYPE_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro CellType(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@CellType($(args...)))); end
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
-# NOTE: @parallel does not appear here as it is extended and therefore defined in parallel.jl
 @doc replace(ParallelKernel.GRIDDIM_DOC,            "@init_parallel_kernel" => "@init_parallel_stencil") macro gridDim(args...)            check_initialized(); esc(:(ParallelStencil.ParallelKernel.@gridDim($(args...)))); end
 @doc replace(ParallelKernel.BLOCKIDX_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockIdx(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@blockIdx($(args...)))); end
 @doc replace(ParallelKernel.BLOCKDIM_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockDim(args...)           check_initialized(); esc(:(ParallelStencil.ParallelKernel.@blockDim($(args...)))); end
@@ -19,11 +22,11 @@
 """
     @init_parallel_stencil(package, numbertype, ndims)
 
-Initialize the package ParallelStencil, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_stencil` is called from. The module `Data` contains the types `Data.Number`, `Data.Array` and `Data.DeviceArray` (type `?Data` *after* calling `@init_parallel_stencil` to see the full description of the module).
+Initialize the package ParallelStencil, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_stencil` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_stencil` to see the full description of the module).
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA or Threads).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones and @rand and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels (1, 2 or 3).
 
 See also: [`Data`](@ref)
@@ -44,7 +47,9 @@ macro init_parallel_stencil(args...)
 end
 
 function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer)
-    datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC, "@init_parallel_kernel" => "@init_parallel_stencil") Data)
+    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "@init_parallel_kernel" => "@init_parallel_stencil") Data)
+    else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "@init_parallel_kernel" => "@init_parallel_stencil") Data)
+    end
     ParallelKernel.init_parallel_kernel(caller, package, numbertype; datadoc_call=datadoc_call)
     set_package(package)
     set_numbertype(numbertype)
