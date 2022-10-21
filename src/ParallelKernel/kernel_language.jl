@@ -161,7 +161,7 @@ end
 
 function pk_println(args...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    return :(CUDA.@cuprintln($(args...)))
-    elseif (package == PKG_THREADS) return :(Base.@println($(args...)))
+    elseif (package == PKG_THREADS) return :(Base.println($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
