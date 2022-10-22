@@ -25,7 +25,7 @@ end
     return
 end
 
-@parallel function compute_1!(Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, σxy::Data.Array, ∇V::Data.Array, Vx::Data.Array, Vy::Data.Array, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number)
+@parallel function compute_1!(Pt::Data.Array, τxx::Data.Array, τyy::Data.Array, σxy::Data.Array, Eta::Data.Array, ∇V::Data.Array, Vx::Data.Array, Vy::Data.Array, dτ_iter::Data.Number, β::Data.Number, dx::Data.Number, dy::Data.Number)
     @all(Pt)   = @all(Pt) - dτ_iter/β*@all(∇V)
     @all(τxx)  = 2.0*@all(Eta)*(@d_xa(Vx)/dx  - 1.0/3.0*@all(∇V))
     @all(τyy)  = 2.0*@all(Eta)*(@d_ya(Vy)/dy  - 1.0/3.0*@all(∇V))
@@ -159,7 +159,7 @@ end
             @parallel assign!(ErrV, Vy)
             @parallel assign!(ErrP, Pt)
             @parallel compute_0!(RogT, Eta, ∇V, T, Vx, Vy, ρ0gα, η0, dη_dT, ΔT, dx, dy)
-            @parallel compute_1!(Pt, τxx, τyy, σxy, ∇V, Vx, Vy, dτ_iter, β, dx, dy)
+            @parallel compute_1!(Pt, τxx, τyy, σxy, Eta, ∇V, Vx, Vy, dτ_iter, β, dx, dy)
             @parallel compute_2!(Rx, Ry, dVxdτ, dVydτ, Pt, RogT, τxx, τyy, σxy, ρ, dampX, dampY, dτ_iter, dx, dy)
             @parallel update_V!(Vx, Vy, dVxdτ, dVydτ, dτ_iter)
             @parallel (1:size(Vx,1)) bc_y!(Vx)
