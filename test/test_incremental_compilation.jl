@@ -2,6 +2,7 @@ push!(LOAD_PATH, "@stdlib")  # NOTE: this is needed to enable this test to run f
 push!(LOAD_PATH, joinpath(@__DIR__, ".."))
 using Test
 using Pkg
+Pkg.instantiate()
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
