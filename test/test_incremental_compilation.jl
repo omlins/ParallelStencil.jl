@@ -2,7 +2,6 @@ push!(LOAD_PATH, "@stdlib")  # NOTE: this is needed to enable this test to run f
 push!(LOAD_PATH, joinpath(@__DIR__, ".."))
 using Test
 using Pkg
-Pkg.instantiate()
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -18,6 +17,7 @@ end
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "incremental compilation" begin
             Pkg.activate(joinpath(@__DIR__, "test_projects", "Diffusion3D_$(nameof($package))"))
+            Pkg.instantiate()
             using $(Symbol("Diffusion3D_$package"))
             @test $(Symbol("Diffusion3D_$package")).diffusion3D()
         end;
