@@ -395,6 +395,14 @@ end
                 @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(CuCellArray{T_Phase,0}(undef,2,3))
                 @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(CuCellArray{T_Phase,0}(undef,2,3))
                 CUDA.allowscalar(false)
+            elseif $package == $PKG_AMDGPU
+                AMDGPU.allowscalar(true)
+                @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(AMDGPU.ROCArray(rand(Phase, 2,3)))
+                @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(ROCCellArray{T_Phase,0}(undef,2,3))
+                @test typeof(@fill(solid, 2,3, eltype=Phase))                                   == typeof(AMDGPU.ROCArray(rand(Phase, 2,3)))
+                @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(ROCCellArray{T_Phase,0}(undef,2,3))
+                @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(ROCCellArray{T_Phase,0}(undef,2,3))
+                AMDGPU.allowscalar(false)
             else
                 @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(rand(Phase, 2,3))
                 @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(CPUCellArray{T_Phase,1}(undef,2,3))
