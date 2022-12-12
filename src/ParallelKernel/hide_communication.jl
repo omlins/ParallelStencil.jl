@@ -14,7 +14,7 @@ Hide the communication behind the computation within the code `block`.
 
 # Arguments
 - `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communcation performed.
-- `block`: code block wich starts with exactly one [`@parallel`](@ref) call to perform computations, followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations cannot contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default CUDA stream (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of `ranges_outer` are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
+- `block`: code block wich starts with exactly one [`@parallel`](@ref) call to perform computations, followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations cannot contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default stream in CUDA (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of `ranges_outer` are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
 
 !!! note "Advanced"
     - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communcation and boundary conditions performed.
@@ -67,6 +67,9 @@ See also: [`@parallel`](@ref)
 @doc HIDE_COMMUNICATION_DOC
 macro hide_communication(args...) check_initialized(); checkargs_hide_communication(args...); esc(hide_communication(args...)); end
 
+macro get_priority_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_priority_stream(args...)); end
+macro get_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_stream(args...)); end
+
 
 ## ARGUMENT CHECKS
 
@@ -75,20 +78,37 @@ function checkargs_hide_communication(args...)
     if !is_block(args[end]) @ArgumentError("the last argument must be a code block (obtained: $(args[end])).") end
 end
 
+function checkargs_get_stream(args...)
+    if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
+end
+
 
 ## GATEWAY FUNCTIONS
 
 function hide_communication(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
-    if     (package == PKG_CUDA)    hide_communication_cuda(args...)
+    if     isgpu(package)           hide_communication_gpu(args...)
     elseif (package == PKG_THREADS) hide_communication_threads(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
+function get_priority_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+    if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    end
+end
+
+function get_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+    if     (package == PKG_CUDA)    get_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    end
+end
 
 ## @HIDE_COMMUNICATION FUNCTIONS
 
-function hide_communication_cuda(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr)
+function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr)
     compcall, bc_and_commcalls = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
     posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
@@ -97,14 +117,14 @@ function hide_communication_cuda(ranges_outer::Union{Symbol,Expr}, ranges_inner:
     bc_and_commcalls = process_bc_and_commcalls(bc_and_commcalls)
     quote
         for i in 1:length($ranges_outer)
-            @parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.get_priority_custream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt.
+            @parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.@get_priority_stream(i) $(kwargs...) $compkernelcall #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as loopopt (fixing it to ParallelStencil is also not possible as it assumes, else the ParalellKernel hide_communication unit tests fail).
         end
         for i in 1:length($ranges_inner)
-            @parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.get_custream(i) $(kwargs...) $compkernelcall          #NOTE: ...
+            @parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.@get_stream(i) $(kwargs...) $compkernelcall          #NOTE: ...
         end
-        for i in 1:length($ranges_outer) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.get_priority_custream(i)); end
+        for i in 1:length($ranges_outer) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_priority_stream(i)); end
         $bc_and_commcalls
-        for i in 1:length($ranges_inner) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.get_custream(i)); end
+        for i in 1:length($ranges_inner) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream(i)); end
     end
 end
 
@@ -113,7 +133,7 @@ function hide_communication_threads(ranges_outer::Union{Symbol,Expr}, ranges_inn
 end
 
 
-function hide_communication_cuda(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
+function hide_communication_gpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr)
     compcall, = extract_calls(block)
     parallel_args = extract_args(compcall, Symbol("@parallel"))
     posargs, kwargs, compkernelcall = split_parallel_args(parallel_args)
@@ -134,6 +154,14 @@ function hide_communication_threads(boundary_width::Union{Integer,Symbol,Expr}, 
 end
 
 
+# @GET_STREAM AND @GET_PRIORITY_STEAM FUNCTIONS
+
+get_priority_stream_cuda(id::Union{Integer,Symbol,Expr})   = return :(ParallelStencil.ParallelKernel.get_priority_custream($id))
+get_priority_stream_amdgpu(id::Union{Integer,Symbol,Expr}) = return :(ParallelStencil.ParallelKernel.get_priority_rocstream($id))
+get_stream_cuda(id::Union{Integer,Symbol,Expr})            = return :(ParallelStencil.ParallelKernel.get_custream($id))
+get_stream_amdgpu(id::Union{Integer,Symbol,Expr})          = return :(ParallelStencil.ParallelKernel.get_rocstream($id))
+
+
 ## FUNCTIONS TO EXTRACT AND PROCESS COMPUTATION AND BOUNDARY CONDITIONS CALLS / COMMUNICATION CALLS
 
 function extract_calls(block::Expr)
@@ -151,7 +179,7 @@ function process_bc_and_commcalls(block::Expr)
         posargs, kwargs = split_parallel_args(args)
         if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM) end
         if (length(posargs) != 1) @ArgumentError(ERRMSG_INVALID_BC_COMM) end
-        return :(@parallel $(args[1:end-1]...) stream = ParallelStencil.ParallelKernel.get_priority_custream(1) $(args[end]))
+        return :(@parallel $(args[1:end-1]...) stream = ParallelStencil.ParallelKernel.@get_priority_stream(1) $(args[end]))
     end
 end
 
@@ -164,7 +192,7 @@ promote_boundary_width(boundary_width::BOUNDARY_WIDTH_TYPE_2D)       = (boundary
 promote_boundary_width(boundary_width::BOUNDARY_WIDTH_TYPE)          = boundary_width
 promote_boundary_width(boundary_width)                               = @ArgumentError("@hide_communication: boundary_width must be a Tuple of Integer of size 1, 2 or 3 (obtained: $boundary_width; its type is: $(typeof(boundary_width))).")
 
-function get_ranges_outer(boundary_width, ranges::RANGES_TYPE) where T <:Integer
+function get_ranges_outer(boundary_width, ranges::RANGES_TYPE)
     boundary_width = promote_boundary_width(boundary_width)
     validate_ranges_args(boundary_width, ranges)
     ms = length.(ranges)
@@ -193,14 +221,14 @@ function get_ranges_outer(boundary_width, ranges::RANGES_TYPE) where T <:Integer
     return Tuple([r for r in ranges_outer if all(length.(r) .!= 0)])
 end
 
-function get_ranges_inner(boundary_width, ranges::RANGES_TYPE) where T <:Integer
+function get_ranges_inner(boundary_width, ranges::RANGES_TYPE)
     boundary_width = promote_boundary_width(boundary_width)
     validate_ranges_args(boundary_width, ranges)
     ms = length.(ranges)
     bw = boundary_width
     if     (ms[3] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], bw[3]+1:ms[3]-bw[3]), ) # 3D
-    elseif (ms[2] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], 1:1), ) # 2D
-    elseif (ms[1] > 1) return ( (bw[1]+1:ms[1]-bw[1], 1:1, 1:1), ) # 1D
+    elseif (ms[2] > 1) return ( (bw[1]+1:ms[1]-bw[1], bw[2]+1:ms[2]-bw[2], 1:1), )                 # 2D
+    elseif (ms[1] > 1) return ( (bw[1]+1:ms[1]-bw[1], 1:1, 1:1), )                                 # 1D
     else @ModuleInternalError("invalid argument 'ranges'.")
     end
 end
@@ -212,26 +240,4 @@ function validate_ranges_args(boundary_width::Tuple{T,T,T}, ranges::RANGES_TYPE)
     if !all(maxsize .> 2 .* boundary_width) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be true: all(length.(ranges) .> 2 .* boundary_width) ") end # NOTE: this ensures among other things that if maxsize == 1, then boundary_width==0.
     if any((maxsize .> 1) .& (boundary_width .== 0)) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be false: any((length.(ranges) .> 1) .& (boundary_width .== 0)) ") end
     if all(maxsize .== 1) @IncoherentArgumentError("incoherent arguments in @hide_communication: the following must be false: all(length.(ranges) .== 1)") end
-end
-
-
-## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS
-
-@static if ENABLE_CUDA
-    let
-        global get_priority_custream, get_custream
-        priority_custreams = Array{CuStream}(undef, 0)
-        custreams          = Array{CuStream}(undef, 0)
-
-        function get_priority_custream(id::Integer)
-            while (id > length(priority_custreams)) push!(priority_custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[end])) end # CUDA.priority_range()[end] is max priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return priority_custreams[id]
-        end
-
-        function get_custream(id::Integer)
-            priority_min =
-            while (id > length(custreams)) push!(custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[1])) end # CUDA.priority_range()[1] is min priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return custreams[id]
-        end
-    end
 end

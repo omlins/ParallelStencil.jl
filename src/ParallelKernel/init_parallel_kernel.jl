@@ -4,7 +4,7 @@
 Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA or Threads).
+- `package::Module`: the package used for parallelization (CUDA, AMDGPU or Threads).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil.
 
 See also: [`Data`](@ref)
@@ -27,6 +27,9 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     if package == PKG_CUDA
         data_module = Data_cuda(numbertype)
         import_cmd  = :(import CUDA)
+    elseif package == PKG_AMDGPU
+        data_module = Data_amdgpu(numbertype)
+        import_cmd  = :(import AMDGPU)
     elseif package == PKG_THREADS
         data_module = Data_threads(numbertype)
         import_cmd  = :()

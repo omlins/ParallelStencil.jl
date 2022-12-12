@@ -13,17 +13,17 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA was selected with [`@init_parallel_kernel`](@ref).
-    - `kwargs...`: keyword arguments to be passed further to CUDA (ignored for Threads).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
-    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
 
 See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_DOC
-macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(args...)); end
+macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...)); end
 
 
 ##
@@ -54,7 +54,7 @@ Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`]
 See also: [`@synchronize`](@ref), [`@parallel`](@ref)
 """
 @doc PARALLEL_ASYNC_DOC
-macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...)); end
+macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...)); end
 
 
 ##
@@ -71,13 +71,17 @@ macro synchronize(args...) check_initialized(); esc(synchronize(args...)); end
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(args...; package=PKG_CUDA)); end
-macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_AMDGPU)); end
 macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...; package=PKG_CUDA)); end
-macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(args...; package=PKG_THREADS)); end
+macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
 macro synchronize_cuda(args...)         check_initialized(); esc(synchronize(args...; package=PKG_CUDA)); end
+macro synchronize_amdgpu(args...)         check_initialized(); esc(synchronize(args...; package=PKG_AMDGPU)); end
 macro synchronize_threads(args...)      check_initialized(); esc(synchronize(args...; package=PKG_THREADS)); end
 
 
@@ -102,11 +106,12 @@ end
 
 ## GATEWAY FUNCTIONS
 
-parallel_async(args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(args...; package=package, async=true)
+parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(caller, args...; package=package, async=true)
 
-function parallel(args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
-    posargs, kwargs, kernelarg = split_parallel_args(args)
-    if     (package == PKG_CUDA)    parallel_call_cuda(posargs..., kernelarg, kwargs, async)
+function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+    posargs, kwargs_expr, kernelarg = split_parallel_args(args)
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream,), "@parallel <kernelcall>", true)
+    if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
     elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async) # Ignore keyword args as they are not for the threads case (noted in doc).
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -119,6 +124,7 @@ end
 
 function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    synchronize_cuda(args...)
+    elseif (package == PKG_AMDGPU)  synchronize_amdgpu(args...)
     elseif (package == PKG_THREADS) synchronize_threads(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -132,7 +138,7 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    if (package == PKG_CUDA)
+    if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),         :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),          :(Data.DeviceCell))
         kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
@@ -142,13 +148,14 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-    if (package == PKG_CUDA)
+    if isgpu(package)
         body = add_threadids(indices, ranges, body)
         body = literaltypes(numbertype, body)
     elseif (package == PKG_THREADS)
@@ -165,32 +172,34 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_cuda(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
+    if     (package == PKG_CUDA)   int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
+    end
     push!(kernelcall.args, ranges)
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[1]))))
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[2]))))
-    push!(kernelcall.args, :($INT_CUDA(length($ranges[3]))))
-    synccall = async ? :(begin end) : create_synccall_cuda(kwargs)
-    return :( CUDA.@cuda blocks=$nblocks threads=$nthreads $(kwargs...) $kernelcall; $synccall )
+    push!(kernelcall.args, :($int_type(length($ranges[1]))))
+    push!(kernelcall.args, :($int_type(length($ranges[2]))))
+    push!(kernelcall.args, :($int_type(length($ranges[3]))))
+    return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream)
 end
 
-function parallel_call_cuda(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_cuda(ranges, nblocks, nthreads, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream)
 end
 
-function parallel_call_cuda(ranges::Union{Symbol,Expr}, kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    parallel_call_cuda(ranges, nblocks, nthreads, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream)
 end
 
-function parallel_call_cuda(kernelcall::Expr, kwargs::Array, async::Bool)
+function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_cuda(ranges, kernelcall, kwargs, async)
+    parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream)
 end
 
 
@@ -226,6 +235,7 @@ end
 ## @SYNCHRONIZE FUNCTIONS
 
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...)))
+synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(ParallelStencil.ParallelKernel.synchronize_rocstream($(args...))) #TODO: this supports currently only stream synchronization. Whole GPU synchronization (all streams) should also be supported.
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 
 
@@ -292,7 +302,7 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $block
@@ -307,8 +317,8 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
-            $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
@@ -325,9 +335,9 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
             end
         end
         quote
-            $tx = (CUDA.blockIdx().x-1) * CUDA.blockDim().x + CUDA.threadIdx().x;  # thread ID, dimension x
-            $ty = (CUDA.blockIdx().y-1) * CUDA.blockDim().y + CUDA.threadIdx().y;  # thread ID, dimension y
-            $tz = (CUDA.blockIdx().z-1) * CUDA.blockDim().z + CUDA.threadIdx().z;  # thread ID, dimension z
+            $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+            $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
             $thread_bounds_check
             $ix = $range_x[$tx]                                                    # index, dimension x
             $iy = $range_y[$ty]                                                    # index, dimension y
@@ -438,20 +448,26 @@ function compute_nblocks(maxsize, nthreads)
 end
 
 
-## FUNCTIONS TO CREATE SYNCHRONIZATION CALLS
+## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
 
-function create_synccall_cuda(kwargs::Array)
-    kwarg_stream = [x for x in kwargs if x.args[1]==:stream]
-    if length(kwarg_stream) == 0
-        synchronize_cuda()
-    elseif length(kwarg_stream) == 1
-        stream = kwarg_stream[1].args[2]
-        synchronize_cuda(stream)
-    else
-        @KeywordArgumentError("there can only be one keyword argument stream in a @parallel <kernelcall>.")
+function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr})
+    synccall = async ? :(begin end) : create_synccall(package, stream)
+    if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+    elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
+    else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
 
-function create_synccall_threads(kwargs::Array)
-    synchronize_threads()
+function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
+    if     (package == PKG_CUDA)   synchronize_cuda(stream)
+    elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
+    else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+    end
+end
+
+function default_stream(package)
+    if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.get_default_rocstream())
+    else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
+    end
 end

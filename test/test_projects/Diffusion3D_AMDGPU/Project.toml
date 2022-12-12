@@ -1,0 +1,13 @@
+name = "Diffusion3D_AMDGPU"
+uuid = "a4dced44-8a7a-478b-bd8d-24d2cfa57376"
+authors = ["Samuel Omlin <samuel.omlin@cscs.ch>"]
+version = "0.1.0"
+
+[deps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[compat]
+ParallelStencil = ">= 0.4.0"

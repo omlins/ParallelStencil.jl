@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_THREADS
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
 import ParallelStencil.ParallelKernel: @require, @prettystring
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
@@ -9,6 +9,10 @@ TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
+end
+@static if PKG_AMDGPU in TEST_PACKAGES
+    import AMDGPU
+    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 
 @static for package in TEST_PACKAGES  eval(:(
@@ -27,6 +31,15 @@ end
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "CUDA.@cuDynamicSharedMem Float32 (2, 3)"
                     @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
+                elseif $package == $AMDGPU
+                    @test @prettystring(1, @gridDim()) == "AMDGPU.gridDimWG()"
+                    @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
+                    @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
+                    @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
+                    @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
+                    #@test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"  #TODO: not yet supported for AMDGPU
                 elseif $package == $PKG_THREADS
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"

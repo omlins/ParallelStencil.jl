@@ -3,7 +3,7 @@ const ZEROS_DOC = """
     @zeros(args...)
     @zeros(args..., <keyword arguments>)
 
-Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads and CUDA.zeros for CUDA).
+Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads, CUDA.zeros for CUDA and AMDGPU.zeros for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -31,7 +31,7 @@ const ONES_DOC = """
     @ones(args...)
     @ones(args..., <keyword arguments>)
 
-Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads and CUDA.ones for CUDA).
+Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads, CUDA.ones for CUDA and AMDGPU.ones for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -233,6 +233,13 @@ macro falses_cuda(args...)    check_initialized(); esc(_falses(args...; package=
 macro trues_cuda(args...)     check_initialized(); esc(_trues(args...; package=PKG_CUDA)); end
 macro fill_cuda(args...)      check_initialized(); esc(_fill(args...; package=PKG_CUDA)); end
 macro fill!_cuda(args...)     check_initialized(); esc(_fill!(args...; package=PKG_CUDA)); end
+macro zeros_amdgpu(args...)     check_initialized(); esc(_zeros(args...; package=PKG_AMDGPU)); end
+macro ones_amdgpu(args...)      check_initialized(); esc(_ones(args...; package=PKG_AMDGPU)); end
+macro rand_amdgpu(args...)      check_initialized(); esc(_rand(args...; package=PKG_AMDGPU)); end
+macro falses_amdgpu(args...)    check_initialized(); esc(_falses(args...; package=PKG_AMDGPU)); end
+macro trues_amdgpu(args...)     check_initialized(); esc(_trues(args...; package=PKG_AMDGPU)); end
+macro fill_amdgpu(args...)      check_initialized(); esc(_fill(args...; package=PKG_AMDGPU)); end
+macro fill!_amdgpu(args...)     check_initialized(); esc(_fill!(args...; package=PKG_AMDGPU)); end
 macro zeros_threads(args...)  check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
 macro ones_threads(args...)   check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
 macro rand_threads(args...)   check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
@@ -258,7 +265,8 @@ end
 function _zeros(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -267,7 +275,8 @@ end
 function _ones(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -276,7 +285,8 @@ end
 function _rand(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -285,7 +295,8 @@ end
 function _falses(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -294,7 +305,8 @@ end
 function _trues(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -303,14 +315,16 @@ end
 function _fill(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
     celltype    = determine_celltype(eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
 function _fill!(args...; package::Symbol=get_package())
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_gpu!($(args...)))
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -384,7 +398,7 @@ function determine_blocklength(blocklength, package)
 end
 
 
-## RUNTIME ALLOCATOR FUNCTIONS
+## RUNTIME ALLOCATOR FUNCTIONS 
 
  zeros_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); Base.zeros(T, args...))                # (blocklength is ignored if neither celldims nor celltype is set)
   ones_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))  # ...
@@ -399,21 +413,33 @@ falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
 
+ zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.ones(T, args...))   # ...
+  rand_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))   # ...
+falses_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.falses(args...)                         # ...
+ trues_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.trues(args...)                          # ...
+  fill_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(fill_cpu(T, blocklength, args...))   # ...
 
- zeros_gpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_gpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.ones(T, args...))   # ...
-  rand_gpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))   # ...
-falses_gpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.falses(args...)                         # ...
- trues_gpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.trues(args...)                          # ...
-  fill_gpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(fill_cpu(T, blocklength, args...))   # ...
+ zeros_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 0, args...))
+  ones_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 1, args...))
+  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+  rand_cuda(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cuda(T, blocklength, dims)
+falses_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, false, args...)
+ trues_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, true, args...)
 
- zeros_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_gpu(T, blocklength, 0, args...))
-  ones_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_gpu(T, blocklength, 1, args...))
-  rand_gpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
-  rand_gpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_gpu(T, blocklength, dims)
-falses_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_gpu(T, blocklength, false, args...)
- trues_gpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_gpu(T, blocklength, true, args...)
+ zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.ones(T, args...))   # ...
+  rand_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(rand_cpu(T, blocklength, args...))   # ...
+falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.falses(args...)                         # ...
+ trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.trues(args...)                          # ...
+  fill_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(fill_cpu(T, blocklength, args...))   # ...
 
+ zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 0, args...))
+  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 1, args...))
+  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+  rand_amdgpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_amdgpu(T, blocklength, dims)
+falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, false, args...)
+ trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, true, args...)
 
 function fill_cpu(::Type{T}, blocklength, x, args...) where {T <: Union{Number, Enum}} # (blocklength is ignored if neither celldims nor celltype is set)
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
@@ -432,7 +458,7 @@ function fill_cpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,Fiel
     return CellArrays.fill!(CPUCellArray{T,B}(undef, args...), cell)
 end
 
-function fill_gpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
+function fill_cuda(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
@@ -442,8 +468,19 @@ function fill_gpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,Fiel
     return CellArrays.fill!(CuCellArray{T,B}(undef, args...), cell)
 end
 
+function fill_amdgpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype(T, Bool)
+    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+    elseif (length(x) == length(T)) cell = convert(T, x)
+    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+    end
+    return CellArrays.fill!(ROCCellArray{T,B}(undef, args...), cell)
+end
+
 fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
-fill_gpu!(A, x) = CUDA.fill!(A, construct_cell(A, x))
+fill_cuda!(A, x) = CUDA.fill!(A, construct_cell(A, x))
+fill_amdgpu!(A, x) = AMDGPU.fill!(A, construct_cell(A, x))
 
 #TODO: eliminate nearly duplicate code starting from if T_cell I think...
 function construct_cell(A, x)

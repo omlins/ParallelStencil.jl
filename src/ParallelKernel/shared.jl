@@ -1,12 +1,22 @@
-# Enable CUDA if the CUDA package is installed (enables to use the package for CPU-only without requiring the CUDA package installed if the installation procedure allows it).
-const CUDA_IS_INSTALLED = (Base.find_package("CUDA")!==nothing)
-const ENABLE_CUDA       = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
-const PKG_CUDA          = :CUDA
-const PKG_THREADS       = :Threads
-const PKG_NONE          = :PKG_NONE
-@static if ENABLE_CUDA
+# Enable CUDA/AMDGPU if the CUDA/AMDGPU package is installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU package installed if the installation procedure allows it).
+const CUDA_IS_INSTALLED   = (Base.find_package("CUDA")!==nothing)
+const AMDGPU_IS_INSTALLED = (Base.find_package("AMDGPU")!==nothing)
+const ENABLE_CUDA         = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
+const ENABLE_AMDGPU       = true # NOTE: Can be set to AMDGPU_IS_INSTALLED, or to true or false independent of it.
+const PKG_CUDA            = :CUDA
+const PKG_AMDGPU          = :AMDGPU
+const PKG_THREADS         = :Threads
+const PKG_NONE            = :PKG_NONE
+@static if ENABLE_CUDA && ENABLE_AMDGPU
+    using CUDA
+    using AMDGPU
+    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
+elseif ENABLE_CUDA 
     using CUDA
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
+elseif ENABLE_AMDGPU
+    using AMDGPU
+    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_AMDGPU]
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
@@ -22,6 +32,7 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
 const INT_CUDA                     = Int64
+const INT_AMDGPU                   = Int64
 const INT_THREADS                  = Int64
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
@@ -52,12 +63,82 @@ const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be on
 
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
                                    PKG_CUDA    => 0,
+                                   PKG_AMDGPU  => 0,
                                    PKG_THREADS => 1)
 
 struct Dim3
     x::INT_THREADS
     y::INT_THREADS
     z::INT_THREADS
+end
+
+
+## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "ROCSTREAMS"
+
+@static if ENABLE_CUDA
+    let
+        global get_priority_custream, get_custream
+        priority_custreams = Array{CuStream}(undef, 0)
+        custreams          = Array{CuStream}(undef, 0)
+
+        function get_priority_custream(id::Integer)
+            while (id > length(priority_custreams)) push!(priority_custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[end])) end # CUDA.priority_range()[end] is max priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
+            return priority_custreams[id]
+        end
+
+        function get_custream(id::Integer)
+            while (id > length(custreams)) push!(custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[1])) end # CUDA.priority_range()[1] is min priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
+            return custreams[id]
+        end
+    end
+end
+
+@static if ENABLE_AMDGPU
+    ## Stream implementation for AMDGPU. It is the responsibility of the package developers to keep the ROCStreams consistent by pushing each signal received from a kernel launch on queue=stream.queue to the ROCStream using push_signal!. If ROCQueues are to be exposed to the users, then a macro should be implemented to automatize this (e.g. overwrite @roc to accept the kwarg stream...).
+    mutable struct ROCStream
+        queue::AMDGPU.ROCQueue
+        last_signal::Union{Nothing, AMDGPU.ROCKernelSignal}
+
+        function ROCStream(device::ROCDevice; priority::Union{Nothing,Symbol}=nothing)
+            queue = ROCQueue(device; priority=priority)
+            new(queue, nothing)
+        end
+        function ROCStream(queue::ROCQueue)
+            new(queue, nothing)
+        end
+    end
+
+    function push_signal!(stream::ROCStream, signal::AMDGPU.ROCKernelSignal)
+        AMDGPU.barrier_and!(stream.queue, [signal])
+        stream.last_signal = signal
+    end
+
+    function synchronize_rocstream(stream::ROCStream)
+        AMDGPU.wait(stream.last_signal)
+    end
+
+    let
+        global get_priority_rocstream, get_rocstream, get_default_rocstream
+        priority_rocstreams = Array{ROCStream}(undef, 0)
+        rocstreams          = Array{ROCStream}(undef, 0)
+        default_rocstreams  = Array{ROCStream}(undef, 0)
+
+        function get_priority_rocstream(id::Integer)
+            while (id > length(priority_rocstreams)) push!(priority_rocstreams, ROCStream(AMDGPU.default_device(); priority=:high)) end # :high is max priority.
+            return priority_rocstreams[id]
+        end
+
+        #TODO: check if set priority to normal!
+        function get_rocstream(id::Integer)
+            while (id > length(rocstreams)) push!(rocstreams, ROCStream(AMDGPU.default_device(); priority=:low)) end # :low min priority.
+            return rocstreams[id]
+        end
+
+        function get_default_rocstream()
+            if (length(default_rocstreams)==0) push!(default_rocstreams, ROCStream(AMDGPU.default_queue())) end # NOTE: this implementation is extensible to multiple defaults as available in CUDA for streams.
+            return default_rocstreams[1]
+        end
+    end
 end
 
 
@@ -76,7 +157,7 @@ end
 
 function remove_return(body::Expr)
     if !(body.args[end] in [:(return), :(return nothing), :(nothing)])
-        @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any CUDA kernels.")
+        @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any GPU kernels.")
     end
     remainder = copy(body)
     remainder.args = body.args[1:end-2]
@@ -165,6 +246,7 @@ function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
     if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
+    if (is_call && any([x.args[1] in [:groupsize, :gridsize, :queue] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: groupsize / gridsize / queue. CUDA nomenclature and concepts are to be used for @parallel calls (and kernels).") end
     return posargs, kwargs, kernelarg
 end
 
@@ -227,6 +309,7 @@ gorgeousstring(expr::Expr)                                         = string(simp
 longnameof(f)                                                      = "$(parentmodule(f)).$(nameof(f))"
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro symbols(eval_mod, mod)           symbols(eval_mod, mod) end
+macro isgpu(package)                   isgpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -272,6 +355,11 @@ function simplify_varnames!(expr::Expr)
     end
     return expr
 end
+
+
+## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
+
+isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
 
 
 ## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)

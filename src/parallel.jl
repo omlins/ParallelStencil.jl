@@ -31,10 +31,13 @@ macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
 macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
 macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
 macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
 macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
 macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
 
 
@@ -77,7 +80,7 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
         if haskey(kwargs, :loopopt) && kwargs.loopopt
             parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
-            ParallelKernel.parallel(args...; package=package)
+            ParallelKernel.parallel(caller, args...; package=package)
         end
     end
 end
@@ -115,7 +118,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body = get_body(kernel)
     body = remove_return(body)
     validate_body(body)
-    if (package == PKG_CUDA)
+    if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
         kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
@@ -126,13 +129,14 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if !loopopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
         if     (package == PKG_CUDA)    int_type = INT_CUDA
+        elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
         elseif (package == PKG_THREADS) int_type = INT_THREADS
         end
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
         ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-        if (package == PKG_CUDA)
+        if isgpu(package)
             body = add_threadids(indices, ranges, body)
             body = literaltypes(numbertype, body)
         elseif (package == PKG_THREADS)
