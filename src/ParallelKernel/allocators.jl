@@ -413,7 +413,6 @@ falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
 
-
  zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
   ones_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.ones(T, args...))   # ...
   rand_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))   # ...
@@ -427,7 +426,6 @@ falses_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                    
   rand_cuda(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cuda(T, blocklength, dims)
 falses_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, false, args...)
  trues_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, true, args...)
-
 
  zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
   ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.ones(T, args...))   # ...
@@ -452,7 +450,7 @@ end
 
 function fill_cpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool)
+    check_datatype(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -462,7 +460,7 @@ end
 
 function fill_cuda(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool)
+    check_datatype(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -510,6 +508,7 @@ length(x::Enum) = 1
 
 import Base.eltype
 eltype(x::Enum) = typeof(x)
+eltype(::Type{T}) where {T <:Enum} = T
 
 import Random
 Random.SamplerType{T}() where {T<:Enum} = Random.Sampler(Random.GLOBAL_RNG, instances(T))
