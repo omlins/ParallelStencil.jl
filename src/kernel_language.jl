@@ -56,6 +56,8 @@ end
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
 #TODO: maybe gensym with macro @gensym
+# TODO: create a run time check for requirement: 
+# In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
 function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, halosize, indices_shift, body; package::Symbol=get_package())
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
     A = optvars 
@@ -65,8 +67,6 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
     noexpr = :(begin end)
     if optdim == 3
         ranges         = RANGES_VARNAME
-        rangelength_x  = RANGELENGTHS_VARNAMES[1]
-        rangelength_y  = RANGELENGTHS_VARNAMES[2]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
         tz_g           = THREADIDS_VARNAMES[3]
         hx, hy         = halosize
@@ -79,8 +79,6 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         i              = (indices_shift[3] > 0) ? :(($_i  - $(indices_shift[3]))) : _i
         range_z        = (indices_shift[3] > 0) ? :(($ranges[3])[$tz_g] - $(indices_shift[3])) : :(($ranges[3])[$tz_g])
         range_z_start  = (indices_shift[3] > 0) ? :(($ranges[3])[1]     - $(indices_shift[3])) : :(($ranges[3])[1])
-        bx             = gensym_world("bx", @__MODULE__)
-        by             = gensym_world("by", @__MODULE__)
         tx             = gensym_world("tx", @__MODULE__)
         ty             = gensym_world("ty", @__MODULE__)
         nx_l           = gensym_world("nx_l", @__MODULE__)
@@ -132,14 +130,12 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         loopstart = 0 #TODO: if in z neighbors beyond iz-1 are accessed, then this needs to be bigger (also range_z_start-...!). NOTE: not the same as halosize which is for shmemhalo
 
         return quote
-                    $bx            = (@blockIdx().x*@blockDim().x - $rangelength_x > 0) ? @blockDim().x - (@blockIdx().x*@blockDim().x - $rangelength_x) : @blockDim().x
-                    $by            = (@blockIdx().y*@blockDim().y - $rangelength_y > 0) ? @blockDim().y - (@blockIdx().y*@blockDim().y - $rangelength_y) : @blockDim().y
                     $tx            = @threadIdx().x + $hx
                     $ty            = @threadIdx().y + $hy
-                    $nx_l          = $bx + (2*$hx)
-                    $ny_l          = $by + (2*$hy)
-                    $t_h           = (@threadIdx().y-1)*$bx + @threadIdx().x # NOTE: here it must be bx, not @blockDim().x
-                    $t_h2          = $t_h + $nx_l*$ny_l - $bx*$by
+                    $nx_l          = @blockDim().x + (2*$hx)
+                    $ny_l          = @blockDim().y + (2*$hy)
+                    $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x # NOTE: here it must be bx, not @blockDim().x
+                    $t_h2          = $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y
                     $tx_h          = ($t_h-1) % $nx_l + 1
                     $ty_h          = ($t_h-1) ÷ $nx_l + 1
                     $tx_h2         = ($t_h2-1) % $nx_l + 1
