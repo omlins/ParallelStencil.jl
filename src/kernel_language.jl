@@ -1,58 +1,6 @@
 #TODO: add ParallelStencil.ParallelKernel. in front of all kernel lang in macros! Later: generalize more for z?
 
 ##
-macro nx_l(args...) check_initialized(); checksinglearg(args...); esc(nx_l(args...)); end
-
-
-##
-macro ny_l(args...) check_initialized(); checksinglearg(args...); esc(ny_l(args...)); end
-
-
-##
-macro nz_l(args...) check_initialized(); checksinglearg(args...); esc(nz_l(args...)); end
-
-
-##
-macro t_h(args...) check_initialized(); checknoargs(args...); esc(t_h(args...)); end
-
-
-##
-macro t_h2(args...) check_initialized(); checktwoargs(args...); esc(t_h2(args...)); end
-
-
-##
-macro tx_h(args...) check_initialized(); checksinglearg(args...); esc(tx_h(args...)); end
-
-
-##
-macro ty_h(args...) check_initialized(); checksinglearg(args...); esc(ty_h(args...)); end
-
-
-##
-macro tx_h2(args...) check_initialized(); checktwoargs(args...); esc(tx_h2(args...)); end
-
-
-##
-macro ty_h2(args...) check_initialized(); checktwoargs(args...); esc(ty_h2(args...)); end
-
-
-##
-macro ix_h(args...) check_initialized(); checksinglearg(args...); esc(ix_h(args...)); end
-
-
-##
-macro iy_h(args...) check_initialized(); checktwoargs(args...); esc(iy_h(args...)); end
-
-
-##
-macro ix_h2(args...) check_initialized(); checktwoargs(args...); esc(ix_h2(args...)); end
-
-
-##
-macro iy_h2(args...) check_initialized(); checktwoargs(args...); esc(iy_h2(args...)); end
-
-
-##
 macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args...)); end
 
 
@@ -87,74 +35,6 @@ function checkargs_loopopt(args...)
 end
 
 
-## FUNCTIONS FOR INDEXING AND DIMENSIONS
-
-function nx_l(hx; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(@blockDim().x + (2*$hx))
-end
-
-function ny_l(hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(@blockDim().y + (2*$hy))
-end
-
-function nz_l(hz; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(@blockDim().z + (2*$hz))
-end
-
-function t_h(args...; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@threadIdx().y-1)*@blockDim().x + @threadIdx().x)
-end
-
-function t_h2(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :(ParallelStencil.@t_h() + ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy) - @blockDim().x*@blockDim().y)
-end
-
-function tx_h(hx; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((ParallelStencil.@t_h() -1) % ParallelStencil.@nx_l($hx) + 1)
-end
-
-function ty_h(hx; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((ParallelStencil.@t_h() -1) ÷ ParallelStencil.@nx_l($hx) + 1)
-end
-
-function tx_h2(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((ParallelStencil.@t_h2($hx, $hy)-1) % ParallelStencil.@nx_l($hx) + 1)
-end
-
-function ty_h2(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((ParallelStencil.@t_h2($hx, $hy)-1) ÷ ParallelStencil.@nx_l($hx) + 1)
-end
-
-function ix_h(hx; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().x-1)*@blockDim().x + ParallelStencil.@tx_h($hx)  - $hx)
-end
-
-function iy_h(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().y-1)*@blockDim().y + ParallelStencil.@ty_h($hx)  - $hy)
-end
-
-function ix_h2(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().x-1)*@blockDim().x + ParallelStencil.@tx_h2($hx, $hy) - $hx)
-end
-
-function iy_h2(hx, hy; package::Symbol=get_package())
-    if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    return :((@blockIdx().y-1)*@blockDim().y + ParallelStencil.@ty_h2($hx, $hy) - $hy)
-end
-
-
 ## FUNCTIONS FOR PERFORMANCE OPTIMSATIONS
 
 function loop(index::Symbol, optdim::Integer, loopsize, body; package::Symbol=get_package())
@@ -185,6 +65,8 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
     noexpr = :(begin end)
     if optdim == 3
         ranges         = RANGES_VARNAME
+        rangelength_x  = RANGELENGTHS_VARNAMES[1]
+        rangelength_y  = RANGELENGTHS_VARNAMES[2]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
         tz_g           = THREADIDS_VARNAMES[3]
         hx, hy         = halosize
@@ -196,8 +78,19 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
         iz             = (indices_shift[3] > 0) ? :(($_iz + $(indices_shift[3]))) : _iz
         i              = (indices_shift[3] > 0) ? :(($_i  - $(indices_shift[3]))) : _i
         range_z        = (indices_shift[3] > 0) ? :(($ranges[3])[$tz_g] - $(indices_shift[3])) : :(($ranges[3])[$tz_g])
+        range_z_start  = (indices_shift[3] > 0) ? :(($ranges[3])[1]     - $(indices_shift[3])) : :(($ranges[3])[1])
+        bx             = gensym_world("bx", @__MODULE__)
+        by             = gensym_world("by", @__MODULE__)
         tx             = gensym_world("tx", @__MODULE__)
         ty             = gensym_world("ty", @__MODULE__)
+        nx_l           = gensym_world("nx_l", @__MODULE__)
+        ny_l           = gensym_world("ny_l", @__MODULE__)
+        t_h            = gensym_world("t_h", @__MODULE__)
+        t_h2           = gensym_world("t_h2", @__MODULE__)
+        tx_h           = gensym_world("tx_h", @__MODULE__)
+        tx_h2          = gensym_world("tx_h2", @__MODULE__)
+        ty_h           = gensym_world("ty_h", @__MODULE__)
+        ty_h2          = gensym_world("ty_h2", @__MODULE__)
         ix_h           = gensym_world("ix_h", @__MODULE__)
         ix_h2          = gensym_world("ix_h2", @__MODULE__)
         iy_h           = gensym_world("iy_h", @__MODULE__)
@@ -236,19 +129,29 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, ha
                         end
                     end
         end
-        loopstart = 0 #TODO: if in z neighbors beyond iz-1 are accessed, then this needs to be bigger. NOTE: not the same as halosize which is for shmemhalo
+        loopstart = 0 #TODO: if in z neighbors beyond iz-1 are accessed, then this needs to be bigger (also range_z_start-...!). NOTE: not the same as halosize which is for shmemhalo
 
         return quote
+                    $bx            = (@blockIdx().x*@blockDim().x - $rangelength_x > 0) ? @blockDim().x - (@blockIdx().x*@blockDim().x - $rangelength_x) : @blockDim().x
+                    $by            = (@blockIdx().y*@blockDim().y - $rangelength_y > 0) ? @blockDim().y - (@blockIdx().y*@blockDim().y - $rangelength_y) : @blockDim().y
                     $tx            = @threadIdx().x + $hx
                     $ty            = @threadIdx().y + $hy
-                    $ix_h          = ParallelStencil.@ix_h($hx)
-                    $ix_h2         = ParallelStencil.@ix_h2($hx, $hy)
-                    $iy_h          = ParallelStencil.@iy_h($hx, $hy)
-                    $iy_h2         = ParallelStencil.@iy_h2($hx, $hy)
+                    $nx_l          = $bx + (2*$hx)
+                    $ny_l          = $by + (2*$hy)
+                    $t_h           = (@threadIdx().y-1)*$bx + @threadIdx().x # NOTE: here it must be bx, not @blockDim().x
+                    $t_h2          = $t_h + $nx_l*$ny_l - $bx*$by
+                    $tx_h          = ($t_h-1) % $nx_l + 1
+                    $ty_h          = ($t_h-1) ÷ $nx_l + 1
+                    $tx_h2         = ($t_h2-1) % $nx_l + 1
+                    $ty_h2         = ($t_h2-1) ÷ $nx_l + 1
+                    $ix_h          = (@blockIdx().x-1)*@blockDim().x + $tx_h  - $hx    # NOTE: here it must be @blockDim().x, not bx
+                    $ix_h2         = (@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx    # ...
+                    $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy    # ...
+                    $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy    # ...
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-$(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), (ParallelStencil.@nx_l($hx), ParallelStencil.@ny_l($hy)))    ) : noexpr)
+$(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), ($nx_l, $ny_l))              ) : noexpr)
                     $A_ix_iy_izm1  = 0.0
-                    $A_ix_iy_iz    = $A[$ix,$iy,1+$loopoffset]
+                    $A_ix_iy_iz    = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
                     $A_ix_iy_izp1  = 0.0
 $(hx>0 ?  :(        $A_ixm1_iy_iz  = 0.0                                                 ) : noexpr)
 $(hx>0 ?  :(        $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
@@ -258,14 +161,14 @@ $(hy>0 ?  :(        $A_ix_iyp1_iz  = 0.0                                        
                     for $_i = $loopstart:$loopsize
                         $tz_g = $_i + $loopoffset
                         if ($tz_g > $rangelength_z) return; end
-                        $_iz = $range_z
+                        $_iz = ($tz_g < 1) ? $range_z_start-1 : $range_z
 $(shmem ? quote           
                         @sync_threads()
-                        if (ParallelStencil.@t_h() <= cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
-                            $A_izp1[ParallelStencil.@tx_h($hx),ParallelStencil.@ty_h($hx)] = $A[$ix_h,$iy_h,$iz+1] 
+                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+1] 
                         end
-                        if (ParallelStencil.@t_h2($hx, $hy) > cld(ParallelStencil.@nx_l($hx)*ParallelStencil.@ny_l($hy),2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
-                            $A_izp1[ParallelStencil.@tx_h2($hx, $hy),ParallelStencil.@ty_h2($hx, $hy)] = $A[$ix_h2,$iy_h2,$iz+1]
+                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && $iz<size($A,3)) 
+                            $A_izp1[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+1]
                         end
                         @sync_threads()
           end : 
