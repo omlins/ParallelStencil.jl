@@ -78,6 +78,7 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel <kernelcall>", true; eval_args=(:loopopt, :optdim, :halosize))
         if haskey(kwargs, :loopopt) && kwargs.loopopt
+            if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel loopopt=true call.") end
             parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
             ParallelKernel.parallel(caller, args...; package=package)
@@ -213,7 +214,7 @@ determine_optdim() = get_ndims() # NOTE: in @parallel_indices kernels, this coul
 
 function compute_nthreads_loopopt(maxsize, optdim, halosize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
     nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
-    if (prod(nthreads) < sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
+    if (prod(nthreads) < 2*sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
     return nthreads
 end
 
