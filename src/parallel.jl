@@ -215,6 +215,7 @@ determine_optdim() = get_ndims() # NOTE: in @parallel_indices kernels, this coul
 function compute_nthreads_loopopt(maxsize, optdim, halosize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
     nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
     if (prod(nthreads) < 2*sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
+    if any(maxsize .% nthreads .!= 0) @ArgumentError("@parallel <kernelcall>: loopopt optimization not possible for the given maximum array size in the kernel arguments (the maximum array size must be dividable without the rest by the number of threads per block)")
     return nthreads
 end
 
