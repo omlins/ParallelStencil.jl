@@ -117,14 +117,10 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
         body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
         if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
-        # if hx > 0
-            if (rx1 < 0) body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz) end
-            if (rx2 > 0) body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz) end
-        # end
-        # if hy > 0
-            if (ry1 < 0) body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz) end
-            if (ry1 > 0) body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz) end
-        # end
+        if (rx1 < 0) body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz) end
+        if (rx2 > 0) body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz) end
+        if (ry1 < 0) body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz) end
+        if (ry2 > 0) body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz) end
         if indices_shift[3] > 0
             body =  quote 
                         if ($i > 0)
