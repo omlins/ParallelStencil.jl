@@ -70,13 +70,13 @@ parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs     = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel <kernel>"; eval_args=(:loopopt, :optdim, :halosize))
+        kwargs     = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :stencilsize), "@parallel <kernel>"; eval_args=(:loopopt, :optdim, :stencilsize))
         numbertype = get_numbertype()
         ndims      = get_ndims()
         parallel_kernel(caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel <kernelcall>", true; eval_args=(:loopopt, :optdim, :halosize))
+        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :stencilsize), "@parallel <kernelcall>", true; eval_args=(:loopopt, :optdim, :stencilsize))
         if haskey(kwargs, :loopopt) && kwargs.loopopt
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel loopopt=true call.") end
             parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
@@ -90,7 +90,7 @@ end
 function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
     posargs, kwargs_expr = split_args(args)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel_indices"; eval_args=(:loopopt, :optdim, :halosize))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :stencilsize), "@parallel_indices"; eval_args=(:loopopt, :optdim, :stencilsize))
     if haskey(kwargs, :loopopt) && kwargs.loopopt
         parallel_indices_loopopt(package, numbertype, posargs...; kwargs...)
     else
@@ -101,13 +101,14 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize(), indices_shift::Tuple{<:Integer,<:Integer,<:Integer}=(0,0,0))
+function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilsize::Union{Integer,NTuple{N,Integer} where N}=compute_stencilsize(), indices_shift::Tuple{<:Integer,<:Integer,<:Integer}=(0,0,0))
     if (!loopopt) @ModuleInternalError("parallel_indices_loopopt: called with `loopopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
+    stencilsize = promote_stencilsize(stencilsize)
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_loopopt(body, indices, optvars, optdim, loopsize, halosize, indices_shift)
+    body = add_loopopt(body, indices, optvars, optdim, loopsize, stencilsize, indices_shift)
     body = add_return(body)
     set_body!(kernel, body)
     return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
@@ -162,41 +163,42 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_loopopt(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
+function parallel_call_loopopt(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilsize::Union{Integer,NTuple{N,Integer} where N}=compute_stencilsize())
     if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
     if isa(optvars, Expr) @ArgumentError("parallel_call_loopopt: at present, one and only one variable is supported in argument `optvars`.") end
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when loopopt=true is set.") end
+    stencilsize = promote_stencilsize(stencilsize)
     if     (optdim==3) loopsizes = :(1, 1, $loopsize)
     elseif (optdim==2) loopsizes = :(1, $loopsize, 1)
     elseif (optdim==1) loopsizes = :($loopsize, 1, 1)
     end
     maxsize   = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
-    nthreads  = :( ParallelStencil.compute_nthreads_loopopt($maxsize, $optdim, $halosize) )
+    nthreads  = :( ParallelStencil.compute_nthreads_loopopt($maxsize, $optdim, $stencilsize) )
     nblocks   = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     numbertype = (optvars==Symbol("")) ? get_numbertype() : :(eltype(optvars))
-    if     (optdim==3) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[2]+2*$halosize[2])*sizeof($numbertype))
-    elseif (optdim==2) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
-    elseif (optdim==1) shmem = :(($nthreads[2]+2*$halosize[2])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
+    if     (optdim==3) shmem = :(($nthreads[1]+$stencilsize[1]+$stencilsize[2])*($nthreads[2]+2*$stencilsize[3]+$stencilsize[4])*sizeof($numbertype))
+    elseif (optdim==2) shmem = :(($nthreads[1]+$stencilsize[1]+$stencilsize[2])*($nthreads[3]+2*$stencilsize[5]+$stencilsize[6])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
+    elseif (optdim==1) shmem = :(($nthreads[2]+$stencilsize[3]+$stencilsize[4])*($nthreads[3]+2*$stencilsize[5]+$stencilsize[6])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
     end
     if (async) return :(@parallel_async $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
     else       return :(@parallel       $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
     end
 end
 
-function parallel_call_loopopt(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
+function parallel_call_loopopt(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilsize::Union{Integer,NTuple{N,Integer} where N}=compute_stencilsize())
     if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_loopopt(ranges, kernelcall, backend_kwargs_expr, async; loopopt=loopopt, optvars=optvars, optdim=optdim, loopsize=loopsize, halosize=halosize)
+    parallel_call_loopopt(ranges, kernelcall, backend_kwargs_expr, async; loopopt=loopopt, optvars=optvars, optdim=optdim, loopsize=loopsize, stencilsize=stencilsize)
 end
 
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N}, indices_shift::Tuple{<:Integer,<:Integer,<:Integer})
+function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, stencilsize::NTuple{N,Integer} where N, indices_shift::Tuple{<:Integer,<:Integer,<:Integer})
     if (optvars == Symbol("")) @KeywordArgumentError("@parallel <kernel>: keyword argument `optvars` is mandatory when `loopopt=true` is set.") end
     if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
     quote
-        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, halosize...)) $indices_shift begin
+        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, stencilsize...)) $indices_shift begin
             $body
         end
     end
@@ -205,16 +207,18 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-compute_halosize() = return (1,1,0)  # TODO: A heuristic will be needed here too.
-compute_loopsize() = return LOOPSIZE
-determine_optdim() = get_ndims() # NOTE: in @parallel_indices kernels, this could be determined from the indices, but not in the @parallel calls (the heuristic must be the same...): determine_optdim(indices) = return (isa(indices,Expr) ? length(indices.args) : 1)
-
+determine_optdim()                        = get_ndims() # NOTE: in @parallel_indices kernels, this could be determined from the indices, but not in the @parallel calls (the heuristic must be the same...): determine_optdim(indices) = return (isa(indices,Expr) ? length(indices.args) : 1)
+compute_loopsize()                        = LOOPSIZE
+compute_stencilsize()                     = promote_stencilsize(1)  # TODO: A heuristic will be needed here too.
+promote_stencilsize(stencilsize::Integer) = (stencilsize,stencilsize, stencilsize,stencilsize, stencilsize,stencilsize)
+promote_stencilsize(stencilsize::NTuple)  = stencilsize
 
 ## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
 
-function compute_nthreads_loopopt(maxsize, optdim, halosize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
-    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
-    if (prod(nthreads) < 2*sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
+function compute_nthreads_loopopt(maxsize, optdim, stencilsize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
+    nthreads       = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
+    haloextensions = ((stencilsize[1] + stencilsize[2])*(optdim!=1), (stencilsize[3] + stencilsize[4])*(optdim!=2), (stencilsize[5] + stencilsize[6])*(optdim!=3))
+    if (2*prod(nthreads) < prod(nthreads .+ haloextensions)) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the total number of cells including halo.
     if any(maxsize .% nthreads .!= 0) @ArgumentError("@parallel <kernelcall>: loopopt optimization not possible for the given maximum array size in the kernel arguments (the maximum array size must be dividable without the rest by the number of threads per block)") end
     return nthreads
 end
