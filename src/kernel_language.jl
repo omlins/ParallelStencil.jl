@@ -67,7 +67,8 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     rx, ry ,rz    = stencilranges
     rx1, ry1, rz1 = rx.start, ry.start ,rz.start
     rx2, ry2, rz2 = rx.stop, ry.stop ,rz.stop
-    noexpr = :(begin end)
+    noexpr        = :(begin end)
+    body          = eval_offsets(caller, body, indices)
     if optdim == 3
         ranges         = RANGES_VARNAME
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -106,14 +107,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
         A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
 
-        # 1. Do a loop over the stencil sizes to create all possible indices within stensil; try to substitute the corresponding expressions
-        # with the on the fly created symbol. Substitute must return the number of substituted elements.
-        # If the number is greater than one, then create the symbol, allocate it later and populate it within the snake.
-        # Even if the symbol is not put into the body, it will need to be created and allocated if it is within the snake.
-        # The snake is field as follows: before the body is computed anything from the z plus ? plane is red; the rest is read afterwards.
-        # Stencil sizes can also be negative, indicating that the element at point zero is never accessed; this avoids unnecessary reads 
-        # and unnecessary shared memory allocation. The snake does not need to go until point zero if it is not needed.
-        # UPDATE: stencil sizes should be called stencil ranges instead.
+
         if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
         body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
         if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
@@ -225,3 +219,26 @@ end
 
 ## FUNCTIONS FOR SHARED MEMORY ALLOCATION
 
+
+## HELPER FUNCTIONS
+
+is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol, iz::Symbol) = @capture(ex, A_[x_, y_, z_]) && inexpr_walk(x, ix) && inexpr_walk(y, iy) && inexpr_walk(z, iz)
+is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_])     && inexpr_walk(x, ix) && inexpr_walk(y, iy)
+is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
+is_stencil_access(ex, indices...)                               = false
+
+function eval_offsets(caller::Module, body, indices)
+    return postwalk(body) do ex
+        if !is_stencil_access(ex, indices...) return ex; end
+        @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+        for i = 1:length(indices)
+            offset_expr = substitute(indices_expr[i], indices[i], 0)
+            offset = eval_arg(caller, offset_expr)
+            indices_expr[i] = if     (offset >  0) quote $(indices[i]) + $offset        end
+                              elseif (offset <  0) quote $(indices[i]) - $(abs(offset)) end
+                              else                         indices[i]
+                              end
+        end
+        return :($A[$(indices_expr...)])
+    end
+end
