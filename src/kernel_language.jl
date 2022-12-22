@@ -69,6 +69,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     rx2, ry2, rz2 = rx.stop, ry.stop ,rz.stop
     noexpr        = :(begin end)
     body          = eval_offsets(caller, body, indices)
+    offsets       = extract_offsets(caller, body, indices, optdim)
     if optdim == 3
         ranges         = RANGES_VARNAME
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -107,7 +108,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
         A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
 
-
+        
         if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
         body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
         if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
@@ -241,4 +242,30 @@ function eval_offsets(caller::Module, body, indices)
         end
         return :($A[$(indices_expr...)])
     end
+end
+
+function extract_offsets(caller::Module, body, indices, optdim)
+    access_offsets = Dict()
+    postwalk(body) do ex
+        if is_stencil_access(ex, indices...)
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            offsets = ()
+            for i = 1:length(indices)
+                offset_expr = substitute(indices_expr[i], indices[i], 0)
+                offset = eval_arg(caller, offset_expr)
+                offsets = (offsets..., offset)
+            end
+            if (optdim == 3) 
+                k1 = offsets[1:2]
+                k2 = offsets[end]
+                if haskey(access_offsets, k1) && haskey(access_offsets[k1], k2) access_offsets[k1][k2] += 1
+                else                                                            access_offsets[k1]      = Dict(k2 => 1)
+                end
+            else
+                @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+            end
+        end
+        return ex    
+    end
+    return access_offsets
 end
