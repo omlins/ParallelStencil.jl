@@ -258,8 +258,9 @@ function extract_offsets(caller::Module, body, indices, optdim)
             if (optdim == 3) 
                 k1 = offsets[1:2]
                 k2 = offsets[end]
-                if haskey(access_offsets, k1) && haskey(access_offsets[k1], k2) access_offsets[k1][k2] += 1
-                else                                                            access_offsets[k1]      = Dict(k2 => 1)
+                if     haskey(access_offsets, k1) && haskey(access_offsets[k1], k2) access_offsets[k1][k2] += 1
+                elseif haskey(access_offsets, k1)                                   access_offsets[k1][k2]  = 1
+                else                                                                access_offsets[k1]      = Dict(k2 => 1)
                 end
             else
                 @ArgumentError("@loopopt: only optdim=3 is currently supported.")
