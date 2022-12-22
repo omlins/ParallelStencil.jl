@@ -271,6 +271,8 @@ function substitute(expr::Expr, old, new)
     end
 end
 
+substitute(expr, old, new) = (old == expr) ? new : expr
+
 function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
     postwalk(expr) do x
@@ -280,6 +282,9 @@ function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     end
     return found
 end
+
+inexpr_walk(expr::Symbol, s::Symbol; match_only_head=false) = (s == expr)
+inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
 
 Base.unquoted(s::Symbol) = s
 
