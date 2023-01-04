@@ -62,14 +62,20 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
     A = optvars 
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
+    if     (package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
+    elseif (package == PKG_THREADS) int_type = INT_THREADS
+    end
     if isa(indices,Expr) indices = indices.args else indices = (indices,) end
     stencilranges = eval_arg(caller, stencilranges)
     rx, ry ,rz    = stencilranges
     rx1, ry1, rz1 = rx.start, ry.start ,rz.start
     rx2, ry2, rz2 = rx.stop, ry.stop ,rz.stop
     noexpr        = :(begin end)
-    body          = eval_offsets(caller, body, indices)
-    offsets       = extract_offsets(caller, body, indices, optdim)
+    body          = eval_offsets(caller, body, indices, int_type)
+    offsets       = extract_offsets(caller, body, indices, int_type, optdim)
+    regqueue_head, regqueue_tail, optdim_offset_max  = define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
+    @show regqueue_head, regqueue_tail, optdim_offset_max
     if optdim == 3
         ranges         = RANGES_VARNAME
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -100,22 +106,32 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         iy_h2          = gensym_world("iy_h2", @__MODULE__)
         loopoffset     = gensym_world("loopoffset", @__MODULE__)
         A_izp1         = gensym_world(string(A, "_izp1"), @__MODULE__)
-        A_ix_iy_izm1   = gensym_world(string(A, "_ix_iy_izm1"), @__MODULE__)
-        A_ix_iy_iz     = gensym_world(string(A, "_ix_iy_iz"), @__MODULE__)
-        A_ix_iy_izp1   = gensym_world(string(A, "_ix_iy_izp1"), @__MODULE__)
-        A_ixm1_iy_iz   = gensym_world(string(A, "_ixm1_iy_iz"), @__MODULE__)
-        A_ixp1_iy_iz   = gensym_world(string(A, "_ixp1_iy_iz"), @__MODULE__)
-        A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
-        A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
 
-        
-        if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
-        body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
-        if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
-        if (rx1 < 0) body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz) end
-        if (rx2 > 0) body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz) end
-        if (ry1 < 0) body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz) end
-        if (ry2 > 0) body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz) end
+        # A_ix_iy_izm1   = gensym_world(string(A, "_ix_iy_izm1"), @__MODULE__)
+        # A_ix_iy_iz     = gensym_world(string(A, "_ix_iy_iz"), @__MODULE__)
+        # A_ix_iy_izp1   = gensym_world(string(A, "_ix_iy_izp1"), @__MODULE__)
+        # A_ixm1_iy_iz   = gensym_world(string(A, "_ixm1_iy_iz"), @__MODULE__)
+        # A_ixp1_iy_iz   = gensym_world(string(A, "_ixp1_iy_iz"), @__MODULE__)
+        # A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
+        # A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
+
+        for oxy in keys(regqueue_tail)
+            for oz in keys(regqueue_tail[oxy])
+                body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_tail[oxy][oz])
+            end
+        end
+        for oxy in keys(regqueue_head)
+            for oz in keys(regqueue_head[oxy])
+                body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_head[oxy][oz])
+            end
+        end
+        # if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
+        # body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
+        # if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
+        # if (rx1 < 0) body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz) end
+        # if (rx2 > 0) body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz) end
+        # if (ry1 < 0) body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz) end
+        # if (ry2 > 0) body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz) end
         if indices_shift[3] > 0
             body =  quote 
                         if ($i > 0)
@@ -130,7 +146,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
                     end
         end
         loopstart = 0 #TODO: if in z neighbors beyond iz-1 are accessed, then this needs to be bigger (also range_z_start-...!). NOTE: not the same as stencilranges which is for shmemhalo
-
+        
         return quote
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
@@ -152,13 +168,26 @@ $(shmem ? quote
 )
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
 $(shmem ? :(        $A_izp1        = @sharedMem(eltype($A), ($nx_l, $ny_l))              ) : noexpr)
-                    $A_ix_iy_izm1  = 0.0
-                    $A_ix_iy_iz    = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
-                    $A_ix_iy_izp1  = 0.0
-$(rx1<0 ?  :(       $A_ixm1_iy_iz  = 0.0                                                 ) : noexpr)
-$(rx2>0 ?  :(       $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
-$(ry1<0 ?  :(       $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
-$(ry2>0 ?  :(       $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
+$((:(               $reg           = 0.0
+    ) 
+    for regs in values(regqueue_tail) for reg in values(regs)
+  )...
+)
+$((:(               $reg           = 0.0
+    )
+    for regs in values(regqueue_head) for reg in values(regs)
+  )...
+)
+                    # TODO: the following line should be removed later and replaced with an earlier start of the loop.
+                    $(regqueue_tail[(0,0)][0]) = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
+# $(       (:(        $(regqueue_head[oxy][oz]) = 0.0                                      ) for oxy in keys(regqueue_head), oz in keys(regqueue_head[oxy]))...)
+#                     $A_ix_iy_izm1  = 0.0
+#                     $A_ix_iy_iz    = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
+#                     $A_ix_iy_izp1  = 0.0
+# $(rx1<0 ?  :(       $A_ixm1_iy_iz  = 0.0                                                 ) : noexpr)
+# $(rx2>0 ?  :(       $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
+# $(ry1<0 ?  :(       $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
+# $(ry2>0 ?  :(       $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
 
                     for $_i = $loopstart:$loopsize
                         $tz_g = $_i + $loopoffset
@@ -176,18 +205,48 @@ $(shmem ? quote
           end : 
           noexpr
 )
-$(shmem ? :(            $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
-           ) :
-          :(            $A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1
-           )
+$((shmem ?
+  (:(                   $reg           = $(regsource(A_izp1, oxy, (tx, ty))) #$A_izp1[$tx,$ty]
+    )
+    for (oxy, regs) in regqueue_head for reg in values(regs)
+  ) :
+  (:(                   $reg           = ($iz<size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+    )
+    for (oxy, regs) in regqueue_head for (oz, reg) in regs
+  ))...
 )
+# $(shmem ? :(            $A_ix_iy_izp1 = $A_izp1[$tx,$ty]
+#            ) :
+#           :(            $A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1
+#            )
+# )
                         $body
-$(rx1<0 ? :(            $A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]                                ) : noexpr)
-$(rx2>0 ? :(            $A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]                                ) : noexpr)
-$(ry1<0 ? :(            $A_ix_iym1_iz = $A_izp1[$tx,$ty-1]                                ) : noexpr)
-$(ry2>0 ? :(            $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                                ) : noexpr)
-                        $A_ix_iy_izm1 = $A_ix_iy_iz
-                        $A_ix_iy_iz   = $A_ix_iy_izp1
+# TODO: the following needs to be done from the lowest z to the highest z. Else the same value would just be passed along down the registers.
+$((:(
+                        $(regs[oz])           = $(regs[oz+1])
+    )
+    for regs in values(regqueue_tail) for oz in sort(keys(regs)) if oz<=optdim_offset_max-2
+        # for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz<=optdim_offset_max-2
+  )...
+)
+                        # $A_ix_iy_izm1 = $A_ix_iy_iz
+$((:(                   $reg           = $(regsource(A_izp1, oxy, (tx, ty)))
+    )
+    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==optdim_offset_max-1 && !(haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1))
+  )...
+)
+# for oxy in keys(regqueue_tail) for (reg, oz) in zip(regqueue_tail[oxy], filter(oz -> oz==optdim_offset_max-1, keys(regqueue_tail[oxy])))
+# $(rx1<0 ? :(            $A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]                                ) : noexpr)
+# $(rx2>0 ? :(            $A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]                                ) : noexpr)
+# $(ry1<0 ? :(            $A_ix_iym1_iz = $A_izp1[$tx,$ty-1]                                ) : noexpr)
+# $(ry2>0 ? :(            $A_ix_iyp1_iz = $A_izp1[$tx,$ty+1]                                ) : noexpr)
+$((:(
+                        $reg           = $(regqueue_head[oxy][oz+1])
+    )
+    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==optdim_offset_max-1 && haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1)
+  )...
+)
+                        # $A_ix_iy_iz   = $A_ix_iy_izp1
                     end
         end
     else
@@ -228,23 +287,23 @@ is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A
 is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
 is_stencil_access(ex, indices...)                               = false
 
-function eval_offsets(caller::Module, body, indices)
+function eval_offsets(caller::Module, body, indices, int_type)
     return postwalk(body) do ex
         if !is_stencil_access(ex, indices...) return ex; end
         @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
         for i = 1:length(indices)
             offset_expr = substitute(indices_expr[i], indices[i], 0)
-            offset = eval_arg(caller, offset_expr)
-            indices_expr[i] = if     (offset >  0) quote $(indices[i]) + $offset        end
-                              elseif (offset <  0) quote $(indices[i]) - $(abs(offset)) end
-                              else                         indices[i]
-                              end
+            offset = int_type(eval_arg(caller, offset_expr))
+            if     (offset >  0) indices_expr[i] = :($(indices[i]) + $offset       )
+            elseif (offset <  0) indices_expr[i] = :($(indices[i]) - $(abs(offset)))
+            else                 indices_expr[i] =     indices[i]
+            end
         end
         return :($A[$(indices_expr...)])
     end
 end
 
-function extract_offsets(caller::Module, body, indices, optdim)
+function extract_offsets(caller::Module, body, indices, int_type, optdim)
     access_offsets = Dict()
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
@@ -252,10 +311,10 @@ function extract_offsets(caller::Module, body, indices, optdim)
             offsets = ()
             for i = 1:length(indices)
                 offset_expr = substitute(indices_expr[i], indices[i], 0)
-                offset = eval_arg(caller, offset_expr)
+                offset = int_type(eval_arg(caller, offset_expr))
                 offsets = (offsets..., offset)
             end
-            if (optdim == 3) 
+            if optdim == 3
                 k1 = offsets[1:2]
                 k2 = offsets[end]
                 if     haskey(access_offsets, k1) && haskey(access_offsets[k1], k2) access_offsets[k1][k2] += 1
@@ -270,3 +329,124 @@ function extract_offsets(caller::Module, body, indices, optdim)
     end
     return access_offsets
 end
+
+function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
+    regqueue_head = Dict()
+    regqueue_tail = Dict()
+    optdim_offset_max = typemin(int_type)
+    if optdim == 3
+        stencilranges_xy = stencilranges[1:2]
+        stencilranges_z  = stencilranges[3]
+        offsets_xy       = filter(oxy -> all(oxy .∈ stencilranges_xy), keys(offsets))
+        #if all(oxy .∈ stencilranges_xy)
+        offset_z_max = typemin(int_type)
+        for oxy in offsets_xy
+            offset_z_max = max(offset_z_max, maximum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))))
+        end
+        for oxy in offsets_xy
+            offsets_z = sort([filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))...])
+            k1 = oxy
+            for oz = offsets_z[1]:offset_z_max-1
+                k2 = oz
+                if haskey(regqueue_tail, k1) && haskey(regqueue_tail[k1], k2) @ModuleInternalError("regqueue_tail entry exists already.") end
+                reg = gensym_world(regname(A, (oxy..., oz)), @__MODULE__)
+                if haskey(regqueue_tail, k1) regqueue_tail[k1][k2] = reg
+                else                         regqueue_tail[k1]     = Dict(k2 => reg)
+                end
+            end
+            oz = offsets_z[end]
+            if oz == offset_z_max
+                k2 = oz
+                if haskey(regqueue_head, k1) && haskey(regqueue_head[k1], k2) @ModuleInternalError("regqueue_head entry exists already.") end
+                reg = gensym_world(regname(A, (oxy..., oz)), @__MODULE__)
+                if haskey(regqueue_head, k1) regqueue_head[k1][k2] = reg
+                else                         regqueue_head[k1]     = Dict(k2 => reg)
+                end
+            end
+        end
+        optdim_offset_max = offset_z_max
+    else
+        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+    end
+    return regqueue_head, regqueue_tail, optdim_offset_max
+end
+
+function regname(A, offsets)
+    ndims = length(offsets)
+    ox    = offsets[1]
+    x = if     (ox > 0) "ix" * "p" * string(ox)
+        elseif (ox < 0) "ix" * "m" * string(abs(ox))
+        else            "ix"
+        end
+    if ndims > 1
+        oy = offsets[2]
+        y = if     (oy > 0) "iy" * "p" * string(oy)
+            elseif (oy < 0) "iy" * "m" * string(abs(oy))
+            else            "iy"
+            end
+    end
+    if ndims > 2
+        oz = offsets[3]
+        z = if     (oz > 0) "iz" * "p" * string(oz)
+            elseif (oz < 0) "iz" * "m" * string(abs(oz))
+            else            "iz"
+            end
+    end
+    if     (ndims == 1) return string(A, "_$(x)")
+    elseif (ndims == 2) return string(A, "_$(x)_$(y)")
+    elseif (ndims == 3) return string(A, "_$(x)_$(y)_$(z)")
+    end
+end
+
+function regtarget(A, offsets, indices)
+    ndims = length(offsets)
+    ox    = offsets[1]
+    ix    = indices[1]
+    if     (ox > 0) x = :($ix + $ox)
+    elseif (ox < 0) x = :($ix - $(abs(ox)))
+    else            x = ix
+    end
+    if ndims > 1
+        oy = offsets[2]
+        iy = indices[2]
+        if     (oy > 0) y = :($iy + $oy)
+        elseif (oy < 0) y = :($iy - $(abs(oy)))
+        else            y = iy
+        end
+    end
+    if ndims > 2
+        oz = offsets[3]
+        iz = indices[3]
+        if     (oz > 0) z = :($iz + $oz)
+        elseif (oz < 0) z = :($iz - $(abs(oz)))
+        else            z = iz
+        end
+    end
+    if     (ndims == 1) return :($A[$x])
+    elseif (ndims == 2) return :($A[$x,$y])
+    elseif (ndims == 3) return :($A[$x,$y,$z])
+    end
+end
+
+function regsource(A_izp1, offsets, local_indices)
+    ndims = length(offsets)
+    ox    = offsets[1]
+    tx    = local_indices[1]
+    if     (ox > 0) x = :($tx + $ox)
+    elseif (ox < 0) x = :($tx - $(abs(ox)))
+    else            x = tx
+    end
+    if ndims > 1
+        oy    = offsets[2]
+        ty    = local_indices[2]
+        if     (oy > 0) y = :($ty + $oy)
+        elseif (oy < 0) y = :($ty - $(abs(oy)))
+        else            y = ty
+        end
+    end
+    if     (ndims == 1) return :($A_izp1[$x])
+    elseif (ndims == 2) return :($A_izp1[$x,$y]) # e.g. :($A_izp1[$tx,$ty-1])
+    end
+end
+
+Base.sort(keys::Base.KeySet) = sort([keys...])
