@@ -68,19 +68,19 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     end
     if isa(indices,Expr) indices = indices.args else indices = (indices,) end
     stencilranges = eval_arg(caller, stencilranges)
-    rx, ry ,rz    = stencilranges
-    rx1, ry1, rz1 = rx.start, ry.start ,rz.start
-    rx2, ry2, rz2 = rx.stop, ry.stop ,rz.stop
     noexpr        = :(begin end)
     body          = eval_offsets(caller, body, indices, int_type)
     offsets       = extract_offsets(caller, body, indices, int_type, optdim)
-    regqueue_head, regqueue_tail, optdim_offset_max  = define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
-    @show regqueue_head, regqueue_tail, optdim_offset_max
+    regqueue_head, regqueue_tail, offset_min, offset_max = define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
+    @show regqueue_head, regqueue_tail, offset_min, offset_max
     if optdim == 3
         ranges         = RANGES_VARNAME
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
         tz_g           = THREADIDS_VARNAMES[3]
-        hx1,hx2, hy1,hy2 = -rx1,rx2, -ry1,ry2
+        oz_max         = offset_max[3]
+        hx1, hy1       = -1 .* offset_min[1:2]
+        hx2, hy2       = offset_max[1:2]
+        # hx1,hx2, hy1,hy2 = -rx1,rx2, -ry1,ry2
         shmem          = (hx1+hx2>0 || hy1+hy2>0)
         _ix, _iy, _iz  = indices
         _i             = gensym_world("i", @__MODULE__)
@@ -225,17 +225,17 @@ $((shmem ?
 $((:(
                         $(regs[oz])           = $(regs[oz+1])
     )
-    for regs in values(regqueue_tail) for oz in sort(keys(regs)) if oz<=optdim_offset_max-2
-        # for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz<=optdim_offset_max-2
+    for regs in values(regqueue_tail) for oz in sort(keys(regs)) if oz<=oz_max-2
+        # for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz<=oz_max-2
   )...
 )
                         # $A_ix_iy_izm1 = $A_ix_iy_iz
 $((:(                   $reg           = $(regsource(A_izp1, oxy, (tx, ty)))
     )
-    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==optdim_offset_max-1 && !(haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1))
+    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && !(haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1))
   )...
 )
-# for oxy in keys(regqueue_tail) for (reg, oz) in zip(regqueue_tail[oxy], filter(oz -> oz==optdim_offset_max-1, keys(regqueue_tail[oxy])))
+# for oxy in keys(regqueue_tail) for (reg, oz) in zip(regqueue_tail[oxy], filter(oz -> oz==oz_max-1, keys(regqueue_tail[oxy])))
 # $(rx1<0 ? :(            $A_ixm1_iy_iz = $A_izp1[$tx-1,$ty]                                ) : noexpr)
 # $(rx2>0 ? :(            $A_ixp1_iy_iz = $A_izp1[$tx+1,$ty]                                ) : noexpr)
 # $(ry1<0 ? :(            $A_ix_iym1_iz = $A_izp1[$tx,$ty-1]                                ) : noexpr)
@@ -243,7 +243,7 @@ $((:(                   $reg           = $(regsource(A_izp1, oxy, (tx, ty)))
 $((:(
                         $reg           = $(regqueue_head[oxy][oz+1])
     )
-    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==optdim_offset_max-1 && haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1)
+    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz+1)
   )...
 )
                         # $A_ix_iy_iz   = $A_ix_iy_izp1
@@ -333,20 +333,25 @@ end
 function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
     regqueue_head = Dict()
     regqueue_tail = Dict()
-    optdim_offset_max = typemin(int_type)
     if optdim == 3
         stencilranges_xy = stencilranges[1:2]
         stencilranges_z  = stencilranges[3]
         offsets_xy       = filter(oxy -> all(oxy .∈ stencilranges_xy), keys(offsets))
-        #if all(oxy .∈ stencilranges_xy)
-        offset_z_max = typemin(int_type)
+        offset_min       = (typemax(int_type), typemax(int_type), typemax(int_type))
+        offset_max       = (typemin(int_type), typemin(int_type), typemin(int_type))
         for oxy in offsets_xy
-            offset_z_max = max(offset_z_max, maximum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))))
+            offset_min = (min(offset_min[1], oxy[1]),
+                          min(offset_min[2], oxy[2]),
+                          min(offset_min[3], minimum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))))
+            offset_max = (max(offset_max[1], oxy[1]),
+                          max(offset_max[2], oxy[2]),
+                          max(offset_max[3], maximum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))))
         end
+        oz_max = offset_max[3]
         for oxy in offsets_xy
             offsets_z = sort([filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))...])
             k1 = oxy
-            for oz = offsets_z[1]:offset_z_max-1
+            for oz = offsets_z[1]:oz_max-1
                 k2 = oz
                 if haskey(regqueue_tail, k1) && haskey(regqueue_tail[k1], k2) @ModuleInternalError("regqueue_tail entry exists already.") end
                 reg = gensym_world(regname(A, (oxy..., oz)), @__MODULE__)
@@ -355,7 +360,7 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
                 end
             end
             oz = offsets_z[end]
-            if oz == offset_z_max
+            if oz == oz_max
                 k2 = oz
                 if haskey(regqueue_head, k1) && haskey(regqueue_head[k1], k2) @ModuleInternalError("regqueue_head entry exists already.") end
                 reg = gensym_world(regname(A, (oxy..., oz)), @__MODULE__)
@@ -364,11 +369,10 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
                 end
             end
         end
-        optdim_offset_max = offset_z_max
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
-    return regqueue_head, regqueue_tail, optdim_offset_max
+    return regqueue_head, regqueue_tail, offset_min, offset_max
 end
 
 function regname(A, offsets)
