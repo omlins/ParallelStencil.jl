@@ -337,19 +337,22 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
         stencilranges_xy = stencilranges[1:2]
         stencilranges_z  = stencilranges[3]
         offsets_xy       = filter(oxy -> all(oxy .∈ stencilranges_xy), keys(offsets))
+        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in @loopopt: stencilranges in x-y dimension do not include any array access.") end
         offset_min       = (typemax(int_type), typemax(int_type), typemax(int_type))
         offset_max       = (typemin(int_type), typemin(int_type), typemin(int_type))
         for oxy in offsets_xy
+            offsets_z = filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))
+            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in @loopopt: stencilranges in z dimension do not include any array access.") end
             offset_min = (min(offset_min[1], oxy[1]),
                           min(offset_min[2], oxy[2]),
-                          min(offset_min[3], minimum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))))
+                          min(offset_min[3], minimum(offsets_z)))
             offset_max = (max(offset_max[1], oxy[1]),
                           max(offset_max[2], oxy[2]),
-                          max(offset_max[3], maximum(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))))
+                          max(offset_max[3], maximum(offsets_z)))
         end
         oz_max = offset_max[3]
         for oxy in offsets_xy
-            offsets_z = sort([filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))...])
+            offsets_z = sort(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))
             k1 = oxy
             for oz = offsets_z[1]:oz_max-1
                 k2 = oz
@@ -453,4 +456,4 @@ function regsource(A_izp1, offsets, local_indices)
     end
 end
 
-Base.sort(keys::Base.KeySet) = sort([keys...])
+Base.sort(keys::T) where T<:Base.AbstractSet = sort([keys...])
