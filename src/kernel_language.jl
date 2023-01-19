@@ -58,7 +58,7 @@ end
 #TODO: maybe gensym with macro @gensym
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges, indices_shift, body; package::Symbol=get_package())
+function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges::Union{Nothing,NTuple{N,UnitRange} where N}, indices_shift, body; package::Symbol=get_package())
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
     A = optvars 
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
@@ -67,7 +67,8 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     if isa(indices,Expr) indices = indices.args else indices = (indices,) end
-    stencilranges = eval_arg(caller, stencilranges)
+    fullrange     = typemin(int_type):typemax(int_type)
+    stencilranges = isnothing(stencilranges) ? (fullrange, fullrange, fullrange) : eval_arg(caller, stencilranges)
     noexpr        = :(begin end)
     body          = eval_offsets(caller, body, indices, int_type)
     offsets       = extract_offsets(caller, body, indices, int_type, optdim)
@@ -264,9 +265,9 @@ end
 
 
 function loopopt(caller::Module, indices, optvars, body; package::Symbol=get_package())
-    optdim   = isa(indices,Expr) ? length(indices.args) : 1
-    loopsize = LOOPSIZE
-    stencilranges = (optdim == 3) ? (-1:1,-1:1,-1:1) : (optdim == 2) ? (-1:1,-1:1,0:0) : (-1:1,0:0,0:0)
+    optdim        = isa(indices,Expr) ? length(indices.args) : 1
+    loopsize      = LOOPSIZE
+    stencilranges = nothing
     return loopopt(caller, indices, optvars, optdim, loopsize, stencilranges, body; package=package)
 end
 
