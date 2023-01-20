@@ -101,14 +101,14 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilranges::Union{UnitRange,NTuple{N,UnitRange} where N}=compute_stencilranges(), indices_shift::Tuple{<:Integer,<:Integer,<:Integer}=(0,0,0))
+function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilranges::Union{UnitRange,NTuple{N,UnitRange} where N}=compute_stencilranges())
     if (!loopopt) @ModuleInternalError("parallel_indices_loopopt: called with `loopopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     stencilranges = promote_stencilranges(stencilranges)
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_loopopt(body, indices, optvars, optdim, loopsize, stencilranges, indices_shift)
+    body = add_loopopt(body, indices, optvars, optdim, loopsize, stencilranges)
     body = add_return(body)
     set_body!(kernel, body)
     return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
@@ -154,7 +154,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     set_body!(kernel, body)
     if loopopt 
         expanded_kernel = macroexpand(caller, kernel)
-        parallel_indices_loopopt(package, numbertype, get_indices_expr(ndims), expanded_kernel; indices_shift=(1,1,1), kwargs...)
+        parallel_indices_loopopt(package, numbertype, get_indices_expr(ndims), expanded_kernel; kwargs...)
     else
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
@@ -194,11 +194,11 @@ end
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, stencilranges::NTuple{N,UnitRange} where N, indices_shift::Tuple{<:Integer,<:Integer,<:Integer})
+function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, stencilranges::NTuple{N,UnitRange} where N)
     if (optvars == Symbol("")) @KeywordArgumentError("@parallel <kernel>: keyword argument `optvars` is mandatory when `loopopt=true` is set.") end
     if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
     quote
-        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, stencilranges...)) $indices_shift begin
+        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, stencilranges...)) begin
             $body
         end
     end
