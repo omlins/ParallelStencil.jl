@@ -58,7 +58,7 @@ end
 #TODO: maybe gensym with macro @gensym
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges::Union{Nothing,NTuple{N,UnitRange} where N}, indices_shift, body; package::Symbol=get_package())
+function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges, body; package::Symbol=get_package())
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
     A = optvars 
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
@@ -69,7 +69,6 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     if isa(indices,Expr) indices = indices.args else indices = (indices,) end
     fullrange     = typemin(int_type):typemax(int_type)
     stencilranges = isnothing(stencilranges) ? (fullrange, fullrange, fullrange) : eval_arg(caller, stencilranges)
-    noexpr        = :(begin end)
     body          = eval_offsets(caller, body, indices, int_type)
     offsets       = extract_offsets(caller, body, indices, int_type, optdim)
     regqueue_head, regqueue_tail, offset_min, offset_max = define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
@@ -81,19 +80,14 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         oz_max         = offset_max[3]
         hx1, hy1       = -1 .* offset_min[1:2]
         hx2, hy2       = offset_max[1:2]
-        # hx1,hx2, hy1,hy2 = -rx1,rx2, -ry1,ry2
         shmem          = (hx1+hx2>0 || hy1+hy2>0)
         offset_span    = offset_max .- offset_min
         oz_span        = offset_span[3]
-        loopstart      = 1 - oz_span
-        _ix, _iy, _iz  = indices
-        _i             = gensym_world("i", @__MODULE__)
-        ix             = _ix # (indices_shift[1] > 0) ? :(($_ix + $(indices_shift[1]))) : _ix
-        iy             = _iy # (indices_shift[2] > 0) ? :(($_iy + $(indices_shift[2]))) : _iy
-        iz             = _iz # (indices_shift[3] > 0) ? :(($_iz + $(indices_shift[3]))) : _iz
-        i              = _i # (indices_shift[3] > 0) ? :(($_i  - $(indices_shift[3]))) : _i
-        range_z        = :(($ranges[3])[$tz_g]) # (indices_shift[3] > 0) ? :(($ranges[3])[$tz_g] - $(indices_shift[3])) : :(($ranges[3])[$tz_g])
-        range_z_start  = :(($ranges[3])[1])     # (indices_shift[3] > 0) ? :(($ranges[3])[1]     - $(indices_shift[3])) : :(($ranges[3])[1])
+        loopstart      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+        ix, iy, iz     = indices
+        i              = gensym_world("i", @__MODULE__)
+        range_z        = :(($ranges[3])[$tz_g])
+        range_z_start  = :(($ranges[3])[1])
         tx             = gensym_world("tx", @__MODULE__)
         ty             = gensym_world("ty", @__MODULE__)
         nx_l           = gensym_world("nx_l", @__MODULE__)
@@ -111,14 +105,6 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         loopoffset     = gensym_world("loopoffset", @__MODULE__)
         A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
 
-        # A_ix_iy_izm1   = gensym_world(string(A, "_ix_iy_izm1"), @__MODULE__)
-        # A_ix_iy_iz     = gensym_world(string(A, "_ix_iy_iz"), @__MODULE__)
-        # A_ix_iy_izp1   = gensym_world(string(A, "_ix_iy_izp1"), @__MODULE__)
-        # A_ixm1_iy_iz   = gensym_world(string(A, "_ixm1_iy_iz"), @__MODULE__)
-        # A_ixp1_iy_iz   = gensym_world(string(A, "_ixp1_iy_iz"), @__MODULE__)
-        # A_ix_iym1_iz   = gensym_world(string(A, "_ix_iym1_iz"), @__MODULE__)
-        # A_ix_iyp1_iz   = gensym_world(string(A, "_ix_iyp1_iz"), @__MODULE__)
-
         for oxy in keys(regqueue_tail)
             for oz in keys(regqueue_tail[oxy])
                 body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_tail[oxy][oz])
@@ -129,31 +115,16 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
                 body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_head[oxy][oz])
             end
         end
-        # if (rz1 < 0) body = substitute(body, :($A[$ix,$iy,$iz-1]), A_ix_iy_izm1) end
-        # body = substitute(body, :($A[$ix,$iy,$iz  ]), A_ix_iy_iz  )
-        # if (rz2 > 0) body = substitute(body, :($A[$ix,$iy,$iz+1]), A_ix_iy_izp1) end
-        # if (rx1 < 0) body = substitute(body, :($A[$ix-1,$iy,$iz]), A_ixm1_iy_iz) end
-        # if (rx2 > 0) body = substitute(body, :($A[$ix+1,$iy,$iz]), A_ixp1_iy_iz) end
-        # if (ry1 < 0) body = substitute(body, :($A[$ix,$iy-1,$iz]), A_ix_iym1_iz) end
-        # if (ry2 > 0) body = substitute(body, :($A[$ix,$iy+1,$iz]), A_ix_iyp1_iz) end
-        if indices_shift[3] > 0
-            body =  quote 
-                        if ($i > 0)
-                            $body
-                        end
+        body =  quote 
+                    if ($i > 0)
+                        $body
                     end
-        else
-            body =  quote 
-                        if ($_i > 0)
-                            $body
-                        end
-                    end
-        end
+                end
 
         return quote
+$(shmem ? quote     
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
-$(shmem ? quote     
                     $nx_l          = @blockDim().x + $(hx1+hx2)
                     $ny_l          = @blockDim().y + $(hy1+hy2)
                     $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x # NOTE: here it must be bx, not @blockDim().x
@@ -167,35 +138,24 @@ $(shmem ? quote
                     $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1    # ...
                     $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
         end : 
-        noexpr
+        NOEXPR
 )
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-$(shmem ? :(        $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))              ) : noexpr)
-$((:(               $reg           = 0.0
+$(shmem ? :(        $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))              ) : NOEXPR) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l))
+$((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
     ) 
     for regs in values(regqueue_tail) for reg in values(regs)
   )...
 )
-$((:(               $reg           = 0.0
+$((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp3 = 0.0
     )
     for regs in values(regqueue_head) for reg in values(regs)
   )...
 )
-                    # TODO: the following line should be removed later and replaced with an earlier start of the loop.
-                    #$(regqueue_tail[(0,0)][0]) = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
-# $(       (:(        $(regqueue_head[oxy][oz]) = 0.0                                      ) for oxy in keys(regqueue_head), oz in keys(regqueue_head[oxy]))...)
-#                     $A_ix_iy_izm1  = 0.0
-#                     $A_ix_iy_iz    = (@blockIdx().z>1) ? $A[$ix,$iy,$range_z_start-1+$loopoffset] : 0.0
-#                     $A_ix_iy_izp1  = 0.0
-# $(rx1<0 ?  :(       $A_ixm1_iy_iz  = 0.0                                                 ) : noexpr)
-# $(rx2>0 ?  :(       $A_ixp1_iy_iz  = 0.0                                                 ) : noexpr)
-# $(ry1<0 ?  :(       $A_ix_iym1_iz  = 0.0                                                 ) : noexpr)
-# $(ry2>0 ?  :(       $A_ix_iyp1_iz  = 0.0                                                 ) : noexpr)
-
-                    for $_i = $loopstart:$loopsize
-                        $tz_g = $_i + $loopoffset
+                    for $i = $loopstart:$loopsize
+                        $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) return; end
-                        $_iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
 $(shmem ? quote           
                         @sync_threads()
                         if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
@@ -206,61 +166,43 @@ $(shmem ? quote
                         end
                         @sync_threads()
           end : 
-          noexpr
+          NOEXPR
 )
 $((shmem ?
-  (:(                   $reg           = $(regsource(A_head, oxy, (tx, ty))) #$A_head[$tx,$ty]
+  (:(                   $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
     )
     for (oxy, regs) in regqueue_head for reg in values(regs)
   ) :
-  (:(                   $reg           = (0<$iz+oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+  (:(                   $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
     )
     for (oxy, regs) in regqueue_head for (oz, reg) in regs
   ))...
 )
-# $(shmem ? :(            $A_ix_iy_izp1 = $A_head[$tx,$ty]
-#            ) :
-#           :(            $A_ix_iy_izp1 = ($iz<size($A,3)) ? $A[$ix,$iy,$iz+1] : $A_ix_iy_izp1
-#            )
-# )
-                            $body
-# TODO: the following needs to be done from the lowest z to the highest z. Else the same value would just be passed along down the registers.
+
+                        $body
+
 $((:(
-                        $(regs[oz])           = $(regs[oz+1])
+                        $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
     )
     for regs in values(regqueue_tail) for oz in sort(keys(regs)) if oz<=oz_max-2
-        # for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz<=oz_max-2
   )...
 )
-                        # $A_ix_iy_izm1 = $A_ix_iy_iz
-$((:(                   $reg           = $(regsource(A_head, oxy, (tx, ty)))
+$((:(                   $reg        = $(regsource(A_head, oxy, (tx, ty)))               # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
     )
     for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && !(haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz_max))
   )...
 )
-# for oxy in keys(regqueue_tail) for (reg, oz) in zip(regqueue_tail[oxy], filter(oz -> oz==oz_max-1, keys(regqueue_tail[oxy])))
-# $(rx1<0 ? :(            $A_ixm1_iy_iz = $A_head[$tx-1,$ty]                                ) : noexpr)
-# $(rx2>0 ? :(            $A_ixp1_iy_iz = $A_head[$tx+1,$ty]                                ) : noexpr)
-# $(ry1<0 ? :(            $A_ix_iym1_iz = $A_head[$tx,$ty-1]                                ) : noexpr)
-# $(ry2>0 ? :(            $A_ix_iyp1_iz = $A_head[$tx,$ty+1]                                ) : noexpr)
 $((:(
-                        $reg           = $(regqueue_head[oxy][oz_max])
+                        $reg           = $(regqueue_head[oxy][oz_max])                  # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
     )
     for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz_max)
   )...
 )
-                        # $A_ix_iy_iz   = $A_ix_iy_izp1
                     end
         end
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
-end
-
-
-function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges, body; package::Symbol=get_package())
-    indices_shift = (0,0,0)
-    return loopopt(caller, indices, optvars, optdim, loopsize, stencilranges, indices_shift, body; package=package)
 end
 
 
