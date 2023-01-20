@@ -35,6 +35,10 @@ end
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = CUDA.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                    call = @prettystring(2, @parallel loopopt=true f(A))
+                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
+                    call = @prettystring(2, @parallel ranges loopopt=true f(A))
+                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_loopopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                 elseif $package == $PKG_AMDGPU
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("ParallelStencil.ParallelKernel.push_signal!(ParallelStencil.ParallelKernel.get_default_rocstream(), AMDGPU.@roc(gridsize = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))))) .* ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))), groupsize = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))), queue = (ParallelStencil.ParallelKernel.get_default_rocstream()).queue, f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))))", call)
@@ -53,6 +57,8 @@ end
                     @test @prettystring(1, @parallel nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))"
                     @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                     @test @prettystring(1, @parallel stream=mystream f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
+                    @test @prettystring(2, @parallel loopopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
+                    @test @prettystring(2, @parallel ranges loopopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                 end;
             end;
             @testset "@parallel <kernel>" begin
@@ -105,6 +111,154 @@ end
                     @parallel write_indices!(A);
                     @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end
+                # TODO: activate these tests also for AMDGPU once shared memory is implemented there.
+                @static if $package == $PKG_CUDA
+                    @testset "@parallel loopopt <kernel>" begin
+                        nx, ny, nz   = 32, 8, 8 # 6, 6, 6
+                        # threads      = (8, 4, 1)
+                        # blocks       = ceil.(Int, (nx/threads[1], ny/threads[2], nz/LOOPSIZE))
+                        # shmem        = (threads[1]+2)*(threads[2]+2)*sizeof(Float64)
+                        @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=0:0)" begin
+                            A  = @zeros(nx, ny, nz);
+                            A2 = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^2)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=A stencilranges=0:0 loopsize=3 function copy_loopopt!(A2, A)
+                                A2[ix,iy,iz] = A[ix,iy,iz]
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 copy_loopopt!(A2, A);
+                            @test all(Array(A2) .== Array(A))
+                        end
+                        @testset "@parallel <kernel> (3D, loopopt, stencilranges=0:0)" begin
+                            A  = @zeros(nx, ny, nz);
+                            A2 = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^2)
+                            @parallel loopopt=true optvars=A stencilranges=0:0 loopsize=3 function copy_loopopt!(A2, A)
+                                @all(A2) = @all(A)
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 copy_loopopt!(A2, A);
+                            @test all(Array(A2) .== Array(A))
+                        end
+                        # Add here also single difference, where with parallel we have a negative halo: stencilranges=(0:0, 0:0, 1:2)
+                        @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=(0:0, 0:0, -1:1); z-stencil)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^3)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=A stencilranges=(0:0, 0:0, -1:1) loopsize=3 function d2_loopopt!(A2, A)
+                                if (iz>1 && iz<size(A2,3))
+                                    A2[ix,iy,iz] = A[ix,iy,iz+1] - 2.0*A[ix,iy,iz] + A[ix,iy,iz-1]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 d2_loopopt!(A2, A);
+                            A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2.0.*A[:,:,2:end-1] .+ A[:,:,1:end-2]
+                            @test all(Array(A2) .== Array(A2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=(0:0, -1:1, 0:0); y-stencil)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^3)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=A stencilranges=(0:0, -1:1, 0:0) function d2_loopopt!(A2, A)
+                                if (iy>1 && iy<size(A2,2))
+                                    A2[ix,iy,iz] = A[ix,iy+1,iz] - 2.0*A[ix,iy,iz] + A[ix,iy-1,iz]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true d2_loopopt!(A2, A);
+                            A2_ref[:,2:end-1,:] .= A[:,3:end,:] .- 2.0.*A[:,2:end-1,:] .+ A[:,1:end-2,:]
+                            @test all(Array(A2) .== Array(A2_ref))
+                        end
+                        @testset "@parallel <kernel> (3D, loopopt, stencilranges=(1:1, 1:1, 0:2); z-stencil)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^3)
+                            @parallel loopopt=true optvars=A stencilranges=(1:1, 1:1, 0:2) loopsize=3 function d2_loopopt!(A2, A)
+                                @inn(A2) = @d2_zi(A)
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 d2_loopopt!(A2, A);
+                            A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,2:end-1,3:end] .- 2.0.*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,2:end-1,1:end-2]
+                            @test all(Array(A2) .== Array(A2_ref))
+                        end
+                        @testset "@parallel <kernel> (3D, loopopt, stencilranges=(1:1, 0:2, 1:1); y-stencil)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^3)
+                            @parallel loopopt=true optvars=A stencilranges=(1:1, 0:2, 1:1) loopsize=3 function d2_loopopt!(A2, A)
+                                @inn(A2) = @d2_yi(A)
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 d2_loopopt!(A2, A);
+                            A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,3:end,2:end-1] .- 2.0.*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,1:end-2,2:end-1]
+                            @test all(Array(A2) .== Array(A2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=-1:1)" begin
+                            lam=dt=_dx=_dy=_dz = 1.0
+                            T      = @zeros(nx, ny, nz);
+                            T2     = @zeros(nx, ny, nz);
+                            T2_ref = @zeros(nx, ny, nz);
+                            Ci     = @ones(nx, ny, nz);
+                            copy!(T, [ix + (iy-1)*size(T2,1) + (iz-1)*size(T2,1)*size(T2,2) for ix=1:size(T2,1), iy=1:size(T2,2), iz=1:size(T2,3)].^2)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=T loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2) && iz>1 && iz<size(T2,3))
+                                    T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
+                                                    - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
+                                                    - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy
+                                                    - ((-lam*(T[ix,iy,iz+1] - T[ix,iy,iz])*_dz) - (-lam*(T[ix,iy,iz] - T[ix,iy,iz-1])*_dz))*_dz)
+                                                    );
+                                end
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(Ci[2:end-1,2:end-1,2:end-1].*(
+                                                    - ((.-lam.*(T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1]).*_dx)).*_dx
+                                                    - ((.-lam.*(T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1]).*_dy)).*_dy
+                                                    - ((.-lam.*(T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]).*_dz) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2]).*_dz)).*_dz)
+                                                    );
+                            @test all(Array(T2) .== Array(T2_ref))
+                        end
+                        @testset "@parallel <kernel> (3D, loopopt, stencilranges=0:2)" begin
+                            lam=dt=_dx=_dy=_dz = 1.0
+                            T      = @zeros(nx, ny, nz);
+                            T2     = @zeros(nx, ny, nz);
+                            T2_ref = @zeros(nx, ny, nz);
+                            Ci     = @ones(nx, ny, nz);
+                            copy!(T, [ix + (iy-1)*size(T2,1) + (iz-1)*size(T2,1)*size(T2,2) for ix=1:size(T2,1), iy=1:size(T2,2), iz=1:size(T2,3)].^2)
+                            @parallel loopopt=true optvars=T loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                    );
+                            @test all(Array(T2) .== Array(T2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A2,1) + (iz-1)*size(A2,1)*size(A2,2) for ix=1:size(A2,1), iy=1:size(A2,2), iz=1:size(A2,3)].^3)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=A stencilranges=(-4:-1, 2:2, -2:3) loopsize=3 function higher_order_loopopt!(A2, A)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true loopsize=3 stencilranges=(-1:-1, 2:2, -2:3) higher_order_loopopt!(A2, A);
+                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5]
+                            @test all(Array(A2) .== Array(A2_ref))
+                        end
+                    end
+                end
+                
             end;
             @testset "apply masks" begin
                 expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
