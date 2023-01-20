@@ -57,7 +57,7 @@ const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Fl
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
-const ERRMSG_CHECK_PACKAGE         = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
+const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
