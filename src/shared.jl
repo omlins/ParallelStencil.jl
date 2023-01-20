@@ -32,7 +32,7 @@ const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
 const NTHREADS_MAX_LOOPOPT      = 128
-
+const NOEXPR                    = :(begin end)
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS
 
