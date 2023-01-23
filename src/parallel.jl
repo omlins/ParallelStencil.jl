@@ -92,7 +92,7 @@ function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::
     posargs, kwargs_expr = split_args(args)
     kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :stencilranges), "@parallel_indices"; eval_args=(:loopopt, :optdim, :stencilranges))
     if haskey(kwargs, :loopopt) && kwargs.loopopt
-        parallel_indices_loopopt(package, numbertype, posargs...; kwargs...)
+        parallel_indices_loopopt(posargs...; kwargs...)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
     else
         ParallelKernel.parallel_indices(posargs...; package=package)
     end
@@ -101,7 +101,7 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilranges::Union{UnitRange,NTuple{N,UnitRange} where N}=compute_stencilranges())
+function parallel_indices_loopopt(indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), stencilranges::Union{UnitRange,NTuple{N,UnitRange} where N}=compute_stencilranges())
     if (!loopopt) @ModuleInternalError("parallel_indices_loopopt: called with `loopopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     stencilranges = promote_stencilranges(stencilranges)
@@ -111,7 +111,7 @@ function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices
     body = add_loopopt(body, indices, optvars, optdim, loopsize, stencilranges)
     body = add_return(body)
     set_body!(kernel, body)
-    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
 function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr; kwargs::NamedTuple)
@@ -154,7 +154,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     set_body!(kernel, body)
     if loopopt 
         expanded_kernel = macroexpand(caller, kernel)
-        parallel_indices_loopopt(package, numbertype, get_indices_expr(ndims), expanded_kernel; kwargs...)
+        parallel_indices_loopopt(get_indices_expr(ndims), expanded_kernel; kwargs...) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
     else
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
