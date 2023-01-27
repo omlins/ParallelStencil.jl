@@ -91,17 +91,18 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     # regqueue_head, regqueue_tail, offset_min, offset_max = regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A]
     # @show stencilranges, regqueue_head, regqueue_tail, offset_min, offset_max
     if optdim == 3
-        oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
-        loopstart = loopstarts[optvars[1]]
-        # oz_max, hx1, hy1, hx2, hy2, shmem, offset_span, oz_span, loopstart = oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], shmems[A], offset_spans[A], oz_spans[A], loopstarts[A]
+        oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
+        # loopentry = loopentrys[optvars[1]]
+        loopstart = minimum(values(loopentrys)) #TODO:
+        # oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry = oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A]
         # oz_max         = offset_max[3]
         # hx1, hy1       = -1 .* offset_min[1:2]
         # hx2, hy2       = offset_max[1:2]
-        # shmem          = (hx1+hx2>0 || hy1+hy2>0)
+        # use_shmem          = (hx1+hx2>0 || hy1+hy2>0)
         # offset_span    = offset_max .- offset_min
         # oz_span        = offset_span[3]
-        # loopstart      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, optdim) #TODO: if shmems[A] can be removed in the loops if this is defined only for arrays it effectively must use shared memory
+        # loopentry      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, optdim) #TODO: if use_shmems[A] can be removed in the loops if this is defined only for arrays it effectively must use shared memory
         # s=shmem_symbols[A]; tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head = s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]
         # tx             = gensym_world("tx", @__MODULE__)
         # ty             = gensym_world("ty", @__MODULE__)
@@ -146,12 +147,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         # optvars=(:T, :Ci); quote $( ((A==:Ci) ? quote $A end : NOEXPR for A in optvars)... ) end
         # optvars=(:T, :Ci); quote $( (quote $A end for A in optvars if (A==:Ci))... ) end
 
-        body =  quote 
-                    if ($i > 0)
-                        $body
-                    end
-                end
-
+        #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
 $((quote
@@ -171,7 +167,7 @@ $((quote
                     $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
                     $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))             # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l))
     end
-    for (A, s) in shmem_symbols for (hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if shmems[A]
+    for (A, s) in shmem_symbols for (hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
   )...
 )
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
@@ -188,7 +184,8 @@ $((:(               $reg           = 0.0                                        
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) return; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$((quote
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
                         @sync_threads()
                         if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
@@ -197,38 +194,59 @@ $((quote
                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
                         end
                         @sync_threads()
-    end
-    for (A, s) in shmem_symbols for (oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if shmems[A]
-  )...
-)
-$((:(                   $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+        end
+        ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs if !shmems[A]
+    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
   )...
 )
-$((:(                   $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+        )
+        ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (tx, ty, A_head) = ((shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if shmems[A]
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
   )...
 )
-
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+        )
+        ;unless=(loopentry==loopstart)
+    )
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if use_shmems[A]
+  )...
+)
+$((wrap_if(:($i > 0),
+        quote
                         $body
-
-$((:(
+        end; 
+        unless=(loopstart==1)
+    )
+))
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
+        )
+        ;unless=(loopentry==loopstart)
     )
-    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for oz_max = (oz_maxs[A],) if oz<=oz_max-2
+    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
   )...
 )
-$((:(                   $reg        = $(regsource(A_head, oxy, (tx, ty)))               # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+$((wrap_if(:($i > $(loopentry-1)),
+       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))               # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+        )
+        ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (oz_max, tx, ty, A_head) = ((oz_maxs[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
-$((:(
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
                         $reg           = $(regqueue_heads[A][oxy][oz_max])                  # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+        )
+        ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for oz_max = (oz_maxs[A],) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
                     end
@@ -236,6 +254,7 @@ $((:(
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
+    @show body
     return body
 end
 
@@ -392,23 +411,23 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
 end
 
 function define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
-    oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
+    oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if optdim == 3
         for A in optvars
             offset_min, offset_max = offset_mins[A], offset_maxs[A]
             oz_max      = offset_max[3]
             hx1, hy1    = -1 .* offset_min[1:2]
             hx2, hy2    = offset_max[1:2]
-            shmem       = (hx1+hx2>0 || hy1+hy2>0)
+            use_shmem       = (hx1+hx2>0 || hy1+hy2>0)
             offset_span = offset_max .- offset_min
             oz_span     = offset_span[3]
-            loopstart   = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], shmems[A], offset_spans[A], oz_spans[A], loopstarts[A] = oz_max, hx1, hy1, hx2, hy2, shmem, offset_span, oz_span, loopstart
+            loopentry   = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry
         end
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
-    return oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts
+    return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys
 end
 
 function define_shmem_symbols(oz_maxs, optvars, optdim)
@@ -513,6 +532,18 @@ function regsource(A_head, offsets, local_indices)
     end
     if     (ndims == 1) return :($A_head[$x])
     elseif (ndims == 2) return :($A_head[$x,$y]) # e.g. :($A_head[$tx,$ty-1])
+    end
+end
+
+function wrap_if(condition, block; unless=false)
+    if unless
+        return block
+    else
+        return quote 
+                    if $condition
+                        $block
+                    end
+                end
     end
 end
 
