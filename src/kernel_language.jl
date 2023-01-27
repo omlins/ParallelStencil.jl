@@ -51,7 +51,7 @@ function loop(index::Symbol, optdim::Integer, loopsize, body; package::Symbol=ge
     end
 end
 
-
+# stencilranges=(A=(1:1, 0:2, 1:1), B=(1:1, 0:2, 1:1))
 #function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, stencilranges::Union{Integer,NTuple{N,Integer} where N})
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
@@ -59,70 +59,102 @@ end
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
 function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges, body; package::Symbol=get_package())
+    #TODO: the two following lines have to be removed later
     if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
-    A = optvars 
+    stencilranges = nothing
+
+    optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
+    indices = Tuple(extract_tuple(indices))
+    readonlyvars  = find_readonlyvars(body, indices)
+    if optvars == (Symbol(""),)
+        optvars = Tuple(keys(readonlyvars))
+    else
+        for A in optvars
+            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in @loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
+        end
+    end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
-    if isa(indices,Expr) indices = indices.args else indices = (indices,) end
     fullrange     = typemin(int_type):typemax(int_type)
-    stencilranges = isnothing(stencilranges) ? (fullrange, fullrange, fullrange) : eval_arg(caller, stencilranges)
+    fullranges    = (fullrange, fullrange, fullrange)
+    stencilranges = isnothing(stencilranges) ? (A = fullranges for A in optvars) : eval_arg(caller, stencilranges)
+    stencilranges = Dict(A => (A ∈ keys(stencilranges)) ? stencilranges.A : fullranges for A in optvars)
     body          = eval_offsets(caller, body, indices, int_type)
-    offsets       = extract_offsets(caller, body, indices, int_type, optdim)
-    regqueue_head, regqueue_tail, offset_min, offset_max = define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
-    @show regqueue_head, regqueue_tail, offset_min, offset_max
+    offsets       = extract_offsets(caller, body, indices, int_type, optvars, optdim)
+    regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, stencilranges, optvars, indices, int_type, optdim)
+    
+    
+    # A = optvars[1]
+    # regqueue_head, regqueue_tail, offset_min, offset_max = regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A]
+    # @show stencilranges, regqueue_head, regqueue_tail, offset_min, offset_max
     if optdim == 3
-        ranges         = RANGES_VARNAME
-        rangelength_z  = RANGELENGTHS_VARNAMES[3]
-        tz_g           = THREADIDS_VARNAMES[3]
-        oz_max         = offset_max[3]
-        hx1, hy1       = -1 .* offset_min[1:2]
-        hx2, hy2       = offset_max[1:2]
-        shmem          = (hx1+hx2>0 || hy1+hy2>0)
-        offset_span    = offset_max .- offset_min
-        oz_span        = offset_span[3]
-        loopstart      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+        oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
+        loopstart = loopstarts[optvars[1]]
+        # oz_max, hx1, hy1, hx2, hy2, shmem, offset_span, oz_span, loopstart = oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], shmems[A], offset_spans[A], oz_spans[A], loopstarts[A]
+        # oz_max         = offset_max[3]
+        # hx1, hy1       = -1 .* offset_min[1:2]
+        # hx2, hy2       = offset_max[1:2]
+        # shmem          = (hx1+hx2>0 || hy1+hy2>0)
+        # offset_span    = offset_max .- offset_min
+        # oz_span        = offset_span[3]
+        # loopstart      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, optdim) #TODO: if shmems[A] can be removed in the loops if this is defined only for arrays it effectively must use shared memory
+        # s=shmem_symbols[A]; tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head = s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]
+        # tx             = gensym_world("tx", @__MODULE__)
+        # ty             = gensym_world("ty", @__MODULE__)
+        # nx_l           = gensym_world("nx_l", @__MODULE__)
+        # ny_l           = gensym_world("ny_l", @__MODULE__)
+        # t_h            = gensym_world("t_h", @__MODULE__)
+        # t_h2           = gensym_world("t_h2", @__MODULE__)
+        # tx_h           = gensym_world("tx_h", @__MODULE__)
+        # tx_h2          = gensym_world("tx_h2", @__MODULE__)
+        # ty_h           = gensym_world("ty_h", @__MODULE__)
+        # ty_h2          = gensym_world("ty_h2", @__MODULE__)
+        # ix_h           = gensym_world("ix_h", @__MODULE__)
+        # ix_h2          = gensym_world("ix_h2", @__MODULE__)
+        # iy_h           = gensym_world("iy_h", @__MODULE__)
+        # iy_h2          = gensym_world("iy_h2", @__MODULE__)
+        # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
         ix, iy, iz     = indices
-        i              = gensym_world("i", @__MODULE__)
+        tz_g           = THREADIDS_VARNAMES[3]
+        rangelength_z  = RANGELENGTHS_VARNAMES[3]
+        ranges         = RANGES_VARNAME
         range_z        = :(($ranges[3])[$tz_g])
         range_z_start  = :(($ranges[3])[1])
-        tx             = gensym_world("tx", @__MODULE__)
-        ty             = gensym_world("ty", @__MODULE__)
-        nx_l           = gensym_world("nx_l", @__MODULE__)
-        ny_l           = gensym_world("ny_l", @__MODULE__)
-        t_h            = gensym_world("t_h", @__MODULE__)
-        t_h2           = gensym_world("t_h2", @__MODULE__)
-        tx_h           = gensym_world("tx_h", @__MODULE__)
-        tx_h2          = gensym_world("tx_h2", @__MODULE__)
-        ty_h           = gensym_world("ty_h", @__MODULE__)
-        ty_h2          = gensym_world("ty_h2", @__MODULE__)
-        ix_h           = gensym_world("ix_h", @__MODULE__)
-        ix_h2          = gensym_world("ix_h2", @__MODULE__)
-        iy_h           = gensym_world("iy_h", @__MODULE__)
-        iy_h2          = gensym_world("iy_h2", @__MODULE__)
-        loopoffset     = gensym_world("loopoffset", @__MODULE__)
-        A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
+        i              = gensym_world("i", @__MODULE__)
+        loopoffset     = gensym_world("loopoffset", @__MODULE__) 
 
-        for oxy in keys(regqueue_tail)
-            for oz in keys(regqueue_tail[oxy])
-                body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_tail[oxy][oz])
+        for A in optvars
+            regqueue_tail = regqueue_tails[A]
+            regqueue_head = regqueue_heads[A]
+            for oxy in keys(regqueue_tail)
+                for oz in keys(regqueue_tail[oxy])
+                    body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_tail[oxy][oz])
+                end
+            end
+            for oxy in keys(regqueue_head)
+                for oz in keys(regqueue_head[oxy])
+                    body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_head[oxy][oz])
+                end
             end
         end
-        for oxy in keys(regqueue_head)
-            for oz in keys(regqueue_head[oxy])
-                body = substitute(body, regtarget(A, (oxy..., oz), indices), regqueue_head[oxy][oz])
-            end
-        end
+
+        # optvars=(:T, :Ci); a=1; quote $( ((a<2) ? quote $A end : NOEXPR for A in optvars)... ) end
+        # optvars=(:T, :Ci); quote $( ((A==:Ci) ? quote $A end : NOEXPR for A in optvars)... ) end
+        # optvars=(:T, :Ci); quote $( (quote $A end for A in optvars if (A==:Ci))... ) end
+
         body =  quote 
                     if ($i > 0)
                         $body
                     end
                 end
 
-        return quote
-$(shmem ? quote     
+        body = quote
+                    $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
+$((quote
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
                     $nx_l          = @blockDim().x + $(hx1+hx2)
@@ -137,26 +169,26 @@ $(shmem ? quote
                     $ix_h2         = (@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1    # ...
                     $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1    # ...
                     $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
-        end : 
-        NOEXPR
+                    $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))             # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l))
+    end
+    for (A, s) in shmem_symbols for (hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if shmems[A]
+  )...
 )
-                    $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
-$(shmem ? :(        $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))              ) : NOEXPR) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l))
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
     ) 
-    for regs in values(regqueue_tail) for reg in values(regs)
+    for A in optvars for regs in values(regqueue_tails[A]) for reg in values(regs)
   )...
 )
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp3 = 0.0
     )
-    for regs in values(regqueue_head) for reg in values(regs)
+    for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
   )...
 )
                     for $i = $loopstart:$loopsize
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) return; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$(shmem ? quote           
+$((quote
                         @sync_threads()
                         if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
@@ -165,18 +197,19 @@ $(shmem ? quote
                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
                         end
                         @sync_threads()
-          end : 
-          NOEXPR
+    end
+    for (A, s) in shmem_symbols for (oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if shmems[A]
+  )...
 )
-$((shmem ?
-  (:(                   $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+$((:(                   $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
     )
-    for (oxy, regs) in regqueue_head for reg in values(regs)
-  ) :
-  (:(                   $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs if !shmems[A]
+  )...
+)
+$((:(                   $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
     )
-    for (oxy, regs) in regqueue_head for (oz, reg) in regs
-  ))...
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (tx, ty, A_head) = ((shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if shmems[A]
+  )...
 )
 
                         $body
@@ -184,18 +217,18 @@ $((shmem ?
 $((:(
                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
     )
-    for regs in values(regqueue_tail) for oz in sort(keys(regs)) if oz<=oz_max-2
+    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for oz_max = (oz_maxs[A],) if oz<=oz_max-2
   )...
 )
 $((:(                   $reg        = $(regsource(A_head, oxy, (tx, ty)))               # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
     )
-    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && !(haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz_max))
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (oz_max, tx, ty, A_head) = ((oz_maxs[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
 $((:(
-                        $reg           = $(regqueue_head[oxy][oz_max])                  # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+                        $reg           = $(regqueue_heads[A][oxy][oz_max])                  # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
     )
-    for (oxy, regs) in regqueue_tail for (oz, reg) in regs if oz==oz_max-1 && haskey(regqueue_head, oxy) && haskey(regqueue_head[oxy], oz_max)
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for oz_max = (oz_maxs[A],) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
                     end
@@ -203,6 +236,7 @@ $((:(
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
+    return body
 end
 
 
@@ -232,6 +266,27 @@ is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A
 is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
 is_stencil_access(ex, indices...)                               = false
 
+function find_readonlyvars(body, indices)
+    vars         = Dict()
+    writevars    = Dict()
+    postwalk(body) do ex
+        if is_stencil_access(ex, indices...)
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")A
+            if haskey(vars, A) vars[A] += 1
+            else               vars[A]  = 1
+            end
+        end
+        if @capture(ex, (A_[indices_expr__] = rhs_) | (A_[indices_expr__] .= rhs_)) && is_stencil_access(:($A[$(indices_expr...)]), indices...)
+            if haskey(writevars, A) writevars[A] += 1
+            else                    writevars[A]  = 1
+            end
+        end
+        return ex    
+    end
+    readonlyvars = Dict(A => count for (A, count) in vars if A ∉ keys(writevars))
+    return readonlyvars
+end
+
 function eval_offsets(caller::Module, body, indices, int_type)
     return postwalk(body) do ex
         if !is_stencil_access(ex, indices...) return ex; end
@@ -239,7 +294,7 @@ function eval_offsets(caller::Module, body, indices, int_type)
         for i = 1:length(indices)
             offset_expr = substitute(indices_expr[i], indices[i], 0)
             offset = int_type(eval_arg(caller, offset_expr))
-            if     (offset >  0) indices_expr[i] = :($(indices[i]) + $offset       )
+            if     (offset >  0) indices_expr[i] = :($(indices[i])   + $offset       )
             elseif (offset <  0) indices_expr[i] = :($(indices[i]) - $(abs(offset)))
             else                 indices_expr[i] =     indices[i]
             end
@@ -248,31 +303,44 @@ function eval_offsets(caller::Module, body, indices, int_type)
     end
 end
 
-function extract_offsets(caller::Module, body, indices, int_type, optdim)
-    access_offsets = Dict()
+function extract_offsets(caller::Module, body, indices, int_type, optvars, optdim)
+    access_offsets = Dict(A => Dict() for A in optvars)
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
-            offsets = ()
-            for i = 1:length(indices)
-                offset_expr = substitute(indices_expr[i], indices[i], 0)
-                offset = int_type(eval_arg(caller, offset_expr))
-                offsets = (offsets..., offset)
-            end
-            if optdim == 3
-                k1 = offsets[1:2]
-                k2 = offsets[end]
-                if     haskey(access_offsets, k1) && haskey(access_offsets[k1], k2) access_offsets[k1][k2] += 1
-                elseif haskey(access_offsets, k1)                                   access_offsets[k1][k2]  = 1
-                else                                                                access_offsets[k1]      = Dict(k2 => 1)
+            if A in optvars
+                offsets = ()
+                for i = 1:length(indices)
+                    offset_expr = substitute(indices_expr[i], indices[i], 0)
+                    offset = int_type(eval_arg(caller, offset_expr))
+                    offsets = (offsets..., offset)
                 end
-            else
-                @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+                if optdim == 3
+                    k1 = offsets[1:2]
+                    k2 = offsets[end]
+                    if     haskey(access_offsets[A], k1) && haskey(access_offsets[A][k1], k2) access_offsets[A][k1][k2] += 1
+                    elseif haskey(access_offsets[A], k1)                                      access_offsets[A][k1][k2]  = 1
+                    else                                                                      access_offsets[A][k1]      = Dict(k2 => 1)
+                    end
+                else
+                    @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+                end
             end
         end
         return ex    
     end
     return access_offsets
+end
+
+function define_regqueues(offsets, stencilranges, optvars, indices, int_type, optdim)
+    regqueue_heads = Dict(A => Dict() for A in optvars)
+    regqueue_tails = Dict(A => Dict() for A in optvars)
+    offset_mins    = Dict()
+    offset_maxs    = Dict()
+    for A in optvars
+        regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A] = define_regqueue(offsets[A], stencilranges[A], A, indices, int_type, optdim)
+    end
+    return regqueue_heads, regqueue_tails, offset_mins, offset_maxs
 end
 
 function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
@@ -321,6 +389,53 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
     return regqueue_head, regqueue_tail, offset_min, offset_max
+end
+
+function define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
+    oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
+    if optdim == 3
+        for A in optvars
+            offset_min, offset_max = offset_mins[A], offset_maxs[A]
+            oz_max      = offset_max[3]
+            hx1, hy1    = -1 .* offset_min[1:2]
+            hx2, hy2    = offset_max[1:2]
+            shmem       = (hx1+hx2>0 || hy1+hy2>0)
+            offset_span = offset_max .- offset_min
+            oz_span     = offset_span[3]
+            loopstart   = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], shmems[A], offset_spans[A], oz_spans[A], loopstarts[A] = oz_max, hx1, hy1, hx2, hy2, shmem, offset_span, oz_span, loopstart
+        end
+    else
+        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+    end
+    return oz_maxs, hx1s, hy1s, hx2s, hy2s, shmems, offset_spans, oz_spans, loopstarts
+end
+
+function define_shmem_symbols(oz_maxs, optvars, optdim)
+    sym = Dict(A => Dict() for A in optvars)
+    if optdim == 3
+        #TODO: use later the same simple for those who can use the same index.
+        for A in optvars
+            sym[A][:tx]     = gensym_world("tx_$A", @__MODULE__)
+            sym[A][:ty]     = gensym_world("ty_$A", @__MODULE__)
+            sym[A][:nx_l]   = gensym_world("nx_l_$A", @__MODULE__)
+            sym[A][:ny_l]   = gensym_world("ny_l_$A", @__MODULE__)
+            sym[A][:t_h]    = gensym_world("t_h_$A", @__MODULE__)
+            sym[A][:t_h2]   = gensym_world("t_h2_$A", @__MODULE__)
+            sym[A][:tx_h]   = gensym_world("tx_h_$A", @__MODULE__)
+            sym[A][:tx_h2]  = gensym_world("tx_h2_$A", @__MODULE__)
+            sym[A][:ty_h]   = gensym_world("ty_h_$A", @__MODULE__)
+            sym[A][:ty_h2]  = gensym_world("ty_h2_$A", @__MODULE__)
+            sym[A][:ix_h]   = gensym_world("ix_h_$A", @__MODULE__)
+            sym[A][:ix_h2]  = gensym_world("ix_h2_$A", @__MODULE__)
+            sym[A][:iy_h]   = gensym_world("iy_h_$A", @__MODULE__)
+            sym[A][:iy_h2]  = gensym_world("iy_h2_$A", @__MODULE__)
+            sym[A][:A_head] = gensym_world(varname(A, (oz_maxs[A],); i="iz"), @__MODULE__)
+        end
+    else
+        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+    end
+    return sym
 end
 
 function varname(A, offsets; i="ix", j="iy", k="iz")
