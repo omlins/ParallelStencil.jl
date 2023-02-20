@@ -5,11 +5,15 @@ macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args.
 
 
 ##
-macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(__module__, args...)); end
+macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(args[1], __module__, args[2:end]...)); end
 
 
 ##
 macro shortif(args...) check_initialized(); checktwoargs(args...); esc(shortif(args...)); end
+
+
+##
+macro return_nothing(args...) check_initialized(); checknoargs(args...); esc(return_nothing(args...)); end
 
 
 ## ARGUMENT CHECKS
@@ -22,7 +26,7 @@ function checksinglearg(args...)
     if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
 end
 
-function checktwoargs(args...)
+function checktwoargs(args...)  
     if (length(args) != 2) @ArgumentError("wrong number of arguments.") end
 end
 
@@ -31,7 +35,7 @@ function checkargs_loop(args...)
 end
 
 function checkargs_loopopt(args...)
-    if (length(args) != 7 && length(args) != 6 && length(args) != 3) @ArgumentError("wrong number of arguments.") end
+    if (length(args) != 8 && length(args) != 7 && length(args) != 4) @ArgumentError("wrong number of arguments.") end
 end
 
 
@@ -51,18 +55,14 @@ function loop(index::Symbol, optdim::Integer, loopsize, body; package::Symbol=ge
     end
 end
 
-# stencilranges=(A=(1:1, 0:2, 1:1), B=(1:1, 0:2, 1:1))
-#function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, stencilranges::Union{Integer,NTuple{N,Integer} where N})
+# optranges=(A=(1:1, 0:2, 1:1), B=(1:1, 0:2, 1:1))
+#function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, optranges::Union{Integer,NTuple{N,Integer} where N})
 #TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
 #TODO: maybe gensym with macro @gensym
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, stencilranges, body; package::Symbol=get_package())
-    #TODO: the two following lines have to be removed later
-    if !isa(optvars, Symbol) @KeywordArgumentError("at present, only one optvar is supported.") end
-    stencilranges = nothing
-
+function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, body::Expr; package::Symbol=get_package())
     optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices = Tuple(extract_tuple(indices))
     readonlyvars  = find_readonlyvars(body, indices)
@@ -78,18 +78,18 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
-    fullrange     = typemin(int_type):typemax(int_type)
-    fullranges    = (fullrange, fullrange, fullrange)
-    stencilranges = isnothing(stencilranges) ? (A = fullranges for A in optvars) : eval_arg(caller, stencilranges)
-    stencilranges = Dict(A => (A ∈ keys(stencilranges)) ? stencilranges.A : fullranges for A in optvars)
-    body          = eval_offsets(caller, body, indices, int_type)
-    offsets       = extract_offsets(caller, body, indices, int_type, optvars, optdim)
-    regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, stencilranges, optvars, indices, int_type, optdim)
+    fullrange  = typemin(int_type):typemax(int_type)
+    fullranges = (fullrange, fullrange, fullrange)
+    optranges  = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
+    optranges  = Dict(A => (A ∈ keys(optranges)) ? optranges.A : fullranges for A in optvars)
+    body       = eval_offsets(caller, body, indices, int_type)
+    offsets    = extract_offsets(caller, body, indices, int_type, optvars, optdim)
+    regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
     
     
     # A = optvars[1]
     # regqueue_head, regqueue_tail, offset_min, offset_max = regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A]
-    # @show stencilranges, regqueue_head, regqueue_tail, offset_min, offset_max
+    # @show optranges, regqueue_head, regqueue_tail, offset_min, offset_max
     if optdim == 3
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
         # loopentry = loopentrys[optvars[1]]
@@ -119,6 +119,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         # iy_h           = gensym_world("iy_h", @__MODULE__)
         # iy_h2          = gensym_world("iy_h2", @__MODULE__)
         # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
+        shmem_exprs    = define_shmem_exprs(shmem_symbols, optvars, optdim)
         ix, iy, iz     = indices
         tz_g           = THREADIDS_VARNAMES[3]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -126,7 +127,7 @@ function loopopt(caller::Module, indices, optvars, optdim::Integer, loopsize, st
         range_z        = :(($ranges[3])[$tz_g])
         range_z_start  = :(($ranges[3])[1])
         i              = gensym_world("i", @__MODULE__)
-        loopoffset     = gensym_world("loopoffset", @__MODULE__) 
+        loopoffset     = gensym_world("loopoffset", @__MODULE__)
 
         for A in optvars
             regqueue_tail = regqueue_tails[A]
@@ -165,9 +166,9 @@ $((quote
                     $ix_h2         = (@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1    # ...
                     $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1    # ...
                     $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
-                    $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l))             # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l))
+                    $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l), $shmem_offset) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l), +(nx_l_A * ny_l_A)*eltype(A))
     end
-    for (A, s) in shmem_symbols for (hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
+    for (A, s) in shmem_symbols for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
   )...
 )
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
@@ -182,7 +183,7 @@ $((:(               $reg           = 0.0                                        
 )
                     for $i = $loopstart:$loopsize
                         $tz_g = $i + $loopoffset
-                        if ($tz_g > $rangelength_z) return; end
+                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
 $((wrap_if(:($i > $(loopentry-1)),
         quote
@@ -233,7 +234,7 @@ $((wrap_if(:($i > $(loopentry-1)),
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
-       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))               # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
         )
         ;unless=(loopentry==loopstart)
     )
@@ -242,7 +243,7 @@ $((wrap_if(:($i > $(loopentry-1)),
 )
 $((wrap_if(:($i > $(loopentry-1)),
        :(
-                        $reg           = $(regqueue_heads[A][oxy][oz_max])                  # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+                        $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
         )
         ;unless=(loopentry==loopstart)
     )
@@ -254,16 +255,16 @@ $((wrap_if(:($i > $(loopentry-1)),
     else
         @ArgumentError("@loopopt: only optdim=3 is currently supported.")
     end
-    @show body
+    store_metadata(metadata_module, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges)
     return body
 end
 
 
-function loopopt(caller::Module, indices, optvars, body; package::Symbol=get_package())
+function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
     optdim        = isa(indices,Expr) ? length(indices.args) : 1
     loopsize      = LOOPSIZE
-    stencilranges = nothing
-    return loopopt(caller, indices, optvars, optdim, loopsize, stencilranges, body; package=package)
+    optranges = nothing
+    return loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, body; package=package)
 end
 
 
@@ -272,6 +273,11 @@ function shortif(else_val, if_expr; package::Symbol=get_package())
     @capture(if_expr, if condition_ body_ end) || @ArgumentError("@shortif: the second argument must be an if statement.")
     @capture(body, lhs_ = rhs_) || @ArgumentError("@shortif: the if statement body must contain a assignement.")
     return :($lhs = $condition ? $rhs : $else_val)
+end
+
+
+function return_nothing()
+    return :(return)
 end
 
 
@@ -285,7 +291,8 @@ is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A
 is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
 is_stencil_access(ex, indices...)                               = false
 
-function find_readonlyvars(body, indices)
+
+function find_readonlyvars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     vars         = Dict()
     writevars    = Dict()
     postwalk(body) do ex
@@ -300,13 +307,13 @@ function find_readonlyvars(body, indices)
             else                    writevars[A]  = 1
             end
         end
-        return ex    
+        return ex
     end
     readonlyvars = Dict(A => count for (A, count) in vars if A ∉ keys(writevars))
     return readonlyvars
 end
 
-function eval_offsets(caller::Module, body, indices, int_type)
+function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer})
     return postwalk(body) do ex
         if !is_stencil_access(ex, indices...) return ex; end
         @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
@@ -322,7 +329,7 @@ function eval_offsets(caller::Module, body, indices, int_type)
     end
 end
 
-function extract_offsets(caller::Module, body, indices, int_type, optvars, optdim)
+function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
     access_offsets = Dict(A => Dict() for A in optvars)
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
@@ -351,30 +358,30 @@ function extract_offsets(caller::Module, body, indices, int_type, optvars, optdi
     return access_offsets
 end
 
-function define_regqueues(offsets, stencilranges, optvars, indices, int_type, optdim)
+function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
     regqueue_heads = Dict(A => Dict() for A in optvars)
     regqueue_tails = Dict(A => Dict() for A in optvars)
-    offset_mins    = Dict()
-    offset_maxs    = Dict()
+    offset_mins    = Dict{Symbol, NTuple{3,Integer}}()
+    offset_maxs    = Dict{Symbol, NTuple{3,Integer}}()
     for A in optvars
-        regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A] = define_regqueue(offsets[A], stencilranges[A], A, indices, int_type, optdim)
+        regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A] = define_regqueue(offsets[A], optranges[A], A, indices, int_type, optdim)
     end
     return regqueue_heads, regqueue_tails, offset_mins, offset_maxs
 end
 
-function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
+function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Symbol, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
     regqueue_head = Dict()
     regqueue_tail = Dict()
     if optdim == 3
-        stencilranges_xy = stencilranges[1:2]
-        stencilranges_z  = stencilranges[3]
-        offsets_xy       = filter(oxy -> all(oxy .∈ stencilranges_xy), keys(offsets))
-        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in @loopopt: stencilranges in x-y dimension do not include any array access.") end
+        optranges_xy     = optranges[1:2]
+        optranges_z      = optranges[3]
+        offsets_xy       = filter(oxy -> all(oxy .∈ optranges_xy), keys(offsets))
+        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in @loopopt: optranges in x-y dimension do not include any array access.") end
         offset_min       = (typemax(int_type), typemax(int_type), typemax(int_type))
         offset_max       = (typemin(int_type), typemin(int_type), typemin(int_type))
         for oxy in offsets_xy
-            offsets_z = filter(x -> x ∈ stencilranges_z, keys(offsets[oxy]))
-            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in @loopopt: stencilranges in z dimension do not include any array access.") end
+            offsets_z = filter(x -> x ∈ optranges_z, keys(offsets[oxy]))
+            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in @loopopt: optranges in z dimension do not include any array access.") end
             offset_min = (min(offset_min[1], oxy[1]),
                           min(offset_min[2], oxy[2]),
                           min(offset_min[3], minimum(offsets_z)))
@@ -384,7 +391,7 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
         end
         oz_max = offset_max[3]
         for oxy in offsets_xy
-            offsets_z = sort(filter(x -> x ∈ stencilranges_z, keys(offsets[oxy])))
+            offsets_z = sort(filter(x -> x ∈ optranges_z, keys(offsets[oxy])))
             k1 = oxy
             for oz = offsets_z[1]:oz_max-1
                 k2 = oz
@@ -410,7 +417,7 @@ function define_regqueue(offsets, stencilranges, A, indices, int_type, optdim)
     return regqueue_head, regqueue_tail, offset_min, offset_max
 end
 
-function define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
+function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
     oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if optdim == 3
         for A in optvars
@@ -430,7 +437,7 @@ function define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
     return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys
 end
 
-function define_shmem_symbols(oz_maxs, optvars, optdim)
+function define_shmem_symbols(oz_maxs::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
     sym = Dict(A => Dict() for A in optvars)
     if optdim == 3
         #TODO: use later the same simple for those who can use the same index.
@@ -457,7 +464,21 @@ function define_shmem_symbols(oz_maxs, optvars, optdim)
     return sym
 end
 
-function varname(A, offsets; i="ix", j="iy", k="iz")
+function define_shmem_exprs(shmem_symbols::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
+    exprs = Dict(A => Dict() for A in optvars)
+    offset = ()
+    if optdim == 3
+        for A in optvars
+            exprs[A][:offset] = (length(offset) > 0) ? Expr(:call, :+, offset...) : 0
+            offset = (offset..., :($(shmem_symbols[A][:nx_l]) * $(shmem_symbols[A][:ny_l]) * sizeof(eltype($A))))
+        end
+    else
+        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+    end
+    return exprs
+end
+
+function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
     ndims = length(offsets)
     ox    = offsets[1]
     x = if     (ox > 0) i * "p" * string(ox)
@@ -484,7 +505,7 @@ function varname(A, offsets; i="ix", j="iy", k="iz")
     end
 end
 
-function regtarget(A, offsets, indices)
+function regtarget(A::Symbol, offsets::NTuple{N,Integer} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     ix    = indices[1]
@@ -514,7 +535,7 @@ function regtarget(A, offsets, indices)
     end
 end
 
-function regsource(A_head, offsets, local_indices)
+function regsource(A_head::Symbol, offsets::NTuple{N,Integer} where N, local_indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     tx    = local_indices[1]
@@ -535,7 +556,7 @@ function regsource(A_head, offsets, local_indices)
     end
 end
 
-function wrap_if(condition, block; unless=false)
+function wrap_if(condition::Expr, block::Expr; unless::Bool=false)
     if unless
         return block
     else
@@ -545,6 +566,19 @@ function wrap_if(condition, block; unless=false)
                     end
                 end
     end
+end
+
+function store_metadata(metadata_module::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}})
+    storeexpr = quote
+        const loopopt       = true
+        const stencilranges = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
+        const offsets       = $offsets
+        const optvars       = $optvars
+        const optdim        = $optdim
+        const loopsize      = $loopsize
+        const optranges     = $optranges
+    end
+    @eval(metadata_module, $storeexpr)
 end
 
 Base.sort(keys::T) where T<:Base.AbstractSet = sort([keys...])
