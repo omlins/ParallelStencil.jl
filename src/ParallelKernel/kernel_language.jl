@@ -57,7 +57,7 @@ const SHAREDMEM_DOC = """
     @sharedMem(T, dims, offset::Integer=0)
 
 Create an array that is *shared* between the threads of a block (i.e. accessible only by the threads of a same block), with element type `T` and size specified by `dims`. 
-When multiple shared memory arrays are created within a kernel, then all arrays except for the first one typically need to define the `offset` to the base shared memory pointer in bytes.
+When multiple shared memory arrays are created within a kernel, then all arrays except for the first one typically need to define the `offset` to the base shared memory pointer in bytes (note that the CPU implementation does not require the `offset` and will simply ignore it when present).
 
 !!! note "Note"
     The amount of shared memory needs to specified when launching the kernel (keyword argument `shmem`).
@@ -189,3 +189,5 @@ macro threadIdx_cpu() esc(:(ParallelStencil.ParallelKernel.Dim3(1, 1, 1))) end
 macro sync_threads_cpu() esc(:(begin end)) end
 
 macro sharedMem_cpu(T, dims) :(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))}(undef)); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code.
+
+macro sharedMem_cpu(T, dims, offset) :(ParallelStencil.ParallelKernel.@sharedMem_cpu($T, $dims))
