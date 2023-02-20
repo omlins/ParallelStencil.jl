@@ -144,9 +144,17 @@ end
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
 
-extract_kernel_args(kernel::Expr)   = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
-get_body(kernel::Expr)              = return kernel.args[2]
-set_body!(kernel::Expr, body::Expr) = ((kernel.args[2] = body); return kernel)
+extract_kernel_args(kernel::Expr)     = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
+get_body(kernel::Expr)                = return kernel.args[2]
+set_body!(kernel::Expr, body::Expr)   = ((kernel.args[2] = body); return kernel)
+get_name(kernel::Expr)                = return splitdef(kernel)[:name]
+
+function set_name(kernel::Expr, name::Symbol)
+    kernel_elems = splitdef(kernel)
+    kernel_elems[:name] = name
+    kernel = combinedef(kernel_elems)
+    return kernel
+end
 
 function push_to_signature!(kernel::Expr, arg::Expr)
     kernel_elems = splitdef(kernel)
