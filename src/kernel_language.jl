@@ -70,7 +70,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         optvars = Tuple(keys(readonlyvars))
     else
         for A in optvars
-            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in @loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
+            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
         end
     end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
@@ -81,7 +81,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
     fullrange  = typemin(int_type):typemax(int_type)
     fullranges = (fullrange, fullrange, fullrange)
     optranges  = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
-    optranges  = Dict(A => (A ∈ keys(optranges)) ? optranges.A : fullranges for A in optvars)
+    optranges  = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
     body       = eval_offsets(caller, body, indices, int_type)
     offsets    = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
@@ -102,7 +102,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         # offset_span    = offset_max .- offset_min
         # oz_span        = offset_span[3]
         # loopentry      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, optdim) #TODO: if use_shmems[A] can be removed in the loops if this is defined only for arrays it effectively must use shared memory
+        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, use_shmems, optdim)
         # s=shmem_symbols[A]; tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head = s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]
         # tx             = gensym_world("tx", @__MODULE__)
         # ty             = gensym_world("ty", @__MODULE__)
@@ -119,7 +119,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         # iy_h           = gensym_world("iy_h", @__MODULE__)
         # iy_h2          = gensym_world("iy_h2", @__MODULE__)
         # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
-        shmem_exprs    = define_shmem_exprs(shmem_symbols, optvars, optdim)
+        shmem_exprs    = define_shmem_exprs(shmem_symbols, optdim)
         ix, iy, iz     = indices
         tz_g           = THREADIDS_VARNAMES[3]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -168,7 +168,7 @@ $((quote
                     $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
                     $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l), $shmem_offset) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l), +(nx_l_A * ny_l_A)*eltype(A))
     end
-    for (A, s) in shmem_symbols for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
+    for (A, s) in shmem_symbols for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
@@ -198,7 +198,7 @@ $((wrap_if(:($i > $(loopentry-1)),
         end
         ;unless=(loopentry==loopstart)
     )
-    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),) if use_shmems[A]
+    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -214,7 +214,7 @@ $((wrap_if(:($i > $(loopentry-1)),
         )
         ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if use_shmems[A]
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
   )...
 )
 $((wrap_if(:($i > 0),
@@ -238,7 +238,7 @@ $((wrap_if(:($i > $(loopentry-1)),
         )
         ;unless=(loopentry==loopstart)
     )
-    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], shmem_symbols[A][:tx], shmem_symbols[A][:ty], shmem_symbols[A][:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -253,7 +253,7 @@ $((wrap_if(:($i > $(loopentry-1)),
                     end
         end
     else
-        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
     store_metadata(metadata_module, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges)
     return body
@@ -349,7 +349,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
                     else                                                                      access_offsets[A][k1]      = Dict(k2 => 1)
                     end
                 else
-                    @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+                    @ArgumentError("loopopt: only optdim=3 is currently supported.")
                 end
             end
         end
@@ -376,12 +376,12 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
         optranges_xy     = optranges[1:2]
         optranges_z      = optranges[3]
         offsets_xy       = filter(oxy -> all(oxy .∈ optranges_xy), keys(offsets))
-        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in @loopopt: optranges in x-y dimension do not include any array access.") end
+        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in loopopt: optranges in x-y dimension do not include any array access.") end
         offset_min       = (typemax(int_type), typemax(int_type), typemax(int_type))
         offset_max       = (typemin(int_type), typemin(int_type), typemin(int_type))
         for oxy in offsets_xy
             offsets_z = filter(x -> x ∈ optranges_z, keys(offsets[oxy]))
-            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in @loopopt: optranges in z dimension do not include any array access.") end
+            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in loopopt: optranges in z dimension do not include any array access.") end
             offset_min = (min(offset_min[1], oxy[1]),
                           min(offset_min[2], oxy[2]),
                           min(offset_min[3], minimum(offsets_z)))
@@ -412,7 +412,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
             end
         end
     else
-        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
     return regqueue_head, regqueue_tail, offset_min, offset_max
 end
@@ -425,55 +425,57 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
             oz_max      = offset_max[3]
             hx1, hy1    = -1 .* offset_min[1:2]
             hx2, hy2    = offset_max[1:2]
-            use_shmem       = (hx1+hx2>0 || hy1+hy2>0)
+            use_shmem   = (hx1+hx2>0 || hy1+hy2>0)
             offset_span = offset_max .- offset_min
             oz_span     = offset_span[3]
             loopentry   = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
             oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry
         end
     else
-        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
     return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys
 end
 
-function define_shmem_symbols(oz_maxs::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
-    sym = Dict(A => Dict() for A in optvars)
+function define_shmem_symbols(oz_maxs::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, optdim::Integer)
+    sym = Dict(A => Dict() for A in optvars if use_shmems[A])
     if optdim == 3
         #TODO: use later the same simple for those who can use the same index.
         for A in optvars
-            sym[A][:tx]     = gensym_world("tx_$A", @__MODULE__)
-            sym[A][:ty]     = gensym_world("ty_$A", @__MODULE__)
-            sym[A][:nx_l]   = gensym_world("nx_l_$A", @__MODULE__)
-            sym[A][:ny_l]   = gensym_world("ny_l_$A", @__MODULE__)
-            sym[A][:t_h]    = gensym_world("t_h_$A", @__MODULE__)
-            sym[A][:t_h2]   = gensym_world("t_h2_$A", @__MODULE__)
-            sym[A][:tx_h]   = gensym_world("tx_h_$A", @__MODULE__)
-            sym[A][:tx_h2]  = gensym_world("tx_h2_$A", @__MODULE__)
-            sym[A][:ty_h]   = gensym_world("ty_h_$A", @__MODULE__)
-            sym[A][:ty_h2]  = gensym_world("ty_h2_$A", @__MODULE__)
-            sym[A][:ix_h]   = gensym_world("ix_h_$A", @__MODULE__)
-            sym[A][:ix_h2]  = gensym_world("ix_h2_$A", @__MODULE__)
-            sym[A][:iy_h]   = gensym_world("iy_h_$A", @__MODULE__)
-            sym[A][:iy_h2]  = gensym_world("iy_h2_$A", @__MODULE__)
-            sym[A][:A_head] = gensym_world(varname(A, (oz_maxs[A],); i="iz"), @__MODULE__)
+            if use_shmems[A]
+                sym[A][:tx]     = gensym_world("tx_$A", @__MODULE__)
+                sym[A][:ty]     = gensym_world("ty_$A", @__MODULE__)
+                sym[A][:nx_l]   = gensym_world("nx_l_$A", @__MODULE__)
+                sym[A][:ny_l]   = gensym_world("ny_l_$A", @__MODULE__)
+                sym[A][:t_h]    = gensym_world("t_h_$A", @__MODULE__)
+                sym[A][:t_h2]   = gensym_world("t_h2_$A", @__MODULE__)
+                sym[A][:tx_h]   = gensym_world("tx_h_$A", @__MODULE__)
+                sym[A][:tx_h2]  = gensym_world("tx_h2_$A", @__MODULE__)
+                sym[A][:ty_h]   = gensym_world("ty_h_$A", @__MODULE__)
+                sym[A][:ty_h2]  = gensym_world("ty_h2_$A", @__MODULE__)
+                sym[A][:ix_h]   = gensym_world("ix_h_$A", @__MODULE__)
+                sym[A][:ix_h2]  = gensym_world("ix_h2_$A", @__MODULE__)
+                sym[A][:iy_h]   = gensym_world("iy_h_$A", @__MODULE__)
+                sym[A][:iy_h2]  = gensym_world("iy_h2_$A", @__MODULE__)
+                sym[A][:A_head] = gensym_world(varname(A, (oz_maxs[A],); i="iz"), @__MODULE__)
+            end
         end
     else
-        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
     return sym
 end
 
-function define_shmem_exprs(shmem_symbols::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
-    exprs = Dict(A => Dict() for A in optvars)
+function define_shmem_exprs(shmem_symbols::Dict{Symbol, Dict{Any, Any}}, optdim::Integer)
+    exprs = Dict(A => Dict() for A in keys(shmem_symbols))
     offset = ()
     if optdim == 3
-        for A in optvars
+        for A in keys(shmem_symbols)
             exprs[A][:offset] = (length(offset) > 0) ? Expr(:call, :+, offset...) : 0
             offset = (offset..., :($(shmem_symbols[A][:nx_l]) * $(shmem_symbols[A][:ny_l]) * sizeof(eltype($A))))
         end
     else
-        @ArgumentError("@loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
     return exprs
 end
