@@ -60,7 +60,7 @@ Create an array that is *shared* between the threads of a block (i.e. accessible
 When multiple shared memory arrays are created within a kernel, then all arrays except for the first one typically need to define the `offset` to the base shared memory pointer in bytes (note that the CPU implementation does not require the `offset` and will simply ignore it when present).
 
 !!! note "Note"
-    The amount of shared memory needs to specified when launching the kernel (keyword argument `shmem`).
+    The amount of shared memory needs to be specified when launching the kernel (keyword argument `shmem`).
 """
 @doc SHAREDMEM_DOC
 macro sharedMem(args...) check_initialized(); checkargs_sharedMem(args...); esc(sharedMem(args...)); end
