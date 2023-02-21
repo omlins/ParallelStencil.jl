@@ -136,7 +136,7 @@ end
                     @parallel_indices (ix,iy) function memcopy!(B, A)
                         tx  = @threadIdx().x
                         ty  = @threadIdx().y
-                        A_l = @sharedMem(eltype(A), (@blockDim().x, @blockDim().y))
+                        A_l = @sharedMem(eltype(A), (@blockDim().x, @blockDim().y), 0*sizeof(eltype(A)))
                         A_l[tx,ty] = A[ix,iy]
                         @sync_threads()
                         B[ix,iy] = A_l[tx,ty]
