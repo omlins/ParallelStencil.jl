@@ -142,7 +142,6 @@ import ParallelStencil.@gorgeousexpand
                             @parallel loopopt=true copy_loopopt!(A2, A);
                             @test all(Array(A2) .== Array(A))
                         end
-                        # Add here also single difference, where with parallel we have a negative halo: stencilranges=(0:0, 0:0, 1:2)
                         @testset "@parallel_indices <kernel> (3D, loopopt, stencilranges=(0:0, 0:0, -1:1); z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
                             A2     = @zeros(nx, ny, nz);
@@ -464,6 +463,156 @@ import ParallelStencil.@gorgeousexpand
                             copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
                             copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
                             @parallel_indices (ix,iy,iz) loopopt=true loopsize=3 function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true higher_order_loopopt!(A2, B2, C2, A, B, C);
+                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, optvars=(A, C), optdim=3, loopsize=3; stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            B      = @zeros(nx, ny, nz);
+                            B2     = @zeros(nx, ny, nz);
+                            B2_ref = @zeros(nx, ny, nz);
+                            C      = @zeros(nx, ny, nz);
+                            C2     = @zeros(nx, ny, nz);
+                            C2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, C) optdim=3 loopsize=3 function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            @test occursin("for i = -4:3", kernel)
+                            @test occursin("tz = i + loopoffset", kernel)
+                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2.0A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
+                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2.0 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
+                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2.0C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, C) optdim=3 loopsize=3 function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true higher_order_loopopt!(A2, B2, C2, A, B, C);
+                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, optvars=(A, C), optdim=3, loopsize=3; stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            B      = @zeros(nx, ny, nz);
+                            B2     = @zeros(nx, ny, nz);
+                            B2_ref = @zeros(nx, ny, nz);
+                            C      = @zeros(nx, ny, nz);
+                            C2     = @zeros(nx, ny, nz);
+                            C2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, C) optdim=3 loopsize=3 function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            @test occursin("for i = -4:3", kernel)
+                            @test occursin("tz = i + loopoffset", kernel)
+                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2.0A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
+                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2.0 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
+                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2.0C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, C) optdim=3 loopsize=3 function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @parallel loopopt=true higher_order_loopopt!(A2, B2, C2, A, B, C);
+                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
+                        end
+                        @testset "@parallel_indices <kernel> (3D, loopopt, optvars=(A, B), optdim=3, loopsize=3, optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:1)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                            A      = @zeros(nx, ny, nz);
+                            A2     = @zeros(nx, ny, nz);
+                            A2_ref = @zeros(nx, ny, nz);
+                            B      = @zeros(nx, ny, nz);
+                            B2     = @zeros(nx, ny, nz);
+                            B2_ref = @zeros(nx, ny, nz);
+                            C      = @zeros(nx, ny, nz);
+                            C2     = @zeros(nx, ny, nz);
+                            C2_ref = @zeros(nx, ny, nz);
+                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, B) optdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_loopopt!(A2, B2, C2, A, B, C)
+                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                end
+                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2.0*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                end
+                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2.0*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                end
+                                return
+                            end
+                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2.0 * A[ix - 3, iy + 2, iz]) + A[ix - 4, iy + 2, iz - 2]", kernel)
+                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2.0B_ixm3_iyp2_izp1) + B_ixm4_iyp2_izp1", kernel) # NOTE: when z is restricted to 1:1 then x cannot include +1, as else the x-y range does not include any z (result: IncoherentArgumentError: incoherent argument in loopopt: optranges in z dimension do not include any array access.).
+                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C[ix - 1, iy + 2, iz] - 2.0 * C[ix - 1, iy + 2, iz - 1]) + C[ix - 1, iy + 2, iz - 1]", kernel)
+                            @parallel_indices (ix,iy,iz) loopopt=true optvars=(A, B) optdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_loopopt!(A2, B2, C2, A, B, C)
                                 if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
                                     A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2.0*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
                                 end
