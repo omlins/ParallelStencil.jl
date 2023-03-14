@@ -78,12 +78,12 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
-    fullrange  = typemin(int_type):typemax(int_type)
-    fullranges = (fullrange, fullrange, fullrange)
-    optranges  = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
-    optranges  = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
-    body       = eval_offsets(caller, body, indices, int_type)
-    offsets    = extract_offsets(caller, body, indices, int_type, optvars, optdim)
+    fullrange             = typemin(int_type):typemax(int_type)
+    fullranges            = (fullrange, fullrange, fullrange)
+    optranges             = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
+    optranges             = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
+    body                  = eval_offsets(caller, body, indices, int_type)
+    offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
     
     
@@ -94,6 +94,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
         # loopentry = loopentrys[optvars[1]]
         loopstart = minimum(values(loopentrys)) #TODO:
+        loopend   = loopsize
         # oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry = oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A]
         # oz_max         = offset_max[3]
         # hx1, hy1       = -1 .* offset_min[1:2]
@@ -120,6 +121,9 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         # iy_h2          = gensym_world("iy_h2", @__MODULE__)
         # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
         shmem_exprs    = define_shmem_exprs(shmem_symbols, optdim)
+        @show shmem_z_ranges = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
+        @show shmem_loopentrys = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
+        @show shmem_loopexits  = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, optdim)
         ix, iy, iz     = indices
         tz_g           = THREADIDS_VARNAMES[3]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -181,11 +185,11 @@ $((:(               $reg           = 0.0                                        
     for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
   )...
 )
-                    for $i = $loopstart:$loopsize
+                    for $i = $loopstart:$loopend
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$((wrap_if(:($i > $(loopentry-1)),
+$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
         quote
                         @sync_threads()
                         if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
@@ -196,9 +200,23 @@ $((wrap_if(:($i > $(loopentry-1)),
                         end
                         @sync_threads()
         end
-        ;unless=(loopentry==loopstart)
+        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
     )
-    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+    for (A, s) in shmem_symbols for (shmem_loopentry, shmem_loopexit, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+  )...
+)
+# Here I am:
+#  it fails for asymmetric stencils which have a shared memory range smaller than the total range. For example: line 245 @parallel_indices <kernel> (3D, loopopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)
+#  the problem is that what is going to be the bottom of the block is not read in currently; instead what is only to be on the top he's read in in both cases. We should define a register q just for the red in at the beginning.
+#  The below should become: $((wrap_if(:(($(shmem_loopexit) < $i)),
+#  ...and the new wreck you should have the following: ($(loopentry-1) < $i < $(shmem_loopentry)) || 
+#  UPDATE: actually i should rather do something like the following: $reg = (...) ? A_izp3[...] : A[...]
+#  Second problem: the performance is really bad with these changes. Moving the if statement into the assignments could solve that. Maybe the rap if macro could do that; else we need to program it explicitly for each assignment. Attention to correctly handle the case where an assignment has already an if inside!
+$((wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
+       :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+        )
+    )
+    for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for (loopentry, shmem_loopentry, shmem_loopexit) = ((loopentrys[A], shmem_loopentrys[A], shmem_loopexits[A]),)
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -209,12 +227,12 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
+$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
        :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
         )
-        ;unless=(loopentry==loopstart)
+        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
     )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (shmem_loopentry, shmem_loopexit, tx, ty, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], s[:tx], s[:ty], s[:A_head]),)
   )...
 )
 $((wrap_if(:($i > 0),
@@ -233,12 +251,12 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
+$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
        :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
         )
-        ;unless=(loopentry==loopstart)
+        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
     )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (shmem_loopentry, shmem_loopexit, oz_max, tx, ty, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -330,7 +348,8 @@ function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symb
 end
 
 function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
-    access_offsets = Dict(A => Dict() for A in optvars)
+    offsets_by_xy = Dict(A => Dict() for A in optvars)
+    offsets_by_z  = Dict(A => Dict() for A in optvars)
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
@@ -344,9 +363,15 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
                 if optdim == 3
                     k1 = offsets[1:2]
                     k2 = offsets[end]
-                    if     haskey(access_offsets[A], k1) && haskey(access_offsets[A][k1], k2) access_offsets[A][k1][k2] += 1
-                    elseif haskey(access_offsets[A], k1)                                      access_offsets[A][k1][k2]  = 1
-                    else                                                                      access_offsets[A][k1]      = Dict(k2 => 1)
+                    if     haskey(offsets_by_xy[A], k1) && haskey(offsets_by_xy[A][k1], k2) offsets_by_xy[A][k1][k2] += 1
+                    elseif haskey(offsets_by_xy[A], k1)                                     offsets_by_xy[A][k1][k2]  = 1
+                    else                                                                    offsets_by_xy[A][k1]      = Dict(k2 => 1)
+                    end
+                    k1 = offsets[end]
+                    k2 = offsets[1:2]
+                    if     haskey(offsets_by_z[A], k1) && haskey(offsets_by_z[A][k1], k2) offsets_by_z[A][k1][k2] += 1
+                    elseif haskey(offsets_by_z[A], k1)                                    offsets_by_z[A][k1][k2]  = 1
+                    else                                                                  offsets_by_z[A][k1]      = Dict(k2 => 1)
                     end
                 else
                     @ArgumentError("loopopt: only optdim=3 is currently supported.")
@@ -355,7 +380,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
         end
         return ex    
     end
-    return access_offsets
+    return offsets_by_xy, offsets_by_z
 end
 
 function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
@@ -480,6 +505,81 @@ function define_shmem_exprs(shmem_symbols::Dict{Symbol, Dict{Any, Any}}, optdim:
     return exprs
 end
 
+function define_shmem_z_ranges(offsets_by_z::Dict{Symbol, Dict{Any, Any}}, use_shmems::Dict{Any, Any}, optdim::Integer)
+    shmem_z_ranges = Dict()
+    shmem_As = (A for (A, use_shmem) in use_shmems if use_shmem)
+    for A in shmem_As
+        shmem_z_ranges[A] = define_shmem_z_range(offsets_by_z[A], optdim)
+    end
+    return shmem_z_ranges
+end
+
+function define_shmem_z_range(offsets_by_z::Dict{Any, Any}, optdim::Integer)
+    start = find_rangelimit(offsets_by_z, optdim; upper=false)
+    stop  = find_rangelimit(offsets_by_z, optdim; upper=true)
+    return start:stop
+end
+
+function find_rangelimit(offsets_by_z::Dict{Any, Any}, optdim::Integer; upper=false)
+    if optdim == 3
+        offsets_z   = sort(keys(offsets_by_z); rev=upper)
+        oz1         = offsets_z[1]
+        rangelimit  = oz1
+        offsets_xy1 = (keys(offsets_by_z[oz1])...,)
+        if length(offsets_xy1) == 1
+            rangelimit = offsets_z[2]
+            oxy1 = offsets_xy1[1]
+            for oz in offsets_z[2:end]
+                offsets_xy = (keys(offsets_by_z[oz])...,)
+                if (length(offsets_xy) == 1) && (offsets_xy[1] == oxy1)
+                    rangelimit = offsets_z[oz+1]
+                else
+                    break
+                end
+            end
+        end
+    else
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+    end
+    return rangelimit
+end
+
+function define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim::Integer)
+    shmem_loopentrys = Dict()
+    shmem_As = (A for A in keys(shmem_z_ranges))
+    for A in shmem_As
+        shmem_loopentrys[A] = define_shmem_loopentry(loopentrys[A], shmem_z_ranges[A], offset_mins[A], optdim)
+    end
+    return shmem_loopentrys
+end
+
+function define_shmem_loopentry(loopentry, shmem_z_range, offset_min, optdim::Integer)
+    if optdim == 3
+        shmem_loopentry = loopentry + (shmem_z_range.start - offset_min[3])
+    else
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+    end
+    return shmem_loopentry
+end
+
+function define_shmem_loopexits(loopexit, shmem_z_ranges, offset_maxs, optdim::Integer)
+    shmem_loopexits = Dict()
+    shmem_As = (A for A in keys(shmem_z_ranges))
+    for A in shmem_As
+        shmem_loopexits[A] = define_shmem_loopexit(loopexit, shmem_z_ranges[A], offset_maxs[A], optdim)
+    end
+    return shmem_loopexits
+end
+
+function define_shmem_loopexit(loopexit, shmem_z_range, offset_max, optdim::Integer)
+    if optdim == 3
+        shmem_loopexit = loopexit - (offset_max[3] - shmem_z_range.stop)
+    else
+        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+    end
+    return shmem_loopexit
+end
+
 function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
     ndims = length(offsets)
     ox    = offsets[1]
@@ -583,4 +683,4 @@ function store_metadata(metadata_module::Module, offset_mins::Dict{Symbol, <:NTu
     @eval(metadata_module, $storeexpr)
 end
 
-Base.sort(keys::T) where T<:Base.AbstractSet = sort([keys...])
+Base.sort(keys::T; kwargs...) where T<:Base.AbstractSet = sort([keys...]; kwargs...)
