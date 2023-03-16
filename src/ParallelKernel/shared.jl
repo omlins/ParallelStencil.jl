@@ -181,7 +181,7 @@ is_block(arg)       = ( isa(arg, Expr) && (arg.head == :block) )
 is_parallel_call(x) = isexpr(x, :macrocall) && (x.args[1] == Symbol("@parallel") || x.args[1] == :(@parallel))
 
 function extract_args(call::Expr, macroname::Symbol)
-    if (call.head == :macrocall) @ModuleInternalError("argument is not a macro call.") end
+    if (call.head != :macrocall) @ModuleInternalError("argument is not a macro call.") end
     if (call.args[1] != macroname) @ModuleInternalError("unexpected macro name.") end
     return (call.args[3:end]...,)
 end
