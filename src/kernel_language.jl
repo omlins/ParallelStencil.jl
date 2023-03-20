@@ -81,55 +81,26 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
-    
-    
-    # A = optvars[1]
-    # regqueue_head, regqueue_tail, offset_min, offset_max = regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A]
-    # @show optranges, regqueue_head, regqueue_tail, offset_min, offset_max
+
     if optdim == 3
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
-        # loopentry = loopentrys[optvars[1]]
-        loopstart = minimum(values(loopentrys)) #TODO:
-        loopend   = loopsize
-        # oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry = oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A]
-        # oz_max         = offset_max[3]
-        # hx1, hy1       = -1 .* offset_min[1:2]
-        # hx2, hy2       = offset_max[1:2]
-        # use_shmem          = (hx1+hx2>0 || hy1+hy2>0)
-        # offset_span    = offset_max .- offset_min
-        # oz_span        = offset_span[3]
-        # loopentry      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-        shmem_symbols = define_shmem_symbols(oz_maxs, optvars, use_shmems, optdim)
-        # s=shmem_symbols[A]; tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head = s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]
-        # tx             = gensym_world("tx", @__MODULE__)
-        # ty             = gensym_world("ty", @__MODULE__)
-        # nx_l           = gensym_world("nx_l", @__MODULE__)
-        # ny_l           = gensym_world("ny_l", @__MODULE__)
-        # t_h            = gensym_world("t_h", @__MODULE__)
-        # t_h2           = gensym_world("t_h2", @__MODULE__)
-        # tx_h           = gensym_world("tx_h", @__MODULE__)
-        # tx_h2          = gensym_world("tx_h2", @__MODULE__)
-        # ty_h           = gensym_world("ty_h", @__MODULE__)
-        # ty_h2          = gensym_world("ty_h2", @__MODULE__)
-        # ix_h           = gensym_world("ix_h", @__MODULE__)
-        # ix_h2          = gensym_world("ix_h2", @__MODULE__)
-        # iy_h           = gensym_world("iy_h", @__MODULE__)
-        # iy_h2          = gensym_world("iy_h2", @__MODULE__)
-        # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
-        shmem_exprs    = define_shmem_exprs(shmem_symbols, optdim)
-        @show shmem_z_ranges   = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
-        @show shmem_loopentrys = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
-        @show shmem_loopexits  = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, optdim)
-        mainloopstart          = (optimize_halo_read && !isempty(shmem_loopentrys)) ? minimum(values(shmem_loopentrys)) : loopstart
-        mainloopend            = loopend # TODO: the second loop split leads to wrong results, probably due to a compiler bug. # mainloopend            = (optimize_halo_read && !isempty(shmem_loopexits) ) ? maximum(values(shmem_loopexits) ) : loopend
-        ix, iy, iz     = indices
-        tz_g           = THREADIDS_VARNAMES[3]
-        rangelength_z  = RANGELENGTHS_VARNAMES[3]
-        ranges         = RANGES_VARNAME
-        range_z        = :(($ranges[3])[$tz_g])
-        range_z_start  = :(($ranges[3])[1])
-        i              = gensym_world("i", @__MODULE__)
-        loopoffset     = gensym_world("loopoffset", @__MODULE__)
+        loopstart        = minimum(values(loopentrys))
+        loopend          = loopsize
+        shmem_symbols    = define_shmem_symbols(oz_maxs, optvars, use_shmems, optdim)
+        shmem_exprs      = define_shmem_exprs(shmem_symbols, optdim)
+        shmem_z_ranges   = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
+        shmem_loopentrys = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
+        shmem_loopexits  = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, optdim)
+        mainloopstart    = (optimize_halo_read && !isempty(shmem_loopentrys)) ? minimum(values(shmem_loopentrys)) : loopstart
+        mainloopend      = loopend # TODO: the second loop split leads to wrong results, probably due to a compiler bug. # mainloopend            = (optimize_halo_read && !isempty(shmem_loopexits) ) ? maximum(values(shmem_loopexits) ) : loopend
+        ix, iy, iz       = indices
+        tz_g             = THREADIDS_VARNAMES[3]
+        rangelength_z    = RANGELENGTHS_VARNAMES[3]
+        ranges           = RANGES_VARNAME
+        range_z          = :(($ranges[3])[$tz_g])
+        range_z_start    = :(($ranges[3])[1])
+        i                = gensym_world("i", @__MODULE__)
+        loopoffset       = gensym_world("loopoffset", @__MODULE__)
 
         for A in optvars
             regqueue_tail = regqueue_tails[A]
@@ -146,10 +117,6 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
             end
         end
 
-        # optvars=(:T, :Ci); a=1; quote $( ((a<2) ? quote $A end : NOEXPR for A in optvars)... ) end
-        # optvars=(:T, :Ci); quote $( ((A==:Ci) ? quote $A end : NOEXPR for A in optvars)... ) end
-        # optvars=(:T, :Ci); quote $( (quote $A end for A in optvars if (A==:Ci))... ) end
-
         #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
                     $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
@@ -158,7 +125,7 @@ $((quote
                     $ty            = @threadIdx().y + $hy1
                     $nx_l          = @blockDim().x + $(hx1+hx2)
                     $ny_l          = @blockDim().y + $(hy1+hy2)
-                    $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x # NOTE: here it must be bx, not @blockDim().x
+                    $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x  # NOTE: here it must be bx, not @blockDim().x
                     $t_h2          = $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y
                     $tx_h          = ($t_h-1) % $nx_l + 1
                     $ty_h          = ($t_h-1) ÷ $nx_l + 1
@@ -300,7 +267,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
 )
                     end
 
-# Termination-loop
+# Wrap-up-loop
                     for $i = $(mainloopend+1):$loopend
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
