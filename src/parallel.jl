@@ -70,7 +70,7 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs     = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :optranges, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:loopopt, :optdim, :optranges, :metadata_module))
+        kwargs     = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :optranges, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:loopopt, :optdim, :optranges, :optimize_halo_read, :metadata_module))
         numbertype = get_numbertype()
         ndims      = get_ndims()
         if !haskey(kwargs, :metadata_module)
@@ -97,7 +97,7 @@ end
 function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
     posargs, kwargs_expr = split_args(args)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :optranges, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:loopopt, :optdim, :optranges, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :optranges, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:loopopt, :optdim, :optranges, :optimize_halo_read, :metadata_module))
     kernelarg = args[end]
     if !haskey(kwargs, :metadata_module)
         @show get_name(kernelarg)
@@ -119,13 +119,13 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_loopopt(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=get_loopopt(), optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing)
+function parallel_indices_loopopt(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=get_loopopt(), optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!loopopt) @ModuleInternalError("parallel_indices_loopopt: called with `loopopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_loopopt(metadata_module, caller, package, body, indices, optvars, optdim, loopsize, optranges)
+    body = add_loopopt(metadata_module, caller, package, body, indices, optvars, optdim, loopsize, optranges, optimize_halo_read)
     body = add_return(body)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
@@ -215,8 +215,8 @@ end
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_loopopt(metadata_module::Module, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t})
-    loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, body; package=package)
+function add_loopopt(metadata_module::Module, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool)
+    loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, optimize_halo_read, body; package=package)
 end
 
 
