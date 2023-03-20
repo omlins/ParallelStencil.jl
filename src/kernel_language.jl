@@ -62,7 +62,7 @@ end
 #TODO: maybe gensym with macro @gensym
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, body::Expr; package::Symbol=get_package())
+function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
     optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices = Tuple(extract_tuple(indices))
     readonlyvars  = find_readonlyvars(body, indices)
@@ -121,9 +121,11 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
         # iy_h2          = gensym_world("iy_h2", @__MODULE__)
         # A_head         = gensym_world(varname(A, (oz_max,); i="iz"), @__MODULE__)
         shmem_exprs    = define_shmem_exprs(shmem_symbols, optdim)
-        @show shmem_z_ranges = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
+        @show shmem_z_ranges   = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
         @show shmem_loopentrys = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
         @show shmem_loopexits  = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, optdim)
+        mainloopstart          = (optimize_halo_read && !isempty(shmem_loopentrys)) ? minimum(values(shmem_loopentrys)) : loopstart
+        mainloopend            = loopend # TODO: the second loop split leads to wrong results, probably due to a compiler bug. # mainloopend            = (optimize_halo_read && !isempty(shmem_loopexits) ) ? maximum(values(shmem_loopexits) ) : loopend
         ix, iy, iz     = indices
         tz_g           = THREADIDS_VARNAMES[3]
         rangelength_z  = RANGELENGTHS_VARNAMES[3]
@@ -185,38 +187,18 @@ $((:(               $reg           = 0.0                                        
     for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
   )...
 )
-                    for $i = $loopstart:$loopend
+# Pre-loop
+                    for $i = $loopstart:$(mainloopstart-1)
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
-        quote
-                        @sync_threads()
-                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
-                        end
-                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
-                        end
-                        @sync_threads()
-        end
-        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
-    )
-    for (A, s) in shmem_symbols for (shmem_loopentry, shmem_loopexit, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
-  )...
-)
-# Here I am:
-#  it fails for asymmetric stencils which have a shared memory range smaller than the total range. For example: line 245 @parallel_indices <kernel> (3D, loopopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)
-#  the problem is that what is going to be the bottom of the block is not read in currently; instead what is only to be on the top he's read in in both cases. We should define a register q just for the red in at the beginning.
-#  The below should become: $((wrap_if(:(($(shmem_loopexit) < $i)),
-#  ...and the new wreck you should have the following: ($(loopentry-1) < $i < $(shmem_loopentry)) || 
-#  UPDATE: actually i should rather do something like the following: $reg = (...) ? A_izp3[...] : A[...]
-#  Second problem: the performance is really bad with these changes. Moving the if statement into the assignments could solve that. Maybe the rap if macro could do that; else we need to program it explicitly for each assignment. Attention to correctly handle the case where an assignment has already an if inside!
-$((wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
+$((
+    # wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
+    wrap_if(:(($(loopentry-1) < $i)),
        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
         )
     )
-    for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for (loopentry, shmem_loopentry, shmem_loopexit) = ((loopentrys[A], shmem_loopentrys[A], shmem_loopexits[A]),)
+    for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -227,21 +209,6 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
   )...
 )
-$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
-       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
-        )
-        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
-    )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (shmem_loopentry, shmem_loopexit, tx, ty, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], s[:tx], s[:ty], s[:A_head]),)
-  )...
-)
-$((wrap_if(:($i > 0),
-        quote
-                        $body
-        end; 
-        unless=(loopstart==1)
-    )
-))
 $((wrap_if(:($i > $(loopentry-1)),
        :(
                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
@@ -249,14 +216,6 @@ $((wrap_if(:($i > $(loopentry-1)),
         ;unless=(loopentry==loopstart)
     )
     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
-  )...
-)
-$((wrap_if(:($(shmem_loopentry-1) < $i < $(shmem_loopexit+1)),
-       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
-        )
-        ;unless=(shmem_loopentry==loopstart && shmem_loopexit==loopend)
-    )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (shmem_loopentry, shmem_loopexit, oz_max, tx, ty, A_head) = ((shmem_loopentrys[A], shmem_loopexits[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -268,6 +227,193 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
+                    end
+# TODO: mainloopstart and end should replace later loop start and end where appropriate. First test however how the if statements affect performance and replace them with more optimal if statements
+# Make sure that all registers are pre allocated and updated using the loops
+
+# Main loop
+                    for $i = $mainloopstart:$mainloopend
+                        $tz_g = $i + $loopoffset
+                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
+                        @sync_threads()
+                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
+                        end
+                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
+                        end
+                        @sync_threads()
+        end
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > 0),
+        quote
+                        $body
+        end; 
+        unless=(mainloopstart>=1)
+    )
+))
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
+                        $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
+                        $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
+  )...
+)
+                    end
+
+# Termination-loop
+                    for $i = $(mainloopend+1):$loopend
+                        $tz_g = $i + $loopoffset
+                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
+                        @sync_threads()
+                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
+                        end
+                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
+                        end
+                        @sync_threads()
+        end
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > 0),
+        quote
+                        $body
+        end; 
+        unless=(mainloopstart>=1)
+    )
+))
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
+                        $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+       :(
+                        $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+        )
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
+  )...
+)
+
+
+
+
+
+
+#                         $tz_g = $i + $loopoffset
+#                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+#                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+# $((
+#     # wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
+#        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+#         )
+#     for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
+#   )...
+# )
+# $((
+#        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+#         )
+#     for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
+#   )...
+# )
+# $((
+#         quote
+#                         $body
+#         end
+# ))
+# $((
+#        :(
+#                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
+#         )
+#     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
+#   )...
+# )
+# $((
+#        :(
+#                         $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+#         )
+#     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
+#   )...
+# )
                     end
         end
     else
@@ -282,7 +428,8 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
     optdim        = isa(indices,Expr) ? length(indices.args) : 1
     loopsize      = LOOPSIZE
     optranges = nothing
-    return loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, body; package=package)
+    optimize_halo_read = true
+    return loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, optimize_halo_read, body; package=package)
 end
 
 
@@ -515,8 +662,11 @@ function define_shmem_z_ranges(offsets_by_z::Dict{Symbol, Dict{Any, Any}}, use_s
 end
 
 function define_shmem_z_range(offsets_by_z::Dict{Any, Any}, optdim::Integer)
-    start = find_rangelimit(offsets_by_z, optdim; upper=false)
-    stop  = find_rangelimit(offsets_by_z, optdim; upper=true)
+    start, start_offsets_xy = find_rangelimit(offsets_by_z, optdim; upper=false)
+    stop,  stop_offsets_xy  = find_rangelimit(offsets_by_z, optdim; upper=true)
+    if (length(start_offsets_xy) != 1 || length(stop_offsets_xy) != 1 || start_offsets_xy[1] != stop_offsets_xy[1]) # NOTE: shared memory range is not reduced in asymmetric case
+        return minimum(keys(offsets_by_z)):maximum(keys(offsets_by_z))
+    end
     return start:stop
 end
 
@@ -541,7 +691,7 @@ function find_rangelimit(offsets_by_z::Dict{Any, Any}, optdim::Integer; upper=fa
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    return rangelimit
+    return rangelimit, offsets_xy1
 end
 
 function define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim::Integer)
