@@ -55,11 +55,7 @@ function loop(index::Symbol, optdim::Integer, loopsize, body; package::Symbol=ge
     end
 end
 
-# optranges=(A=(1:1, 0:2, 1:1), B=(1:1, 0:2, 1:1))
-#function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, optranges::Union{Integer,NTuple{N,Integer} where N})
-#TODO: see what to do with global consts as SHMEM_HALO_X,... Support later multiple vars for opt (now just A=T...)
 #TODO: add input check and errors
-#TODO: maybe gensym with macro @gensym
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
 function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
@@ -192,11 +188,10 @@ $((:(               $reg           = 0.0                                        
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$((
-    # wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
-    wrap_if(:(($(loopentry-1) < $i)),
+$((wrap_if(:($i > $(loopentry-1)),
        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
         )
+        ;unless=(loopentry==loopstart)
     )
     for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
   )...
@@ -209,27 +204,27 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
+$(( # NOTE: the if statement is not needed here as we only deal with registers
+    # wrap_if(:($i > $(loopentry-1)),
        :(
                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
         )
-        ;unless=(loopentry==loopstart)
-    )
+        # ;unless=(loopentry==loopstart)
+    # )
     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
+$(( # NOTE: the if statement is not needed here as we only deal with registers
+    # wrap_if(:($i > $(loopentry-1)),
        :(
                         $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
         )
-        ;unless=(loopentry==loopstart)
-    )
+        # ;unless=(loopentry==loopstart)
+    # )
     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
                     end
-# TODO: mainloopstart and end should replace later loop start and end where appropriate. First test however how the if statements affect performance and replace them with more optimal if statements
-# Make sure that all registers are pre allocated and updated using the loops
 
 # Main loop
                     for $i = $mainloopstart:$mainloopend
@@ -275,12 +270,13 @@ $((wrap_if(:($i > 0),
         unless=(mainloopstart>=1)
     )
 ))
-$((wrap_if(:($i > $(loopentry-1)),
+$(( # NOTE: the if statement is not needed here as we only deal with registers
+    # wrap_if(:($i > $(loopentry-1)),
        :(
                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
         )
-        ;unless=(loopentry<=mainloopstart)
-    )
+        # ;unless=(loopentry<=mainloopstart)
+    # )
     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
   )...
 )
@@ -292,12 +288,13 @@ $((wrap_if(:($i > $(loopentry-1)),
     for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
+$(( # NOTE: the if statement is not needed here as we only deal with registers
+    # wrap_if(:($i > $(loopentry-1)),
        :(
                         $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
         )
-        ;unless=(loopentry<=mainloopstart)
-    )
+        # ;unless=(loopentry<=mainloopstart)
+    # )
     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
@@ -373,11 +370,6 @@ $((wrap_if(:($i > $(loopentry-1)),
     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
-
-
-
-
-
 
 #                         $tz_g = $i + $loopoffset
 #                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
