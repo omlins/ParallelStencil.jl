@@ -1,4 +1,4 @@
-    # Enable CUDA/AMDGPU if the required packages are installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU packages functional - or even not at all if the installation procedure allows it). NOTE: it cannot be precompiled for GPU on a node without GPU.
+# Enable CUDA/AMDGPU if the required packages are installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU packages functional - or even not at all if the installation procedure allows it). NOTE: it cannot be precompiled for GPU on a node without GPU.
 import .ParallelKernel: ENABLE_CUDA, ENABLE_AMDGPU  # ENABLE_CUDA and ENABLE_AMDGPU must also always be accessible from the unit tests
 @static if ENABLE_CUDA && ENABLE_AMDGPU
     using CUDA

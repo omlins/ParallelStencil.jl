@@ -74,7 +74,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         numbertype = get_numbertype()
         ndims      = get_ndims()
         if !haskey(kwargs, :metadata_module)
-            @show get_name(kernelarg)
+            get_name(kernelarg)
             metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
         else
             metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
@@ -100,7 +100,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :optranges, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:loopopt, :optdim, :optranges, :optimize_halo_read, :metadata_module))
     kernelarg = args[end]
     if !haskey(kwargs, :metadata_module)
-        @show get_name(kernelarg)
+        get_name(kernelarg)
         metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
     else
         metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
@@ -138,6 +138,19 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     body = get_body(kernel)
     body = remove_return(body)
     validate_body(body)
+    kernelargs = splitarg.(extract_kernel_args(kernel)[1])
+    argvars = (arg[1] for arg in kernelargs)
+    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
+    check_mask_macro(caller)
+    body = apply_masks(body, indices)
+    if length(onthefly_vars) > 0
+        body = macroexpand(caller, body)
+        onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
+        onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
+        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
+        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
+        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
+    end
     if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
@@ -166,8 +179,6 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
             @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
     end
-    check_mask_macro(caller)
-    body = apply_masks(body, indices)
     body = add_return(body)
     set_body!(kernel, body)
     if loopopt 
@@ -326,3 +337,61 @@ end
 
 get_kernelid(kernelname, file, line) = Symbol("$(kernelname)_$(file)_$(line)")
 get_meta_function(kernelname)        = Symbol("$(META_FUNCTION_PREFIX)$(GENSYM_SEPARATOR)$(kernelname)")
+
+
+## FUNCTIONS TO DEAL WITH ON-THE-FLY ASSIGNMENTS
+
+function extract_onthefly_arrays!(body, argvars)
+    onthefly_vars  = ()
+    onthefly_exprs = ()
+    write_vars     = ()
+    statements     = get_statements(body)
+    for statement in statements
+        if is_array_assignment(statement)
+            if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
+            if A ∈ argvars
+                write_vars = (write_vars..., A)
+            end
+        end
+    end
+    for statement in statements
+        if is_array_assignment(statement)
+            if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
+            if A ∉ argvars
+                if (m != Symbol("@all"))         @ArgumentError("unsupported kernel statements in @parallel kernel definition: partial assignments are not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel); use '@all' instead.") end
+                if (inexpr_walk(assign_expr, A)) @ArgumentError("unsupported kernel statements in @parallel kernel definition: auto-dependency is not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel).") end
+                if any(inexpr_walk.((assign_expr,), write_vars)) # NOTE: in this case here could later be allocated a local array instead
+                    @ArgumentError("unsupported kernel statements in @parallel kernel definition: the assignment of $A should be done on the fly as it is not among the arguments of the kernel; however, this is not possible because it depends on at least one variable that is not read-only within the scope of the kernel (any of: $write_vars).")
+                else
+                    onthefly_vars  = (onthefly_vars..., A)
+                    onthefly_exprs = (onthefly_exprs..., assign_expr)
+                    body           = substitute(body, statement, NOEXPR)
+                end
+            end
+        end
+    end
+    return onthefly_vars, onthefly_exprs, write_vars, body
+end
+
+function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array)
+    indices = (indices...,)
+    for (A, m) in zip(onthefly_vars, onthefly_syms)
+        expr = substitute(expr, A, m, indices)
+    end
+    return expr
+end
+
+function create_onthefly_macro(caller, m, expr, var, indices)
+    ndims         = length(indices)
+    ix, iy, iz    =  gensym_world.(("ix","iy","iz"), (@__MODULE__,))
+    local_indices = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+    for (index, local_index) in zip(indices, local_indices)
+        expr = substitute(expr, index, Expr(:$, local_index))
+    end
+    quote_expr = :($(Expr(:quote, expr)))
+    m_function = :($m($(local_indices...)) = $quote_expr)
+    m_macro = :(macro $m(args...) if (length(args)!=$ndims) @ArgumentError("unsupported kernel statements in @parallel kernel definition: wrong number of indices in $var (expected $ndims indices).") end; esc($m(args...)) end)
+    @eval(caller, $m_function)
+    @eval(caller, $m_macro)
+    return
+end
