@@ -415,18 +415,12 @@ end
 
 ## HELPER FUNCTIONS
 
-is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol, iz::Symbol) = @capture(ex, A_[x_, y_, z_]) && inexpr_walk(x, ix) && inexpr_walk(y, iy) && inexpr_walk(z, iz)
-is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_])     && inexpr_walk(x, ix) && inexpr_walk(y, iy)
-is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
-is_stencil_access(ex, indices...)                               = false
-
-
 function find_readonlyvars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     vars         = Dict()
     writevars    = Dict()
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
-            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")A
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
             if haskey(vars, A) vars[A] += 1
             else               vars[A]  = 1
             end
