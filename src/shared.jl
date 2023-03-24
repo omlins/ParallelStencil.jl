@@ -1,4 +1,4 @@
-# Enable CUDA/AMDGPU if the required packages are installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU packages functional - or even not at all if the installation procedure allows it). NOTE: it cannot be precompiled for GPU on a node without GPU.
+    # Enable CUDA/AMDGPU if the required packages are installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU packages functional - or even not at all if the installation procedure allows it). NOTE: it cannot be precompiled for GPU on a node without GPU.
 import .ParallelKernel: ENABLE_CUDA, ENABLE_AMDGPU  # ENABLE_CUDA and ENABLE_AMDGPU must also always be accessible from the unit tests
 @static if ENABLE_CUDA && ENABLE_AMDGPU
     using CUDA
@@ -8,7 +8,7 @@ elseif ENABLE_CUDA
 elseif ENABLE_AMDGPU
     using AMDGPU
 end
-import MacroTools: @capture, postwalk # NOTE: inexpr_walk used instead of MacroTools.inexpr
+import MacroTools: @capture, postwalk, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, inexpr_walk
 import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
@@ -34,26 +34,44 @@ const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
 const NTHREADS_MAX_LOOPOPT      = 128
 const NOEXPR                    = :(begin end)
-const MOD_METADATA              = gensym_world("__metadata__", @__MODULE__)
+const MOD_METADATA              = :__metadata__ # gensym_world("__metadata__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const META_FUNCTION_PREFIX      = string(gensym_world("META", @__MODULE__))
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS
 
+get_statements(body::Expr)     = (body.head == :block) ? body.args : [body]
+is_array_assignment(statement) = isa(statement, Expr) && (statement.head == :(=)) && isa(statement.args[1], Expr) && (statement.args[1].head == :macrocall)
+
 function validate_body(body::Expr)
-    statements = (body.head == :block) ? body.args : [body]
+    statements = get_statements(body)
     for statement in statements
-        if !(isa(statement, LineNumberNode) || isa(statement, Expr))
-            @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED)
-        end
-        if isa(statement, Expr)
-            if (statement.head != :(=)) || !isa(statement.args[1], Expr) || statement.args[1].head != :macrocall
-                @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED)
-            end
-        end
+        if !(isa(statement, LineNumberNode) || isa(statement, Expr)) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
+        if isa(statement, Expr) && !is_array_assignment(statement)   @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
     end
 end
 
+is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol, iz::Symbol) = @capture(ex, A_[x_, y_, z_]) && inexpr_walk(x, ix) && inexpr_walk(y, iy) && inexpr_walk(z, iz)
+is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_])     && inexpr_walk(x, ix) && inexpr_walk(y, iy)
+is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
+is_stencil_access(ex, indices...)                               = false
+
+function substitute(expr::Expr, A, m, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+    return postwalk(expr) do ex
+        if is_stencil_access(ex, indices...)
+            @capture(ex, B_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            if B == A
+                m_call = :(@f($(indices_expr...))) # NOTE: interpolating the macro symbol m directly does not work
+                m_call.args[1] = Symbol("@$m")
+                return m_call
+            else
+                return ex
+            end
+        else
+            return ex
+        end
+    end
+end
 
 ## FUNCTIONS FOR ERROR HANDLING
 
