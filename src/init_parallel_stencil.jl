@@ -33,7 +33,7 @@ See also: [`Data`](@ref)
 """
 macro init_parallel_stencil(args...)
     posargs, kwargs_expr = split_args(args)
-    if (length(args) > 3)            @ArgumentError("too many arguments.")
+    if (length(args) > 4)            @ArgumentError("too many arguments.")
     elseif (0 < length(posargs) < 3) @ArgumentError("there must be either three or zero positional arguments.")
     end
     kwargs = split_kwargs(kwargs_expr)
@@ -81,7 +81,7 @@ let
     get_numbertype()            = numbertype
     set_ndims(n::Integer)       = (ndims = n)
     get_ndims()                 = ndims
-    set_loopopt(loopopt::Bool)  = (loopopt = loopopt)
+    set_loopopt(flag::Bool)     = (loopopt = flag)
     get_loopopt()               = loopopt
     check_initialized()         = if !is_initialized() @NotInitializedError("no macro or function of the module can be called before @init_parallel_stencil.") end
 
