@@ -356,7 +356,7 @@ function simplify_varnames!(expr::Expr)
     for i=1:length(args)
         if isa(args[i], Symbol)
             varname = string(args[i]);
-            if startswith(varname, "##")
+            if startswith(varname, "@##") || startswith(varname, "##")
                 varname = replace(varname, "##" => "")
                 varname = replace(varname, r"#\d*" => "")
                 varname = split(varname, GENSYM_SEPARATOR)[1]
