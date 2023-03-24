@@ -1,8 +1,8 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_loopopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
-import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims
+import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_loopopt
 using ParallelStencil.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -24,6 +24,7 @@ end
                 @test @get_package() == $package
                 @test @get_numbertype() == ComplexF32
                 @test @get_ndims() == 3
+                @test @get_loopopt() == false
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -44,14 +45,15 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. initialization of ParallelStencil without numbertype" begin
+        @testset "2. initialization of ParallelStencil without numbertype, with loopopt" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3)
+            @init_parallel_stencil(package = $package, ndims = 3, loopopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_ndims() == 3
+                @test @get_loopopt() == true
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -72,11 +74,13 @@ end
                 set_package(:CUDA)
                 set_numbertype(Float64)
                 set_ndims(3)
+                set_loopopt(false)
                 @require is_initialized()
-                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2)
-                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1)
+                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2, false)
+                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, true)
+                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1, true)
                 set_initialized(false)
                 set_package(PKG_NONE)
                 set_numbertype(NUMBERTYPE_NONE)
