@@ -48,7 +48,7 @@ end
                     @test @prettystring(1, @sync_threads()) == "ParallelStencil.ParallelKernel.@sync_threads_cpu"
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_cpu Float32 (2, 3)"
                     @test @prettystring(1, @pk_show()) == "Base.@show"
-                    @test @prettystring(1, @pk_println()) == "Base.println"
+                    @test @prettystring(1, @pk_println()) == "Base.println()"
                 end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
@@ -170,12 +170,12 @@ end
             @init_parallel_kernel($package, Float64)
             @require @is_initialized
             @testset "no arguments" begin
-                @test_throws ArgumentError checknoargs(:(something));                                      # Error: length(args) != 0
+                @test_throws ArgumentError checknoargs(:(something));                                                   # Error: length(args) != 0
             end;
             @testset "arguments @sharedMem" begin
-                @test_throws ArgumentError checkargs_sharedMem();                                          # Error: isempty(args)
-                @test_throws ArgumentError checkargs_sharedMem(:(something));                              # Error: length(args) != 2
-                @test_throws ArgumentError checkargs_sharedMem(:(something), :(something), :(something));  # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_sharedMem();                                                        # Error: isempty(args)
+                @test_throws ArgumentError checkargs_sharedMem(:(something));                                            # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_sharedMem(:(something), :(something), :(something), :(something));  # Error: length(args) != 2
             end;
             @reset_parallel_kernel()
         end;
