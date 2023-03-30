@@ -58,7 +58,7 @@ end
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
+function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
     optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices = Tuple(extract_tuple(indices))
     readonlyvars  = find_readonlyvars(body, indices)
@@ -69,6 +69,7 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
             if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
         end
     end
+    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument loopopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel. Set loopopt=false for this kernel.") end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
@@ -80,12 +81,13 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
     optranges             = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
-    regqueue_heads, regqueue_tails, offset_mins, offset_maxs = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
+    regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
     if optdim == 3
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
         loopstart          = minimum(values(loopentrys))
         loopend            = loopsize
+        use_any_shmem      = any(values(use_shmems))
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, optdim)
         shmem_symbols      = define_shmem_symbols(oz_maxs, optvars, use_shmems, shmem_index_groups, optdim)
         shmem_exprs        = define_shmem_exprs(shmem_symbols, optdim)
@@ -117,6 +119,24 @@ function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,
                 end
             end
         end
+
+        @show nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups))
+        @show nb_cell_vars     = sum(values(nb_regs_heads)) + sum(values(nb_regs_tails))
+
+        # tx            = :(@threadIdx().x + $hx1)
+        # ty            = :(@threadIdx().y + $hy1)
+        # nx_l          = :(@blockDim().x + $(hx1+hx2))
+        # ny_l          = :(@blockDim().y + $(hy1+hy2))
+        # t_h           = :((@threadIdx().y-1)*@blockDim().x + @threadIdx().x)  # NOTE: here it must be bx, not @blockDim().x
+        # t_h2          = :($t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y)
+        # tx_h          = :(($t_h-1) % $nx_l + 1)
+        # ty_h          = :(($t_h-1) ÷ $nx_l + 1)
+        # tx_h2         = :(($t_h2-1) % $nx_l + 1)
+        # ty_h2         = :(($t_h2-1) ÷ $nx_l + 1)
+        # ix_h          = :((@blockIdx().x-1)*@blockDim().x + $tx_h  - $hx1)    # NOTE: here it must be @blockDim().x, not bx
+        # ix_h2         = :((@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1)    # ...
+        # iy_h          = :((@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1)    # ...
+        # iy_h2         = :((@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1)    # ...
 
         #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
@@ -203,21 +223,27 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+$(use_any_shmem ? 
+    :(                  @sync_threads()
+     ) :                NOEXPR
+)
 $((wrap_if(:($i > $(loopentry-1)),
         quote
-                        @sync_threads()
                         if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
                         end
                         if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
                         end
-                        @sync_threads()
         end
         ;unless=(loopentry<=mainloopstart)
     )
     for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
+)
+$(use_any_shmem ? 
+    :(                  @sync_threads()
+     ) :                NOEXPR
 )
 $((wrap_if(:($i > $(loopentry-1)),
        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
@@ -383,17 +409,17 @@ $((wrap_if(:($i > $(loopentry-1)),
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges)
+    store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges)
     return body
 end
 
 
-function loopopt(metadata_module::Module, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
+function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
     optdim        = isa(indices,Expr) ? length(indices.args) : 1
     loopsize      = LOOPSIZE
     optranges = nothing
     optimize_halo_read = true
-    return loopopt(metadata_module, caller, indices, optvars, optdim, loopsize, optranges, optimize_halo_read, body; package=package)
+    return loopopt(metadata_module, is_parallel_kernel, caller, indices, optvars, optdim, loopsize, optranges, optimize_halo_read, body; package=package)
 end
 
 
@@ -493,15 +519,19 @@ function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict
     regqueue_tails = Dict(A => Dict() for A in optvars)
     offset_mins    = Dict{Symbol, NTuple{3,Integer}}()
     offset_maxs    = Dict{Symbol, NTuple{3,Integer}}()
+    nb_regs_heads  = Dict{Symbol, Integer}()
+    nb_regs_tails  = Dict{Symbol, Integer}()
     for A in optvars
-        regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A] = define_regqueue(offsets[A], optranges[A], A, indices, int_type, optdim)
+        regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A], nb_regs_heads[A], nb_regs_tails[A] = define_regqueue(offsets[A], optranges[A], A, indices, int_type, optdim)
     end
-    return regqueue_heads, regqueue_tails, offset_mins, offset_maxs
+    return regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails
 end
 
 function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Symbol, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
     regqueue_head = Dict()
     regqueue_tail = Dict()
+    nb_regs_head  = 0
+    nb_regs_tail  = 0
     if optdim == 3
         optranges_xy     = optranges[1:2]
         optranges_z      = optranges[3]
@@ -526,7 +556,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
             for oz = offsets_z[1]:oz_max-1
                 k2 = oz
                 if haskey(regqueue_tail, k1) && haskey(regqueue_tail[k1], k2) @ModuleInternalError("regqueue_tail entry exists already.") end
-                reg = gensym_world(varname(A, (oxy..., oz)), @__MODULE__)
+                reg = gensym_world(varname(A, (oxy..., oz)), @__MODULE__);  nb_regs_tail += 1
                 if haskey(regqueue_tail, k1) regqueue_tail[k1][k2] = reg
                 else                         regqueue_tail[k1]     = Dict(k2 => reg)
                 end
@@ -535,7 +565,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
             if oz == oz_max
                 k2 = oz
                 if haskey(regqueue_head, k1) && haskey(regqueue_head[k1], k2) @ModuleInternalError("regqueue_head entry exists already.") end
-                reg = gensym_world(varname(A, (oxy..., oz)), @__MODULE__)
+                reg = gensym_world(varname(A, (oxy..., oz)), @__MODULE__);  nb_regs_head += 1
                 if haskey(regqueue_head, k1) regqueue_head[k1][k2] = reg
                 else                         regqueue_head[k1]     = Dict(k2 => reg)
                 end
@@ -544,7 +574,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    return regqueue_head, regqueue_tail, offset_min, offset_max
+    return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
 end
 
 function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
@@ -807,15 +837,16 @@ function wrap_if(condition::Expr, block::Expr; unless::Bool=false)
     end
 end
 
-function store_metadata(metadata_module::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}})
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}})
     storeexpr = quote
-        const loopopt       = true
-        const stencilranges = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
-        const offsets       = $offsets
-        const optvars       = $optvars
-        const optdim        = $optdim
-        const loopsize      = $loopsize
-        const optranges     = $optranges
+        const is_parallel_kernel = $is_parallel_kernel
+        const loopopt            = true
+        const stencilranges      = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
+        const offsets            = $offsets
+        const optvars            = $optvars
+        const optdim             = $optdim
+        const loopsize           = $loopsize
+        const optranges          = $optranges
     end
     @eval(metadata_module, $storeexpr)
 end
