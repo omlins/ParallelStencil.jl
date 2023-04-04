@@ -457,7 +457,8 @@ end
 
 function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
     synccall = async ? :(begin end) : create_synccall(package, stream)
-    if !isnothing(shmem) push!(backend_kwargs_expr, :(shmem = $shmem)) end #TODO: the shared memory argument has still to be inserted in the call for AMDGPU, once available in AMDGPU.jl.
+    backend_kwargs_expr = (backend_kwargs_expr...,)
+    if !isnothing(shmem) backend_kwargs_expr = (backend_kwargs_expr..., :(shmem = $shmem)) end #TODO: the shared memory argument has still to be inserted in the call for AMDGPU, once available in AMDGPU.jl.
     if launch
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
