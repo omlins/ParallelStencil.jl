@@ -58,7 +58,7 @@ end
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
+function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
     optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices = Tuple(extract_tuple(indices))
     readonlyvars  = find_readonlyvars(body, indices)
@@ -79,18 +79,19 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
     fullranges            = (fullrange, fullrange, fullrange)
     optranges             = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
     optranges             = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
+    use_shmemhalos        = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
     if optdim == 3
-        oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, optdim)
+        oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, use_shmemhalos, optdim)
         loopstart          = minimum(values(loopentrys))
         loopend            = loopsize
         use_any_shmem      = any(values(use_shmems))
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, optdim)
-        shmem_symbols      = define_shmem_symbols(oz_maxs, optvars, use_shmems, shmem_index_groups, optdim)
-        shmem_exprs        = define_shmem_exprs(shmem_symbols, optdim)
+        shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim)
+        shmem_exprs        = define_shmem_exprs(shmem_vars, optdim)
         shmem_z_ranges     = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
         shmem_loopentrys   = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
         shmem_loopexits    = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, optdim)
@@ -120,23 +121,8 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
             end
         end
 
-        @show nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups))
+        @show nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups)) # TODO: a group must not be counted if none of the variables uses the shmem indices symbols.
         @show nb_cell_vars     = sum(values(nb_regs_heads)) + sum(values(nb_regs_tails))
-
-        # tx            = :(@threadIdx().x + $hx1)
-        # ty            = :(@threadIdx().y + $hy1)
-        # nx_l          = :(@blockDim().x + $(hx1+hx2))
-        # ny_l          = :(@blockDim().y + $(hy1+hy2))
-        # t_h           = :((@threadIdx().y-1)*@blockDim().x + @threadIdx().x)  # NOTE: here it must be bx, not @blockDim().x
-        # t_h2          = :($t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y)
-        # tx_h          = :(($t_h-1) % $nx_l + 1)
-        # ty_h          = :(($t_h-1) ÷ $nx_l + 1)
-        # tx_h2         = :(($t_h2-1) % $nx_l + 1)
-        # ty_h2         = :(($t_h2-1) ÷ $nx_l + 1)
-        # ix_h          = :((@blockIdx().x-1)*@blockDim().x + $tx_h  - $hx1)    # NOTE: here it must be @blockDim().x, not bx
-        # ix_h2         = :((@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1)    # ...
-        # iy_h          = :((@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1)    # ...
-        # iy_h2         = :((@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1)    # ...
 
         #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
@@ -148,21 +134,25 @@ $((quote
                     $ny_l          = @blockDim().y + $(hy1+hy2)
                     $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x  # NOTE: here it must be bx, not @blockDim().x
                     $t_h2          = $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y
-                    $tx_h          = ($t_h-1) % $nx_l + 1
                     $ty_h          = ($t_h-1) ÷ $nx_l + 1
-                    $tx_h2         = ($t_h2-1) % $nx_l + 1
+                    $tx_h          = ($t_h-1) % $nx_l + 1                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
                     $ty_h2         = ($t_h2-1) ÷ $nx_l + 1
-                    $ix_h          = (@blockIdx().x-1)*@blockDim().x + $tx_h  - $hx1    # NOTE: here it must be @blockDim().x, not bx
-                    $ix_h2         = (@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1    # ...
-                    $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1    # ...
-                    $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
+                    $tx_h2         = ($t_h2-1) % $nx_l + 1                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
+                    $ix_h          = $ix - @threadIdx().x + $tx_h  - $hx1    # NOTE: here it must be @blockDim().x, not bx
+                    $ix_h2         = $ix - @threadIdx().x + $tx_h2 - $hx1    # ...
+                    $iy_h          = $iy - @threadIdx().y + $ty_h  - $hy1    # ...
+                    $iy_h2         = $iy - @threadIdx().y + $ty_h2 - $hy1    # ...
+                    # $ix_h          = (@blockIdx().x-1)*@blockDim().x + $tx_h  - $hx1    # NOTE: here it must be @blockDim().x, not bx
+                    # $ix_h2         = (@blockIdx().x-1)*@blockDim().x + $tx_h2 - $hx1    # ...
+                    # $iy_h          = (@blockIdx().y-1)*@blockDim().y + $ty_h  - $hy1    # ...
+                    # $iy_h2         = (@blockIdx().y-1)*@blockDim().y + $ty_h2 - $hy1    # ...
     end
-    for vars in values(shmem_index_groups) for A in (vars[1],) for s in (shmem_symbols[A],) for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+    for vars in values(shmem_index_groups) for A in (vars[1],) if use_shmemindices[A] for s in (shmem_vars[A],) for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
 $((:(               $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l), $shmem_offset) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l), +(nx_l_A * ny_l_A)*eltype(A))
     )
-    for (A, s) in shmem_symbols for (shmem_offset,  nx_l, ny_l, A_head) = ((shmem_exprs[A][:offset],  s[:nx_l], s[:ny_l], s[:A_head]),)
+    for (A, s) in shmem_vars for (shmem_offset,  nx_l, ny_l, A_head) = ((shmem_exprs[A][:offset],  s[:nx_l], s[:ny_l], s[:A_head]),)
   )...
 )
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
@@ -185,7 +175,7 @@ $((wrap_if(:($i > $(loopentry-1)),
         )
         ;unless=(loopentry==loopstart)
     )
-    for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
+    for A in keys(shmem_vars) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -219,7 +209,9 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
                     end
 
 # Main loop
-                    for $i = $mainloopstart:$mainloopend
+                    # for $i = $mainloopstart:$mainloopend # ParallelStencil.@unroll 
+$(wrap_loop(i, mainloopstart:mainloopend, 
+        quote
                         $tz_g = $i + $loopoffset
                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
@@ -229,16 +221,27 @@ $(use_any_shmem ?
 )
 $((wrap_if(:($i > $(loopentry-1)),
         quote
-                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                        if (2*$t_h <= $nx_l*$ny_l && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
                         end
-                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                        if (2*$t_h2 > $nx_l*$ny_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
                         end
         end
         ;unless=(loopentry<=mainloopstart)
     )
-    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+    for (A, s) in shmem_vars if use_shmemhalos[A] for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
+                        if ($ix>0 && $ix<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx,$ty] = $A[$ix,$iy,$iz+$oz_max] 
+                        end
+        end
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_vars if !use_shmemhalos[A] for (loopentry, oz_max,  tx, ty, nx_l, ny_l, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:A_head]),)
   )...
 )
 $(use_any_shmem ? 
@@ -254,11 +257,15 @@ $((wrap_if(:($i > $(loopentry-1)),
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
+    use_shmemhalo ? 
        :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+        )
+    :
+       :(               $reg       = (0<$tx+$(oxy[1])<=$nx_l && 0<$ty+$(oxy[2])<=$ny_l) ? $(regsource(A_head, oxy, (tx, ty))) : (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
         )
         ;unless=(loopentry<=mainloopstart)
     )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
+    for (A, s) in shmem_vars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for (use_shmemhalo, loopentry,  tx, ty, nx_l, ny_l, A_head) = ((use_shmemhalos[A], loopentrys[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:A_head]),)
   )...
 )
 $((wrap_if(:($i > 0),
@@ -279,13 +286,26 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
-       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+    use_shmemhalo ? 
+       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+        )
+    :
+       :(               $reg       = (0<$tx+$(oxy[1])<=$nx_l && 0<$ty+$(oxy[2])<=$ny_l) ? $(regsource(A_head, oxy, (tx, ty))) : (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
         )
         ;unless=(loopentry<=mainloopstart)
     )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+    for (A, s) in shmem_vars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (use_shmemhalo, loopentry, oz_max,  tx, ty, nx_l, ny_l, A_head) = ((use_shmemhalos[A], loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
   )...
 )
+# TODO: remove these as soon as the above is tested:
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+#   )...
+# )
 $(( # NOTE: the if statement is not needed here as we only deal with registers
     # wrap_if(:($i > $(loopentry-1)),
        :(
@@ -296,78 +316,81 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
   )...
 )
-                    end
+        end
+        # ;unroll=true
+    ) # wrap_loop end
+)                   # end
 
 # Wrap-up-loop
-                    for $i = $(mainloopend+1):$loopend
-                        $tz_g = $i + $loopoffset
-                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
-                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
-$((wrap_if(:($i > $(loopentry-1)),
-        quote
-                        @sync_threads()
-                        if ($t_h <= cld($nx_l*$ny_l,2) && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
-                        end
-                        if ($t_h2 > cld($nx_l*$ny_l,2) && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
-                        end
-                        @sync_threads()
-        end
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for (A, s) in shmem_symbols for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
-  )...
-)
-$((wrap_if(:($i > $(loopentry-1)),
-       :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
-        )
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
-  )...
-)
-$((wrap_if(:($i > $(loopentry-1)),
-       :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
-        )
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
-  )...
-)
-$((wrap_if(:($i > 0),
-        quote
-                        $body
-        end; 
-        unless=(mainloopstart>=1)
-    )
-))
-$((wrap_if(:($i > $(loopentry-1)),
-       :(
-                        $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
-        )
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
-  )...
-)
-$((wrap_if(:($i > $(loopentry-1)),
-       :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
-        )
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for (A, s) in shmem_symbols for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
-  )...
-)
-$((wrap_if(:($i > $(loopentry-1)),
-       :(
-                        $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
-        )
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
-  )...
-)
+#                     ParallelStencil.@unroll for $i = $(mainloopend+1):$loopend
+#                         $tz_g = $i + $loopoffset
+#                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+#                         $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+# $((wrap_if(:($i > $(loopentry-1)),
+#         quote
+#                         @sync_threads()
+#                         if (2*$t_h <= $nx_l*$ny_l && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
+#                         end
+#                         if (2*$t_h2 <= $nx_l*$ny_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
+#                         end
+#                         @sync_threads()
+#         end
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+#   )...
+# )
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for A in optvars for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],) if !use_shmems[A]
+#   )...
+# )
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(               $reg       = $(regsource(A_head, oxy, (tx, ty)))                # e.g. A_ixm1_iyp2_izp3 = A_izp3[tx - 1, ty + 2]
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars for (oxy, regs) in regqueue_heads[A] for reg in values(regs) for (loopentry, tx, ty, A_head) = ((loopentrys[A], s[:tx], s[:ty], s[:A_head]),)
+#   )...
+# )
+# $((wrap_if(:($i > 0),
+#         quote
+#                         $body
+#         end; 
+#         unless=(mainloopstart>=1)
+#     )
+# ))
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(
+#                         $(regs[oz]) = $(regs[oz+1])                                     # e.g. A_ixm1_iyp2_iz = A_ixm1_iyp2_izp1
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for A in optvars for regs in values(regqueue_tails[A]) for oz in sort(keys(regs)) for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz<=oz_max-2
+#   )...
+# )
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(                $reg        = $(regsource(A_head, oxy, (tx, ty)))              # e.g. A_ixm3_iyp2_izp2 = A_izp3[tx - 3, ty + 2]
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max, tx, ty, A_head) = ((loopentrys[A], oz_maxs[A], s[:tx], s[:ty], s[:A_head]),) if oz==oz_max-1 && !(haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max))
+#   )...
+# )
+# $((wrap_if(:($i > $(loopentry-1)),
+#        :(
+#                         $reg           = $(regqueue_heads[A][oxy][oz_max])              # e.g. A_ixm1_iyp2_izp2 = A_ixm1_iyp2_izp3
+#         )
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
+#   )...
+# )
 
 #                         $tz_g = $i + $loopoffset
 #                         if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
@@ -376,7 +399,7 @@ $((wrap_if(:($i > $(loopentry-1)),
 #     # wrap_if(:(($(loopentry-1) < $i < $(shmem_loopentry)) || ($(shmem_loopexit) < $i)),
 #        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
 #         )
-#     for A in keys(shmem_symbols) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
+#     for A in keys(shmem_vars) for (oxy, regs) in regqueue_heads[A] for (oz, reg) in regs for loopentry = (loopentrys[A],)
 #   )...
 # )
 # $((
@@ -404,22 +427,24 @@ $((wrap_if(:($i > $(loopentry-1)),
 #     for A in optvars for (oxy, regs) in regqueue_tails[A] for (oz, reg) in regs for (loopentry, oz_max) = ((loopentrys[A], oz_maxs[A]),) if oz==oz_max-1 && haskey(regqueue_heads[A], oxy) && haskey(regqueue_heads[A][oxy], oz_max)
 #   )...
 # )
-                    end
+                    # end
         end
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges)
+    store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges, use_shmemhalos)
+    # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
 
 
 function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
-    optdim        = isa(indices,Expr) ? length(indices.args) : 1
-    loopsize      = LOOPSIZE
-    optranges = nothing
+    optdim             = isa(indices,Expr) ? length(indices.args) : 1
+    loopsize           = LOOPSIZE
+    optranges          = nothing
+    use_shmemhalos      = nothing
     optimize_halo_read = true
-    return loopopt(metadata_module, is_parallel_kernel, caller, indices, optvars, optdim, loopsize, optranges, optimize_halo_read, body; package=package)
+    return loopopt(metadata_module, is_parallel_kernel, caller, indices, optvars, optdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, body; package=package)
 end
 
 
@@ -468,9 +493,9 @@ function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symb
         @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
         for i = 1:length(indices)
             offset_expr = substitute(indices_expr[i], indices[i], 0)
-            offset = int_type(eval_arg(caller, offset_expr))
-            if     (offset >  0) indices_expr[i] = :($(indices[i])   + $offset       )
-            elseif (offset <  0) indices_expr[i] = :($(indices[i]) - $(abs(offset)))
+            offset = eval_arg(caller, offset_expr)
+            if     (offset >  0) indices_expr[i] = :($(indices[i]) + $(int_type(offset))     )
+            elseif (offset <  0) indices_expr[i] = :($(indices[i]) - $(int_type(abs(offset))))
             else                 indices_expr[i] =     indices[i]
             end
         end
@@ -488,7 +513,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
                 offsets = ()
                 for i = 1:length(indices)
                     offset_expr = substitute(indices_expr[i], indices[i], 0)
-                    offset = int_type(eval_arg(caller, offset_expr))
+                    offset = int_type(eval_arg(caller, offset_expr)) # TODO: do this and cast later to enable unsigned integer (also dealing with negative rangers is required elsewhere): offset = eval_arg(caller, offset_expr)
                     offsets = (offsets..., offset)
                 end
                 if optdim == 3
@@ -577,24 +602,29 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
     return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
 end
 
-function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, optdim::Integer)
-    oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
+function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, use_shmemhalos_arg, optdim::Integer)
+    oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if optdim == 3
         for A in optvars
             offset_min, offset_max = offset_mins[A], offset_maxs[A]
-            oz_max      = offset_max[3]
-            hx1, hy1    = -1 .* offset_min[1:2]
-            hx2, hy2    = offset_max[1:2]
-            use_shmem   = (hx1+hx2>0 || hy1+hy2>0)
-            offset_span = offset_max .- offset_min
-            oz_span     = offset_span[3]
-            loopentry   = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, offset_span, oz_span, loopentry
+            oz_max         = offset_max[3]
+            hx1, hy1       = -1 .* offset_min[1:2]
+            hx2, hy2       = offset_max[1:2]
+            use_shmem      = (hx1+hx2>0 || hy1+hy2>0)
+            use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (A ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, A)
+                             elseif !(hx1+hx2>0 && hy1+hy2>0)                                    USE_SHMEMHALO_1D_DEFAULT
+                             else                                                                USE_SHMEMHALO_DEFAULT
+                             end
+            use_shmemindex = false #use_shmem && use_shmemhalo # && (hx1+hx2>0 && hy1+hy2>0)
+            offset_span    = offset_max .- offset_min
+            oz_span        = offset_span[3]
+            loopentry      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
+            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], use_shmemhalos[A], use_shmemindices[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, use_shmemhalo, use_shmemindex, offset_span, oz_span, loopentry
         end
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, offset_spans, oz_spans, loopentrys
+    return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
 end
 
 function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, optdim::Integer)
@@ -612,56 +642,117 @@ function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Sym
     return shmem_index_groups
 end
 
-function define_shmem_symbols(oz_maxs::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, shmem_index_groups, optdim::Integer)
-    sym = Dict(A => Dict() for A in optvars if use_shmems[A])
+function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, indices, use_shmems::Dict{Any, Any}, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim::Integer)
+    ix, iy, iz = indices
+    shmem_vars = Dict(A => Dict() for A in optvars if use_shmems[A])
     if optdim == 3
         for vars in values(shmem_index_groups)
             suffix = join(string.(vars), "_")
-            tx    = gensym_world("tx_$suffix", @__MODULE__)
-            ty    = gensym_world("ty_$suffix", @__MODULE__)
-            nx_l  = gensym_world("nx_l_$suffix", @__MODULE__)
-            ny_l  = gensym_world("ny_l_$suffix", @__MODULE__)
-            t_h   = gensym_world("t_h_$suffix", @__MODULE__)
-            t_h2  = gensym_world("t_h2_$suffix", @__MODULE__)
-            tx_h  = gensym_world("tx_h_$suffix", @__MODULE__)
-            tx_h2 = gensym_world("tx_h2_$suffix", @__MODULE__)
-            ty_h  = gensym_world("ty_h_$suffix", @__MODULE__)
-            ty_h2 = gensym_world("ty_h2_$suffix", @__MODULE__)
-            ix_h  = gensym_world("ix_h_$suffix", @__MODULE__)
-            ix_h2 = gensym_world("ix_h2_$suffix", @__MODULE__)
-            iy_h  = gensym_world("iy_h_$suffix", @__MODULE__)
-            iy_h2 = gensym_world("iy_h2_$suffix", @__MODULE__)
-            for A in vars
-                sym[A][:tx]     = tx
-                sym[A][:ty]     = ty
-                sym[A][:nx_l]   = nx_l
-                sym[A][:ny_l]   = ny_l
-                sym[A][:t_h]    = t_h
-                sym[A][:t_h2]   = t_h2
-                sym[A][:tx_h]   = tx_h
-                sym[A][:tx_h2]  = tx_h2
-                sym[A][:ty_h]   = ty_h
-                sym[A][:ty_h2]  = ty_h2
-                sym[A][:ix_h]   = ix_h
-                sym[A][:ix_h2]  = ix_h2
-                sym[A][:iy_h]   = iy_h
-                sym[A][:iy_h2]  = iy_h2
-                sym[A][:A_head] = gensym_world(varname(A, (oz_maxs[A],); i="iz"), @__MODULE__)
+            sym_tx    = gensym_world("tx_$suffix", @__MODULE__)
+            sym_ty    = gensym_world("ty_$suffix", @__MODULE__)
+            sym_nx_l  = gensym_world("nx_l_$suffix", @__MODULE__)
+            sym_ny_l  = gensym_world("ny_l_$suffix", @__MODULE__)
+            sym_t_h   = gensym_world("t_h_$suffix", @__MODULE__)
+            sym_t_h2  = gensym_world("t_h2_$suffix", @__MODULE__)
+            sym_tx_h  = gensym_world("tx_h_$suffix", @__MODULE__)
+            sym_tx_h2 = gensym_world("tx_h2_$suffix", @__MODULE__)
+            sym_ty_h  = gensym_world("ty_h_$suffix", @__MODULE__)
+            sym_ty_h2 = gensym_world("ty_h2_$suffix", @__MODULE__)
+            sym_ix_h  = gensym_world("ix_h_$suffix", @__MODULE__)
+            sym_ix_h2 = gensym_world("ix_h2_$suffix", @__MODULE__)
+            sym_iy_h  = gensym_world("iy_h_$suffix", @__MODULE__)
+            sym_iy_h2 = gensym_world("iy_h2_$suffix", @__MODULE__)
+            for A in vars   
+                if use_shmemindices[A]
+                    shmem_vars[A][:tx]     = sym_tx
+                    shmem_vars[A][:ty]     = sym_ty
+                    shmem_vars[A][:nx_l]   = sym_nx_l
+                    shmem_vars[A][:ny_l]   = sym_ny_l
+                    shmem_vars[A][:t_h]    = sym_t_h
+                    shmem_vars[A][:t_h2]   = sym_t_h2
+                    shmem_vars[A][:tx_h]   = sym_tx_h
+                    shmem_vars[A][:tx_h2]  = sym_tx_h2
+                    shmem_vars[A][:ty_h]   = sym_ty_h
+                    shmem_vars[A][:ty_h2]  = sym_ty_h2
+                    shmem_vars[A][:ix_h]   = sym_ix_h
+                    shmem_vars[A][:ix_h2]  = sym_ix_h2
+                    shmem_vars[A][:iy_h]   = sym_iy_h
+                    shmem_vars[A][:iy_h2]  = sym_iy_h2
+                else
+                    if use_shmemhalos[A]
+                        hx1, hy1, hx2, hy2 = hx1s[A], hy1s[A], hx2s[A], hy2s[A]
+                        if (hx1+hx2>0 && hy1+hy2>0)
+                            tx    = :(@threadIdx().x + $hx1)
+                            ty    = :(@threadIdx().y + $hy1)
+                            nx_l  = :(@blockDim().x + $(hx1+hx2))
+                            ny_l  = :(@blockDim().y + $(hy1+hy2))
+                            t_h   = :((@threadIdx().y-1)*@blockDim().x + @threadIdx().x)  # NOTE: here it must be bx, not @blockDim().x
+                            t_h2  = :($t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y)
+                            tx_h  = :(($t_h-1) ÷ $nx_l + 1)
+                            tx_h2 = :(($t_h-1) % $nx_l + 1)                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
+                            ty_h  = :(($t_h2-1) ÷ $nx_l + 1)
+                            ty_h2 = :(($t_h2-1) % $nx_l + 1)                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
+                            ix_h  = :($ix - @threadIdx().x + $tx_h  - $hx1)    # NOTE: here it must be @blockDim().x, not bx
+                            ix_h2 = :($ix - @threadIdx().x + $tx_h2 - $hx1)    # ...
+                            iy_h  = :($iy - @threadIdx().y + $ty_h  - $hy1)    # ...
+                            iy_h2 = :($iy - @threadIdx().y + $ty_h2 - $hy1)    # ...
+                            shmem_vars[A][:tx]     = tx
+                            shmem_vars[A][:ty]     = ty
+                            shmem_vars[A][:nx_l]   = nx_l
+                            shmem_vars[A][:ny_l]   = ny_l
+                            shmem_vars[A][:t_h]    = t_h
+                            shmem_vars[A][:t_h2]   = t_h2
+                            shmem_vars[A][:tx_h]   = tx_h
+                            shmem_vars[A][:tx_h2]  = tx_h2
+                            shmem_vars[A][:ty_h]   = ty_h
+                            shmem_vars[A][:ty_h2]  = ty_h2
+                            shmem_vars[A][:ix_h]   = ix_h
+                            shmem_vars[A][:ix_h2]  = ix_h2
+                            shmem_vars[A][:iy_h]   = iy_h
+                            shmem_vars[A][:iy_h2]  = iy_h2
+                        elseif (hx1+hx2>0)
+                            # @ModuleInternalError("loopopt: using shared memory halos when (hx1+hx2>0), but not (hy1+hy2>0) is not implemented.")
+                            shmem_vars[A][:tx]     = :(@threadIdx().x + $hx1)
+                            shmem_vars[A][:ty]     = :(@threadIdx().y)
+                            shmem_vars[A][:nx_l]   = :(@blockDim().x + $(hx1+hx2))
+                            shmem_vars[A][:ny_l]   = :(@blockDim().y)
+                            shmem_vars[A][:tx_h]   = :(@threadIdx().x)
+                            shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
+                            shmem_vars[A][:ix_h]   = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h])  - $hx1)
+                            shmem_vars[A][:ix_h2]  = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h2]) - $hx1)
+                        elseif (hy1+hy2>0)
+                            shmem_vars[A][:tx]     = :(@threadIdx().x)
+                            shmem_vars[A][:ty]     = :(@threadIdx().y + $hy1)
+                            shmem_vars[A][:nx_l]   = :(@blockDim().x)
+                            shmem_vars[A][:ny_l]   = :(@blockDim().y + $(hy1+hy2))
+                            shmem_vars[A][:ty_h]   = :(@threadIdx().y)
+                            shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
+                            shmem_vars[A][:iy_h]   = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h])  - $hy1)
+                            shmem_vars[A][:iy_h2]  = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h2]) - $hy1)
+                        end
+                    else
+                        shmem_vars[A][:tx]     = :(@threadIdx().x)
+                        shmem_vars[A][:ty]     = :(@threadIdx().y)
+                        shmem_vars[A][:nx_l]   = :(@blockDim().x)
+                        shmem_vars[A][:ny_l]   = :(@blockDim().y)
+                    end
+                end
+                shmem_vars[A][:A_head] = gensym_world(varname(A, (oz_maxs[A],); i="iz"), @__MODULE__)
             end
         end
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    return sym
+    return shmem_vars
 end
 
-function define_shmem_exprs(shmem_symbols::Dict{Symbol, Dict{Any, Any}}, optdim::Integer)
-    exprs = Dict(A => Dict() for A in keys(shmem_symbols))
+function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, optdim::Integer)
+    exprs = Dict(A => Dict() for A in keys(shmem_vars))
     offset = ()
     if optdim == 3
-        for A in keys(shmem_symbols)
+        for A in keys(shmem_vars)
             exprs[A][:offset] = (length(offset) > 0) ? Expr(:call, :+, offset...) : 0
-            offset = (offset..., :($(shmem_symbols[A][:nx_l]) * $(shmem_symbols[A][:ny_l]) * sizeof(eltype($A))))
+            offset = (offset..., :($(shmem_vars[A][:nx_l]) * $(shmem_vars[A][:ny_l]) * sizeof(eltype($A))))
         end
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
@@ -837,7 +928,27 @@ function wrap_if(condition::Expr, block::Expr; unless::Bool=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}})
+function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
+    if unroll
+        return quote
+                    $(( quote
+                            $index = $i
+                            $block
+                        end
+                        for i in range
+                    )...
+                    )
+                end
+    else
+        return quote
+                    for $index = $(range.start):$(range.stop)
+                        $block
+                    end
+                end
+    end
+end
+
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, use_shmemhalos)
     storeexpr = quote
         const is_parallel_kernel = $is_parallel_kernel
         const loopopt            = true
@@ -847,8 +958,29 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offse
         const optdim             = $optdim
         const loopsize           = $loopsize
         const optranges          = $optranges
+        const use_shmemhalos     = $use_shmemhalos
     end
     @eval(metadata_module, $storeexpr)
 end
 
 Base.sort(keys::T; kwargs...) where T<:Base.AbstractSet = sort([keys...]; kwargs...)
+
+
+# macro unroll(args...) check_initialized(); checkargs_unroll(args...); esc(unroll(args...)); end
+
+# function checkargs_unroll(args...)
+#     if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
+# end
+
+# function unroll(expr)
+#     if @capture(expr, for i_ = range_ body__ end) #TODO: enable in instead of equal
+#         return quote
+#             for $i = $range
+#                 $(body...)
+#                 $(Expr(:loopinfo, nodes...))
+#             end
+#         end
+#     else
+#         error("Syntax error: loopinfo needs a for loop")
+#     end
+# end
