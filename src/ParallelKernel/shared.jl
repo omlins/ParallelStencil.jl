@@ -31,9 +31,9 @@ const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
-const INT_CUDA                     = Int64
-const INT_AMDGPU                   = Int64
-const INT_THREADS                  = Int64
+const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
+const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
@@ -51,7 +51,7 @@ const BOUNDARY_WIDTH_TYPE_1D       = Integer
 const BOUNDARY_WIDTH_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE_2D       = Tuple{T, T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE          = Tuple{T, T, T} where T <: Integer
-const OPERATORS                    = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
+const INDEXING_OPERATORS           = [:-, :+, :*, :÷, :%, :<, :>, :<=, :>=, :(==), :(!=), :(:), :!, :&&, :||] #NOTE: ^ is not contained as causes an error. :(:),
 const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
 const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
@@ -280,6 +280,16 @@ function substitute(expr::Expr, old, new)
 end
 
 substitute(expr, old, new) = (old == expr) ? new : expr
+
+function cast(expr::Expr, f::Symbol, type::DataType)
+    return postwalk(expr) do ex
+        if @capture(ex, $f(args__))
+            return :($type($ex))
+        else
+            return ex
+        end
+    end
+end
 
 function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
