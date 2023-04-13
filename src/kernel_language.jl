@@ -85,12 +85,12 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
     if optdim == 3
-        oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, use_shmemhalos, optdim)
+        oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, use_shmemhalos, optdim)
         loopstart          = minimum(values(loopentrys))
         loopend            = loopsize
         use_any_shmem      = any(values(use_shmems))
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, optdim)
-        shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim)
+        shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim)
         shmem_exprs        = define_shmem_exprs(shmem_vars, optdim)
         shmem_z_ranges     = define_shmem_z_ranges(offsets_by_z, use_shmems, optdim)
         shmem_loopentrys   = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, optdim)
@@ -230,7 +230,35 @@ $((wrap_if(:($i > $(loopentry-1)),
         end
         ;unless=(loopentry<=mainloopstart)
     )
-    for (A, s) in shmem_vars if use_shmemhalos[A] for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+    for (A, s) in shmem_vars if (use_shmemhalos[A] && use_shmem_xs[A] && use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
+                        if (2*$tx_h <= $nx_l && $ix_h>0 && $ix_h<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h,$ty] = $A[$ix_h,$iy,$iz+$oz_max] 
+                        end
+                        if (2*$tx_h2 > $nx_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx_h2,$ty] = $A[$ix_h2,$iy,$iz+$oz_max]
+                        end
+        end
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_vars if (use_shmemhalos[A] && use_shmem_xs[A] && !use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, tx_h, tx_h2, ix_h, ix_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:tx_h], s[:tx_h2], s[:ix_h], s[:ix_h2], s[:A_head]),)
+  )...
+)
+$((wrap_if(:($i > $(loopentry-1)),
+        quote
+                        if (2*$ty_h <= $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx,$ty_h] = $A[$ix,$iy_h,$iz+$oz_max] 
+                        end
+                        if (2*$ty_h2 > $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                            $A_head[$tx,$ty_h2] = $A[$ix,$iy_h2,$iz+$oz_max]
+                        end
+        end
+        ;unless=(loopentry<=mainloopstart)
+    )
+    for (A, s) in shmem_vars if (use_shmemhalos[A] && !use_shmem_xs[A] && use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, ty_h, ty_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:ty_h], s[:ty_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
 $((wrap_if(:($i > $(loopentry-1)),
@@ -603,28 +631,30 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
 end
 
 function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, use_shmemhalos_arg, optdim::Integer)
-    oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
+    oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if optdim == 3
         for A in optvars
             offset_min, offset_max = offset_mins[A], offset_maxs[A]
             oz_max         = offset_max[3]
             hx1, hy1       = -1 .* offset_min[1:2]
             hx2, hy2       = offset_max[1:2]
-            use_shmem      = (hx1+hx2>0 || hy1+hy2>0)
+            use_shmem_x    = (hx1 + hx2 > 0)
+            use_shmem_y    = (hy1 + hy2 > 0)
+            use_shmem      = use_shmem_x || use_shmem_y
             use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (A ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, A)
-                             elseif !(hx1+hx2>0 && hy1+hy2>0)                                    USE_SHMEMHALO_1D_DEFAULT
-                             else                                                                USE_SHMEMHALO_DEFAULT
+                             elseif !(use_shmem_x && use_shmem_y)                                  USE_SHMEMHALO_1D_DEFAULT
+                             else                                                                  USE_SHMEMHALO_DEFAULT
                              end
-            use_shmemindex = false #use_shmem && use_shmemhalo # && (hx1+hx2>0 && hy1+hy2>0)
+            use_shmemindex = use_shmem && use_shmemhalo && (use_shmem_x && use_shmem_y)
             offset_span    = offset_max .- offset_min
             oz_span        = offset_span[3]
             loopentry      = 1 - oz_span #TODO: make possibility to do first and last read in z dimension directly into registers without halo
-            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], use_shmemhalos[A], use_shmemindices[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, use_shmemhalo, use_shmemindex, offset_span, oz_span, loopentry
+            oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], use_shmem_xs[A], use_shmem_ys[A], use_shmemhalos[A], use_shmemindices[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, use_shmem_x, use_shmem_y, use_shmemhalo, use_shmemindex, offset_span, oz_span, loopentry
         end
     else
         @ArgumentError("loopopt: only optdim=3 is currently supported.")
     end
-    return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
+    return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
 end
 
 function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, optdim::Integer)
@@ -642,7 +672,7 @@ function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Sym
     return shmem_index_groups
 end
 
-function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, indices, use_shmems::Dict{Any, Any}, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim::Integer)
+function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, indices, use_shmems::Dict{Any, Any}, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, optdim::Integer)
     ix, iy, iz = indices
     shmem_vars = Dict(A => Dict() for A in optvars if use_shmems[A])
     if optdim == 3
@@ -680,22 +710,23 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                     shmem_vars[A][:iy_h2]  = sym_iy_h2
                 else
                     if use_shmemhalos[A]
+                        use_shmem_x, use_shmem_y = use_shmem_xs[A], use_shmem_ys[A]
                         hx1, hy1, hx2, hy2 = hx1s[A], hy1s[A], hx2s[A], hy2s[A]
-                        if (hx1+hx2>0 && hy1+hy2>0)
-                            tx    = :(@threadIdx().x + $hx1)
-                            ty    = :(@threadIdx().y + $hy1)
-                            nx_l  = :(@blockDim().x + $(hx1+hx2))
-                            ny_l  = :(@blockDim().y + $(hy1+hy2))
-                            t_h   = :((@threadIdx().y-1)*@blockDim().x + @threadIdx().x)  # NOTE: here it must be bx, not @blockDim().x
-                            t_h2  = :($t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y)
-                            tx_h  = :(($t_h-1) ÷ $nx_l + 1)
-                            tx_h2 = :(($t_h-1) % $nx_l + 1)                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
-                            ty_h  = :(($t_h2-1) ÷ $nx_l + 1)
-                            ty_h2 = :(($t_h2-1) % $nx_l + 1)                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
-                            ix_h  = :($ix - @threadIdx().x + $tx_h  - $hx1)    # NOTE: here it must be @blockDim().x, not bx
-                            ix_h2 = :($ix - @threadIdx().x + $tx_h2 - $hx1)    # ...
-                            iy_h  = :($iy - @threadIdx().y + $ty_h  - $hy1)    # ...
-                            iy_h2 = :($iy - @threadIdx().y + $ty_h2 - $hy1)    # ...
+                        if use_shmem_x && use_shmem_y # NOTE: if the following expressions are noted with ":()" then it will cause a segmentation fault and run time.
+                            tx            = quote @threadIdx().x + $hx1 end
+                            ty            = quote @threadIdx().y + $hy1 end
+                            nx_l          = quote @blockDim().x + $(hx1+hx2) end
+                            ny_l          = quote @blockDim().y + $(hy1+hy2) end
+                            t_h           = quote (@threadIdx().y-1)*@blockDim().x + @threadIdx().x end  # NOTE: here it must be bx, not @blockDim().x
+                            t_h2          = quote $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y end
+                            ty_h          = quote ($t_h-1) ÷ $nx_l + 1 end
+                            tx_h          = quote ($t_h-1) % $nx_l + 1 end                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
+                            ty_h2         = quote ($t_h2-1) ÷ $nx_l + 1 end
+                            tx_h2         = quote ($t_h2-1) % $nx_l + 1 end                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
+                            ix_h          = quote $ix - @threadIdx().x + $tx_h  - $hx1 end    # NOTE: here it must be @blockDim().x, not bx
+                            ix_h2         = quote $ix - @threadIdx().x + $tx_h2 - $hx1 end    # ...
+                            iy_h          = quote $iy - @threadIdx().y + $ty_h  - $hy1 end    # ...
+                            iy_h2         = quote $iy - @threadIdx().y + $ty_h2 - $hy1 end    # ...
                             shmem_vars[A][:tx]     = tx
                             shmem_vars[A][:ty]     = ty
                             shmem_vars[A][:nx_l]   = nx_l
@@ -710,23 +741,25 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                             shmem_vars[A][:ix_h2]  = ix_h2
                             shmem_vars[A][:iy_h]   = iy_h
                             shmem_vars[A][:iy_h2]  = iy_h2
-                        elseif (hx1+hx2>0)
+                        elseif use_shmem_x
                             # @ModuleInternalError("loopopt: using shared memory halos when (hx1+hx2>0), but not (hy1+hy2>0) is not implemented.")
                             shmem_vars[A][:tx]     = :(@threadIdx().x + $hx1)
                             shmem_vars[A][:ty]     = :(@threadIdx().y)
                             shmem_vars[A][:nx_l]   = :(@blockDim().x + $(hx1+hx2))
                             shmem_vars[A][:ny_l]   = :(@blockDim().y)
                             shmem_vars[A][:tx_h]   = :(@threadIdx().x)
-                            shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
+                            # shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
+                            shmem_vars[A][:tx_h2]  = :(@threadIdx().x + $(hx1+hx2))
                             shmem_vars[A][:ix_h]   = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h])  - $hx1)
                             shmem_vars[A][:ix_h2]  = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h2]) - $hx1)
-                        elseif (hy1+hy2>0)
+                        elseif use_shmem_y
                             shmem_vars[A][:tx]     = :(@threadIdx().x)
                             shmem_vars[A][:ty]     = :(@threadIdx().y + $hy1)
                             shmem_vars[A][:nx_l]   = :(@blockDim().x)
                             shmem_vars[A][:ny_l]   = :(@blockDim().y + $(hy1+hy2))
                             shmem_vars[A][:ty_h]   = :(@threadIdx().y)
-                            shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
+                            # shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
+                            shmem_vars[A][:ty_h2]  = :(@threadIdx().y + $(hy1+hy2))
                             shmem_vars[A][:iy_h]   = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h])  - $hy1)
                             shmem_vars[A][:iy_h2]  = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h2]) - $hy1)
                         end
