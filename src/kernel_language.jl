@@ -59,9 +59,11 @@ end
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
 function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
-    optvars = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
-    indices = Tuple(extract_tuple(indices))
-    readonlyvars  = find_readonlyvars(body, indices)
+    optvars        = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
+    indices        = Tuple(extract_tuple(indices))
+    use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
+    optranges      = isnothing(optranges) ? optranges : eval_arg(caller, optranges)
+    readonlyvars   = find_readonlyvars(body, indices)
     if optvars == (Symbol(""),)
         optvars = Tuple(keys(readonlyvars))
     else
@@ -69,19 +71,16 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
             if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
         end
     end
-    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument loopopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel. Set loopopt=false for this kernel.") end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
-    fullrange             = typemin(int_type):typemax(int_type)
-    fullranges            = (fullrange, fullrange, fullrange)
-    optranges             = isnothing(optranges) ? (A = fullranges for A in optvars) : eval_arg(caller, optranges)
-    optranges             = Dict(A => (A ∈ keys(optranges)) ? getproperty(optranges, A) : fullranges for A in optvars)
-    use_shmemhalos        = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
+    optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
+    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument loopopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set loopopt=false for this kernel.") end
+    optranges             = define_optranges(optranges, optvars, int_type)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
     if optdim == 3
@@ -561,6 +560,21 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
         return ex    
     end
     return offsets_by_xy, offsets_by_z
+end
+
+function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by_z)
+    return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
+end
+
+function define_optranges(optranges_arg, optvars, int_type)
+    fullrange   = typemin(int_type):typemax(int_type)
+    fullranges  = (fullrange, fullrange, fullrange)
+    optranges   = Dict(A => if (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)) getproperty(optranges_arg, A)
+                            else                                                      fullranges
+                            end
+                      for A in optvars
+                 )
+    return optranges
 end
 
 function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
