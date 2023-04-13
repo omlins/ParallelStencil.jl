@@ -744,8 +744,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                             shmem_vars[A][:nx_l]   = :(@blockDim().x + $(hx1+hx2))
                             shmem_vars[A][:ny_l]   = :(@blockDim().y)
                             shmem_vars[A][:tx_h]   = :(@threadIdx().x)
-                            # shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
-                            shmem_vars[A][:tx_h2]  = :(@threadIdx().x + $(hx1+hx2))
+                            shmem_vars[A][:tx_h2]  = :(@threadIdx().x + $(hx1+hx2)) # NOTE: alternative: shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
                             shmem_vars[A][:ix_h]   = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h])  - $hx1)
                             shmem_vars[A][:ix_h2]  = :($ix - @threadIdx().x + $(shmem_vars[A][:tx_h2]) - $hx1)
                         elseif use_shmem_y
@@ -754,8 +753,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                             shmem_vars[A][:nx_l]   = :(@blockDim().x)
                             shmem_vars[A][:ny_l]   = :(@blockDim().y + $(hy1+hy2))
                             shmem_vars[A][:ty_h]   = :(@threadIdx().y)
-                            # shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
-                            shmem_vars[A][:ty_h2]  = :(@threadIdx().y + $(hy1+hy2))
+                            shmem_vars[A][:ty_h2]  = :(@threadIdx().y + $(hy1+hy2)) # NOTE: alternative: # shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
                             shmem_vars[A][:iy_h]   = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h])  - $hy1)
                             shmem_vars[A][:iy_h2]  = :($iy - @threadIdx().y + $(shmem_vars[A][:ty_h2]) - $hy1)
                         end
