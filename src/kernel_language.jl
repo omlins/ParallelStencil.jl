@@ -217,46 +217,46 @@ $(use_any_shmem ?
 )
 $((wrap_if(:($i > $(loopentry-1)),
         quote
-                        if (2*$t_h <= $nx_l*$ny_l && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                        if (2*$t_h <= $n_l && $ix_h>0 && $ix_h<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h,$ty_h] = $A[$ix_h,$iy_h,$iz+$oz_max] 
                         end
-                        if (2*$t_h2 > $nx_l*$ny_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+                        if (2*$t_h2 > $n_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
                             $A_head[$tx_h2,$ty_h2] = $A[$ix_h2,$iy_h2,$iz+$oz_max]
                         end
         end
         ;unless=(loopentry<=mainloopstart)
     )
-    for (A, s) in shmem_vars if (use_shmemhalos[A] && use_shmem_xs[A] && use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+    for (A, s) in shmem_vars if use_shmemhalos[A] for (loopentry, oz_max,  tx, ty, nx_l, ny_l, n_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:n_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
-$((wrap_if(:($i > $(loopentry-1)),
-        quote
-                        if (2*$tx_h <= $nx_l && $ix_h>0 && $ix_h<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h,$ty] = $A[$ix_h,$iy,$iz+$oz_max] 
-                        end
-                        if (2*$tx_h2 > $nx_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx_h2,$ty] = $A[$ix_h2,$iy,$iz+$oz_max]
-                        end
-        end
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for (A, s) in shmem_vars if (use_shmemhalos[A] && use_shmem_xs[A] && !use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, tx_h, tx_h2, ix_h, ix_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:tx_h], s[:tx_h2], s[:ix_h], s[:ix_h2], s[:A_head]),)
-  )...
-)
-$((wrap_if(:($i > $(loopentry-1)),
-        quote
-                        if (2*$ty_h <= $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx,$ty_h] = $A[$ix,$iy_h,$iz+$oz_max] 
-                        end
-                        if (2*$ty_h2 > $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
-                            $A_head[$tx,$ty_h2] = $A[$ix,$iy_h2,$iz+$oz_max]
-                        end
-        end
-        ;unless=(loopentry<=mainloopstart)
-    )
-    for (A, s) in shmem_vars if (use_shmemhalos[A] && !use_shmem_xs[A] && use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, ty_h, ty_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:ty_h], s[:ty_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
-  )...
-)
+# $((wrap_if(:($i > $(loopentry-1)),
+#         quote
+#                         if (2*$tx_h <= $nx_l && $ix_h>0 && $ix_h<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx_h,$ty] = $A[$ix_h,$iy,$iz+$oz_max] 
+#                         end
+#                         if (2*$tx_h2 > $nx_l && $ix_h2>0 && $ix_h2<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx_h2,$ty] = $A[$ix_h2,$iy,$iz+$oz_max]
+#                         end
+#         end
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars if (use_shmemhalos[A] && use_shmem_xs[A] && !use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, tx_h, tx_h2, ix_h, ix_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:tx_h], s[:tx_h2], s[:ix_h], s[:ix_h2], s[:A_head]),)
+#   )...
+# )
+# $((wrap_if(:($i > $(loopentry-1)),
+#         quote
+#                         if (2*$ty_h <= $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h>0 && $iy_h<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx,$ty_h] = $A[$ix,$iy_h,$iz+$oz_max] 
+#                         end
+#                         if (2*$ty_h2 > $ny_l && $ix>0 && $ix<=size($A,1) && $iy_h2>0 && $iy_h2<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
+#                             $A_head[$tx,$ty_h2] = $A[$ix,$iy_h2,$iz+$oz_max]
+#                         end
+#         end
+#         ;unless=(loopentry<=mainloopstart)
+#     )
+#     for (A, s) in shmem_vars if (use_shmemhalos[A] && !use_shmem_xs[A] && use_shmem_ys[A]) for (loopentry, oz_max,  tx, ty, nx_l, ny_l, ty_h, ty_h2, iy_h, iy_h2, A_head) = ((loopentrys[A], oz_maxs[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:ty_h], s[:ty_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
+#   )...
+# )
 $((wrap_if(:($i > $(loopentry-1)),
         quote
                         if ($ix>0 && $ix<=size($A,1) && $iy>0 && $iy<=size($A,2) && 0<$iz+$oz_max<=size($A,3)) 
@@ -690,10 +690,12 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
             sym_iy_h2 = gensym_world("iy_h2_$suffix", @__MODULE__)
             for A in vars   
                 if use_shmemindices[A]
+                    n_l = quote $sym_nx_l*$sym_ny_l end
                     shmem_vars[A][:tx]     = sym_tx
                     shmem_vars[A][:ty]     = sym_ty
                     shmem_vars[A][:nx_l]   = sym_nx_l
                     shmem_vars[A][:ny_l]   = sym_ny_l
+                    shmem_vars[A][:n_l]    = n_l
                     shmem_vars[A][:t_h]    = sym_t_h
                     shmem_vars[A][:t_h2]   = sym_t_h2
                     shmem_vars[A][:tx_h]   = sym_tx_h
@@ -709,53 +711,69 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                         use_shmem_x, use_shmem_y = use_shmem_xs[A], use_shmem_ys[A]
                         hx1, hy1, hx2, hy2 = hx1s[A], hy1s[A], hx2s[A], hy2s[A]
                         if use_shmem_x && use_shmem_y # NOTE: if the following expressions are noted with ":()" then it will cause a segmentation fault and run time.
-                            tx            = quote @threadIdx().x + $hx1 end
-                            ty            = quote @threadIdx().y + $hy1 end
-                            nx_l          = quote @blockDim().x + $(hx1+hx2) end
-                            ny_l          = quote @blockDim().y + $(hy1+hy2) end
-                            t_h           = quote (@threadIdx().y-1)*@blockDim().x + @threadIdx().x end  # NOTE: here it must be bx, not @blockDim().x
-                            t_h2          = quote $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y end
-                            ty_h          = quote ($t_h-1) ÷ $nx_l + 1 end
-                            tx_h          = quote ($t_h-1) % $nx_l + 1 end                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
-                            ty_h2         = quote ($t_h2-1) ÷ $nx_l + 1 end
-                            tx_h2         = quote ($t_h2-1) % $nx_l + 1 end                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
-                            ix_h          = quote $ix - @threadIdx().x + $tx_h  - $hx1 end    # NOTE: here it must be @blockDim().x, not bx
-                            ix_h2         = quote $ix - @threadIdx().x + $tx_h2 - $hx1 end    # ...
-                            iy_h          = quote $iy - @threadIdx().y + $ty_h  - $hy1 end    # ...
-                            iy_h2         = quote $iy - @threadIdx().y + $ty_h2 - $hy1 end    # ...
-                            shmem_vars[A][:tx]     = tx
-                            shmem_vars[A][:ty]     = ty
-                            shmem_vars[A][:nx_l]   = nx_l
-                            shmem_vars[A][:ny_l]   = ny_l
-                            shmem_vars[A][:t_h]    = t_h
-                            shmem_vars[A][:t_h2]   = t_h2
-                            shmem_vars[A][:tx_h]   = tx_h
-                            shmem_vars[A][:tx_h2]  = tx_h2
-                            shmem_vars[A][:ty_h]   = ty_h
-                            shmem_vars[A][:ty_h2]  = ty_h2
-                            shmem_vars[A][:ix_h]   = ix_h
-                            shmem_vars[A][:ix_h2]  = ix_h2
-                            shmem_vars[A][:iy_h]   = iy_h
-                            shmem_vars[A][:iy_h2]  = iy_h2
+                            tx    = quote @threadIdx().x + $hx1 end
+                            ty    = quote @threadIdx().y + $hy1 end
+                            nx_l  = quote @blockDim().x + $(hx1+hx2) end
+                            ny_l  = quote @blockDim().y + $(hy1+hy2) end
+                            n_l   = quote $nx_l*$ny_l end
+                            t_h   = quote (@threadIdx().y-1)*@blockDim().x + @threadIdx().x end  # NOTE: here it must be bx, not @blockDim().x
+                            t_h2  = quote $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y end
+                            ty_h  = quote ($t_h-1) ÷ $nx_l + 1 end
+                            tx_h  = quote ($t_h-1) % $nx_l + 1 end                               # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h-1) - $nx_l*($ty_h-1) + 1
+                            ty_h2 = quote ($t_h2-1) ÷ $nx_l + 1 end
+                            tx_h2 = quote ($t_h2-1) % $nx_l + 1 end                              # NOTE: equivalent to (worse performance has uses registers probably differently): ($t_h2-1) - $nx_l*($ty_h2-1) + 1
+                            ix_h  = quote $ix - @threadIdx().x + $tx_h  - $hx1 end    # NOTE: here it must be @blockDim().x, not bx
+                            ix_h2 = quote $ix - @threadIdx().x + $tx_h2 - $hx1 end    # ...
+                            iy_h  = quote $iy - @threadIdx().y + $ty_h  - $hy1 end    # ...
+                            iy_h2 = quote $iy - @threadIdx().y + $ty_h2 - $hy1 end    # ...
                         elseif use_shmem_x
-                            shmem_vars[A][:tx]     = quote @threadIdx().x + $hx1 end
-                            shmem_vars[A][:ty]     = quote @threadIdx().y end
-                            shmem_vars[A][:nx_l]   = quote @blockDim().x + $(hx1+hx2) end
-                            shmem_vars[A][:ny_l]   = quote @blockDim().y end
-                            shmem_vars[A][:tx_h]   = quote @threadIdx().x end
-                            shmem_vars[A][:tx_h2]  = quote @threadIdx().x + $(hx1+hx2) end # NOTE: alternative: shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
-                            shmem_vars[A][:ix_h]   = quote $ix - @threadIdx().x + $(shmem_vars[A][:tx_h])  - $hx1 end
-                            shmem_vars[A][:ix_h2]  = quote $ix - @threadIdx().x + $(shmem_vars[A][:tx_h2]) - $hx1 end
+                            tx    = quote @threadIdx().x + $hx1 end
+                            ty    = quote @threadIdx().y + $hy1 end
+                            nx_l  = quote @blockDim().x + $(hx1+hx2) end
+                            ny_l  = quote @blockDim().y end
+                            tx_h  = quote @threadIdx().x end
+                            ty_h  = quote @threadIdx().y end
+                            tx_h2 = quote @threadIdx().x + $(hx1+hx2) end # NOTE: alternative: shmem_vars[A][:tx_h2]  = :(@threadIdx().x + @blockDim().x)
+                            ty_h2 = ty_h
+                            ix_h  = quote $ix - @threadIdx().x + $tx_h  - $hx1 end
+                            ix_h2 = quote $ix - @threadIdx().x + $tx_h2 - $hx1 end
+                            iy_h  = quote $iy - @threadIdx().y + $ty_h  - $hy1 end
+                            iy_h2 = quote $iy - @threadIdx().y + $ty_h2 - $hy1 end
+                            n_l   = nx_l
+                            t_h   = tx_h
+                            t_h2  = tx_h2
                         elseif use_shmem_y
-                            shmem_vars[A][:tx]     = quote @threadIdx().x end
-                            shmem_vars[A][:ty]     = quote @threadIdx().y + $hy1 end
-                            shmem_vars[A][:nx_l]   = quote @blockDim().x end
-                            shmem_vars[A][:ny_l]   = quote @blockDim().y + $(hy1+hy2) end
-                            shmem_vars[A][:ty_h]   = quote @threadIdx().y end
-                            shmem_vars[A][:ty_h2]  = quote @threadIdx().y + $(hy1+hy2) end # NOTE: alternative: # shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
-                            shmem_vars[A][:iy_h]   = quote $iy - @threadIdx().y + $(shmem_vars[A][:ty_h])  - $hy1 end
-                            shmem_vars[A][:iy_h2]  = quote $iy - @threadIdx().y + $(shmem_vars[A][:ty_h2]) - $hy1 end
+                            tx    = quote @threadIdx().x + $hx1 end
+                            ty    = quote @threadIdx().y + $hy1 end
+                            nx_l  = quote @blockDim().x end
+                            ny_l  = quote @blockDim().y + $(hy1+hy2) end
+                            tx_h  = quote @threadIdx().x end
+                            ty_h  = quote @threadIdx().y end
+                            tx_h2 = tx_h
+                            ty_h2 = quote @threadIdx().y + $(hy1+hy2) end # NOTE: alternative: # shmem_vars[A][:ty_h2]  = :(@threadIdx().y + @blockDim().y)
+                            ix_h  = quote $ix - @threadIdx().x + $tx_h  - $hx1 end
+                            ix_h2 = quote $ix - @threadIdx().x + $tx_h2 - $hx1 end
+                            iy_h  = quote $iy - @threadIdx().y + $ty_h  - $hy1 end
+                            iy_h2 = quote $iy - @threadIdx().y + $ty_h2 - $hy1 end
+                            n_l   = ny_l
+                            t_h   = ty_h
+                            t_h2  = ty_h2
                         end
+                        shmem_vars[A][:tx]    = tx
+                        shmem_vars[A][:ty]    = ty
+                        shmem_vars[A][:nx_l]  = nx_l
+                        shmem_vars[A][:ny_l]  = ny_l
+                        shmem_vars[A][:n_l]   = n_l
+                        shmem_vars[A][:t_h]   = t_h
+                        shmem_vars[A][:t_h2]  = t_h2
+                        shmem_vars[A][:tx_h]  = tx_h
+                        shmem_vars[A][:tx_h2] = tx_h2
+                        shmem_vars[A][:ty_h]  = ty_h
+                        shmem_vars[A][:ty_h2] = ty_h2
+                        shmem_vars[A][:ix_h]  = ix_h
+                        shmem_vars[A][:ix_h2] = ix_h2
+                        shmem_vars[A][:iy_h]  = iy_h
+                        shmem_vars[A][:iy_h2] = iy_h2
                     else
                         shmem_vars[A][:tx]     = :(@threadIdx().x)
                         shmem_vars[A][:ty]     = :(@threadIdx().y)
