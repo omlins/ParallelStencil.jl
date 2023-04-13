@@ -738,7 +738,6 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                             shmem_vars[A][:iy_h]   = iy_h
                             shmem_vars[A][:iy_h2]  = iy_h2
                         elseif use_shmem_x
-                            # @ModuleInternalError("loopopt: using shared memory halos when (hx1+hx2>0), but not (hy1+hy2>0) is not implemented.")
                             shmem_vars[A][:tx]     = :(@threadIdx().x + $hx1)
                             shmem_vars[A][:ty]     = :(@threadIdx().y)
                             shmem_vars[A][:nx_l]   = :(@blockDim().x + $(hx1+hx2))
