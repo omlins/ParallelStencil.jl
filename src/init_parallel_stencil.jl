@@ -40,14 +40,14 @@ macro init_parallel_stencil(args...)
     if (length(posargs) == 3) package, numbertype_val, ndims_val = extract_posargs_init(__module__, posargs...)
     else                      package, numbertype_val, ndims_val = extract_kwargs_init(__module__, kwargs)
     end
-    loopopt_val = extract_kwargs_optional(__module__, kwargs)
+    memopt_val = extract_kwargs_optional(__module__, kwargs)
     if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
     if (ndims == NDIMS_NONE) @ArgumentError("the ndims argument cannot be ommited.") end #TODO: this error message will disappear, once the ndims can be defined at runtime.
-    check_already_initialized(package, numbertype_val, ndims_val, loopopt_val)
-    esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, loopopt_val))
+    check_already_initialized(package, numbertype_val, ndims_val, memopt_val)
+    esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, memopt_val))
 end
 
-function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, loopopt::Bool)
+function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, memopt::Bool)
     if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     end
@@ -55,7 +55,7 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     set_package(package)
     set_numbertype(numbertype)
     set_ndims(ndims)
-    set_loopopt(loopopt)
+    set_memopt(memopt)
     set_initialized(true)
     return nothing
 end
@@ -65,14 +65,14 @@ macro is_initialized() is_initialized() end
 macro get_package() get_package() end
 macro get_numbertype() get_numbertype() end
 macro get_ndims() get_ndims() end
-macro get_loopopt() get_loopopt() end
+macro get_memopt() get_memopt() end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_loopopt, get_loopopt, check_initialized, check_already_initialized
+    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_memopt, get_memopt, check_initialized, check_already_initialized
     _is_initialized::Bool       = false
     package::Symbol             = PKG_NONE
     numbertype::DataType        = NUMBERTYPE_NONE
     ndims::Integer              = NDIMS_NONE
-    loopopt::Bool               = false
+    memopt::Bool               = false
     set_initialized(flag::Bool) = (_is_initialized = flag)
     is_initialized()            = _is_initialized
     set_package(pkg::Symbol)    = (package = pkg)
@@ -81,13 +81,13 @@ let
     get_numbertype()            = numbertype
     set_ndims(n::Integer)       = (ndims = n)
     get_ndims()                 = ndims
-    set_loopopt(flag::Bool)     = (loopopt = flag)
-    get_loopopt()               = loopopt
+    set_memopt(flag::Bool)     = (memopt = flag)
+    get_memopt()               = memopt
     check_initialized()         = if !is_initialized() @NotInitializedError("no macro or function of the module can be called before @init_parallel_stencil.") end
 
-    function check_already_initialized(package::Symbol, numbertype::DataType, ndims::Integer, loopopt::Bool)
+    function check_already_initialized(package::Symbol, numbertype::DataType, ndims::Integer, memopt::Bool)
         if is_initialized()
-            if package==get_package() && numbertype==get_numbertype() && ndims==get_ndims() && loopopt==get_loopopt()
+            if package==get_package() && numbertype==get_numbertype() && ndims==get_ndims() && memopt==get_memopt()
                 @warn "ParallelStencil has already been initialized, with the same arguments. If you are using ParallelStencil interactively in the REPL, then you can ignore this message. If you are using ParallelStencil non-interactively, then you are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'."
             else
                 @IncoherentCallError("ParallelStencil has already been initialized, with different arguments. If you are using ParallelStencil interactively in the REPL and want to avoid restarting Julia, then you can call ParallelStencil.@reset_parallel_stencil() and rerun all parts of your code that use ParallelStencil features (including kernel definitions and array allocations). If you are using ParallelStencil non-interactively, then you are using ParallelStencil in an invalid way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'.")
@@ -112,8 +112,8 @@ function extract_kwargs_init(caller::Module, kwargs::Dict)
 end
 
 function extract_kwargs_optional(caller::Module, kwargs::Dict)
-    if (:loopopt in keys(kwargs)) loopopt_val = eval_arg(caller, kwargs[:loopopt]); check_loopopt(loopopt_val)
-    else                          loopopt_val = false
+    if (:memopt in keys(kwargs)) memopt_val = eval_arg(caller, kwargs[:memopt]); check_memopt(memopt_val)
+    else                          memopt_val = false
     end
-    return loopopt_val
+    return memopt_val
 end

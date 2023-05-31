@@ -5,7 +5,7 @@ macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args.
 
 
 ##
-macro loopopt(args...) check_initialized(); checkargs_loopopt(args...); esc(loopopt(args[1], __module__, args[2:end]...)); end
+macro memopt(args...) check_initialized(); checkargs_memopt(args...); esc(memopt(args[1], __module__, args[2:end]...)); end
 
 
 ##
@@ -34,7 +34,7 @@ function checkargs_loop(args...)
     if (length(args) != 4) @ArgumentError("wrong number of arguments.") end
 end
 
-function checkargs_loopopt(args...)
+function checkargs_memopt(args...)
     if (length(args) != 8 && length(args) != 7 && length(args) != 4) @ArgumentError("wrong number of arguments.") end
 end
 
@@ -58,7 +58,7 @@ end
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
     optvars        = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices        = Tuple(extract_tuple(indices))
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
@@ -68,7 +68,7 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
         optvars = Tuple(keys(readonlyvars))
     else
         for A in optvars
-            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in loopopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
+            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in memopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
         end
     end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
@@ -79,7 +79,7 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
-    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument loopopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set loopopt=false for this kernel.") end
+    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set memopt=false for this kernel.") end
     optranges             = define_optranges(optranges, optvars, offsets, int_type)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
@@ -453,7 +453,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
                     # end
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, optdim, loopsize, optranges, use_shmemhalos)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
@@ -461,13 +461,13 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
 end
 
 
-function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
     optdim             = isa(indices,Expr) ? length(indices.args) : 1
     loopsize           = LOOPSIZE
     optranges          = nothing
     use_shmemhalos      = nothing
     optimize_halo_read = true
-    return loopopt(metadata_module, is_parallel_kernel, caller, indices, optvars, optdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, body; package=package)
+    return memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, optdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, body; package=package)
 end
 
 
@@ -553,7 +553,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
                     else                                                                  offsets_by_z[A][k1]      = Dict(k2 => 1)
                     end
                 else
-                    @ArgumentError("loopopt: only optdim=3 is currently supported.")
+                    @ArgumentError("memopt: only optdim=3 is currently supported.")
                 end
             end
         end
@@ -614,12 +614,12 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
         optranges_xy     = optranges[1:2]
         optranges_z      = optranges[3]
         offsets_xy       = filter(oxy -> all(oxy .∈ optranges_xy), keys(offsets))
-        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in loopopt: optranges in x-y dimension do not include any array access.") end
+        if isempty(offsets_xy) @IncoherentArgumentError("incoherent argument in memopt: optranges in x-y dimension do not include any array access.") end
         offset_min       = (typemax(int_type), typemax(int_type), typemax(int_type))
         offset_max       = (typemin(int_type), typemin(int_type), typemin(int_type))
         for oxy in offsets_xy
             offsets_z = filter(x -> x ∈ optranges_z, keys(offsets[oxy]))
-            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in loopopt: optranges in z dimension do not include any array access.") end
+            if isempty(offsets_z) @IncoherentArgumentError("incoherent argument in memopt: optranges in z dimension do not include any array access.") end
             offset_min = (min(offset_min[1], oxy[1]),
                           min(offset_min[2], oxy[2]),
                           min(offset_min[3], minimum(offsets_z)))
@@ -650,7 +650,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
             end
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
 end
@@ -677,7 +677,7 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
             oz_maxs[A], hx1s[A], hy1s[A], hx2s[A], hy2s[A], use_shmems[A], use_shmem_xs[A], use_shmem_ys[A], use_shmemhalos[A], use_shmemindices[A], offset_spans[A], oz_spans[A], loopentrys[A] = oz_max, hx1, hy1, hx2, hy2, use_shmem, use_shmem_x, use_shmem_y, use_shmemhalo, use_shmemindex, offset_span, oz_span, loopentry
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
 end
@@ -814,7 +814,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
             end
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return shmem_vars
 end
@@ -828,7 +828,7 @@ function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, optdim::In
             offset = (offset..., :($(shmem_vars[A][:nx_l]) * $(shmem_vars[A][:ny_l]) * sizeof(eltype($A))))
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return exprs
 end
@@ -870,7 +870,7 @@ function find_rangelimit(offsets_by_z::Dict{Any, Any}, optdim::Integer; upper=fa
             end
         end
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return rangelimit, offsets_xy1
 end
@@ -888,7 +888,7 @@ function define_shmem_loopentry(loopentry, shmem_z_range, offset_min, optdim::In
     if optdim == 3
         shmem_loopentry = loopentry + (shmem_z_range.start - offset_min[3])
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return shmem_loopentry
 end
@@ -906,7 +906,7 @@ function define_shmem_loopexit(loopexit, shmem_z_range, offset_max, optdim::Inte
     if optdim == 3
         shmem_loopexit = loopexit - (offset_max[3] - shmem_z_range.stop)
     else
-        @ArgumentError("loopopt: only optdim=3 is currently supported.")
+        @ArgumentError("memopt: only optdim=3 is currently supported.")
     end
     return shmem_loopexit
 end
@@ -1024,7 +1024,7 @@ end
 function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
     storeexpr = quote
         const is_parallel_kernel = $is_parallel_kernel
-        const loopopt            = true
+        const memopt            = true
         const stencilranges      = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
         const offsets            = $offsets
         const optvars            = $optvars

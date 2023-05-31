@@ -29,7 +29,7 @@ const SUPPORTED_NDIMS           = [1, 2, 3]
 const NDIMS_NONE                = 0
 const ERRMSG_KERNEL_UNSUPPORTED = "unsupported kernel statements in @parallel kernel definition: @parallel is only applicable to kernels that contain exclusively array assignments using macros from FiniteDifferences{1|2|3}D or from another compatible computation submodule. @parallel_indices supports any kind of statements in the kernels."
 const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable containing the ndims) and has to be one of the following: $(join(SUPPORTED_NDIMS,", "))"
-const ERRMSG_CHECK_LOOPOPT      = "loopopt must be noted LITERALLY (NOT a variable containing the loopopt) and has to be of type Bool."
+const ERRMSG_CHECK_LOOPOPT      = "memopt must be noted LITERALLY (NOT a variable containing the memopt) and has to be of type Bool."
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
 const NTHREADS_MAX_LOOPOPT      = 128
@@ -80,4 +80,4 @@ end
 ## FUNCTIONS FOR ERROR HANDLING
 
 check_ndims(ndims)     = ( if !isa(ndims, Integer) || !(ndims in SUPPORTED_NDIMS) @ArgumentError("$ERRMSG_CHECK_NDIMS (obtained: $ndims)." ) end )
-check_loopopt(loopopt) = ( if !isa(loopopt, Bool) @ArgumentError("$ERRMSG_CHECK_LOOPOPT (obtained: $loopopt)." ) end )
+check_memopt(memopt) = ( if !isa(memopt, Bool) @ArgumentError("$ERRMSG_CHECK_LOOPOPT (obtained: $memopt)." ) end )
