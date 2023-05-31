@@ -9,7 +9,7 @@ elseif ENABLE_AMDGPU
     using AMDGPU
 end
 import MacroTools: @capture, postwalk, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
-import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, inexpr_walk
+import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, inexpr_walk, cast
 import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
 
@@ -33,6 +33,10 @@ const ERRMSG_CHECK_LOOPOPT      = "loopopt must be noted LITERALLY (NOT a variab
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
 const NTHREADS_MAX_LOOPOPT      = 128
+const USE_SHMEMHALO_DEFAULT     = true
+const USE_SHMEMHALO_1D_DEFAULT  = true
+const USE_FULLRANGE_DEFAULT     = (false, false, true)
+const FULLRANGE_THRESHOLD       = 1
 const NOEXPR                    = :(begin end)
 const MOD_METADATA              = :__metadata__ # gensym_world("__metadata__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const META_FUNCTION_PREFIX      = string(gensym_world("META", @__MODULE__))
