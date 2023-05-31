@@ -80,7 +80,7 @@ function loopopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modu
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, optdim)
     optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
     if (length(optvars)==0) @IncoherentArgumentError("incoherent argument loopopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set loopopt=false for this kernel.") end
-    optranges             = define_optranges(optranges, optvars, int_type)
+    optranges             = define_optranges(optranges, optvars, offsets, int_type)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, optdim)
 
     if optdim == 3
@@ -566,18 +566,33 @@ function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by
     return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
 end
 
-function define_optranges(optranges_arg, optvars, int_type)
-    fullrange   = typemin(int_type):typemax(int_type)
-    fullranges  = (fullrange, fullrange, fullrange)
-    optranges   = Dict(A => if (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)) getproperty(optranges_arg, A)
-                            else                                                      fullranges
-                            end
-                      for A in optvars
-                 )
+function define_optranges(optranges_arg, optvars, offsets, int_type)
+    optranges = Dict()
+    for A in optvars
+        zspan_max     = 0
+        oxy_zspan_max = ()
+        for oxy in keys(offsets[A])
+            zspan = length(keys(offsets[A][oxy]))
+            if zspan > zspan_max
+                zspan_max     = zspan
+                oxy_zspan_max = oxy
+            end
+        end
+        fullrange    = typemin(int_type):typemax(int_type)
+        pointrange_x = oxy_zspan_max[1]: oxy_zspan_max[1]
+        pointrange_y = oxy_zspan_max[2]: oxy_zspan_max[2]
+        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)) optranges[A] = getproperty(optranges_arg, A)
+        elseif (length(optvars) <= FULLRANGE_THRESHOLD)               optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))        optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))        optranges[A] = (pointrange_x, fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))        optranges[A] = (fullrange,    pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))        optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        end
+    end
     return optranges
 end
 
-function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
+function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optdim::Integer)
     regqueue_heads = Dict(A => Dict() for A in optvars)
     regqueue_tails = Dict(A => Dict() for A in optvars)
     offset_mins    = Dict{Symbol, NTuple{3,Integer}}()
@@ -1006,7 +1021,7 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Symbol, <:NTuple{3,UnitRange}}, use_shmemhalos)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, optdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
     storeexpr = quote
         const is_parallel_kernel = $is_parallel_kernel
         const loopopt            = true
