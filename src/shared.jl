@@ -32,6 +32,7 @@ const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable
 const ERRMSG_CHECK_LOOPOPT      = "memopt must be noted LITERALLY (NOT a variable containing the memopt) and has to be of type Bool."
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
+const LOOPDIM_NONE              = 0
 const NTHREADS_MAX_LOOPOPT      = 128
 const USE_SHMEMHALO_DEFAULT     = true
 const USE_SHMEMHALO_1D_DEFAULT  = true
