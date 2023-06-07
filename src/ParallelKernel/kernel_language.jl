@@ -57,7 +57,7 @@ const SHAREDMEM_DOC = """
     @sharedMem(T, dims, offset::Integer=0)
 
 Create an array that is *shared* between the threads of a block (i.e. accessible only by the threads of a same block), with element type `T` and size specified by `dims`. 
-When multiple shared memory arrays are created within a kernel, then all arrays except for the first one typically need to define the `offset` to the base shared memory pointer in bytes (note that the CPU implementation does not require the `offset` and will simply ignore it when present).
+When multiple shared memory arrays are created within a kernel, then all arrays except for the first one typically need to define the `offset` to the base shared memory pointer in bytes (note that the CPU and AMDGPU implementation do not require the `offset` and will simply ignore it when present).
 
 !!! note "Note"
     The amount of shared memory needs to be specified when launching the kernel (keyword argument `shmem`).
@@ -147,7 +147,7 @@ end
 
 function sharedMem(args...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    return :(CUDA.@cuDynamicSharedMem($(args...)))
-    elseif (package == PKG_AMDGPU)  @KeywordArgumentError("not yet supported for AMDGPU.")
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -191,3 +191,7 @@ macro sync_threads_cpu() esc(:(begin end)) end
 macro sharedMem_cpu(T, dims) :(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))}(undef)); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code.
 
 macro sharedMem_cpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sharedMem_cpu($T, $dims))) end
+
+macro sharedMem_amdgpu(T, dims) esc(:(AMDGPU.@ROCDynamicLocalArray($T, $dims, false))) end
+
+macro sharedMem_amdgpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($T, $dims))) end
