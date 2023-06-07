@@ -18,7 +18,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
-    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
 
 See also: [`@init_parallel_kernel`](@ref)
 """
