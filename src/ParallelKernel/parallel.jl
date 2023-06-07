@@ -157,16 +157,18 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
     if isgpu(package)
-        body = add_threadids(indices, ranges, body)
-        body = literaltypes(numbertype, body)
+        body = add_threadids(indices, ranges, body)        
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
+        body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
     elseif (package == PKG_THREADS)
         body = add_loop(indices, ranges, body)
-        body = literaltypes(numbertype, body)
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
     else
         @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
     body = add_return(body)
     set_body!(kernel, body)
+    # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
     return kernel
 end
 
@@ -178,7 +180,7 @@ function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Exp
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
     end
-    push!(kernelcall.args, ranges)
+    push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
     push!(kernelcall.args, :($int_type(length($ranges[2]))))
     push!(kernelcall.args, :($int_type(length($ranges[3]))))
@@ -206,7 +208,7 @@ end
 
 function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
-    push!(kernelcall.args, ranges)
+    push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$INT_THREADS},UnitRange{$INT_THREADS},UnitRange{$INT_THREADS}}, $ranges)))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[1]))))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[2]))))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[3]))))
@@ -264,7 +266,7 @@ function literaltypes(type::DataType, expr::Expr)
     args = expr.args
     head = expr.head
     for i=1:length(args)
-        if type <: Integer && typeof(args[i]) <: Integer && head == :call && args[1] in OPERATORS # NOTE: only integers in operator calls are modified (not in other function calls as e.g. size).
+        if type <: Integer && typeof(args[i]) <: Integer && (head == :comparison || (head == :call && args[1] in INDEXING_OPERATORS)) # NOTE: only integers in comparisons or operator calls are modified (not in other function calls as e.g. size).
             literal = type(args[i])
             args[i] = :($literal)
         elseif type <: AbstractFloat && typeof(args[i]) <: AbstractFloat
@@ -458,8 +460,14 @@ end
 function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
     synccall = async ? :(begin end) : create_synccall(package, stream)
     backend_kwargs_expr = (backend_kwargs_expr...,)
-    if !isnothing(shmem) backend_kwargs_expr = (backend_kwargs_expr..., :(shmem = $shmem)) end #TODO: the shared memory argument has still to be inserted in the call for AMDGPU, once available in AMDGPU.jl.
     if launch
+        if !isnothing(shmem)
+            if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
+            elseif (package == PKG_AMDGPU) shmem_expr = :(localmem = $shmem)
+            else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+            end
+            backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+        end
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
