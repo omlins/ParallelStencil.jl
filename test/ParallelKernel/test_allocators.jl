@@ -113,8 +113,8 @@ end
                     @test typeof(@fill(9, 2,3))                 == typeof(fill(convert(Float16, 9), 2,3))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(fill(convert(Float64, 9), 2,3))
                 end
-                @test @falses(2,3) == parentmodule($package).falses(2,3)
-                @test @trues(2,3)  == parentmodule($package).trues(2,3)
+                @test Array(@falses(2,3)) == Array(parentmodule($package).falses(2,3))
+                @test Array(@trues(2,3))  == Array(parentmodule($package).trues(2,3))
             end;
             @testset "mapping to package (with celldims)" begin
                 T_Float16 = SMatrix{(3,4)..., Float16, prod((3,4))}
@@ -228,8 +228,8 @@ end
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(parentmodule($package).rand(Float64,2,3))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(fill(convert(Float64, 9), 2,3))
                 end
-                @test @falses(2,3) == parentmodule($package).falses(2,3)
-                @test @trues(2,3)  == parentmodule($package).trues(2,3)
+                @test Array(@falses(2,3)) == Array(parentmodule($package).falses(2,3))
+                @test Array(@trues(2,3))  == Array(parentmodule($package).trues(2,3))
             end;
             @testset "mapping to package (with celldims)" begin
                 T_Float16 = SMatrix{(3,4)..., Float16, prod((3,4))}
