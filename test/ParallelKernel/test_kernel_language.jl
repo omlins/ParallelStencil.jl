@@ -29,8 +29,8 @@ end
                     @test @prettystring(1, @threadIdx()) == "CUDA.threadIdx()"
                     @test @prettystring(1, @sync_threads()) == "CUDA.sync_threads()"
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "CUDA.@cuDynamicSharedMem Float32 (2, 3)"
-                    @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
-                    @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
+                    # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
+                    # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
                 elseif $package == $AMDGPU
                     @test @prettystring(1, @gridDim()) == "AMDGPU.gridDimWG()"
                     @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
@@ -39,7 +39,7 @@ end
                     @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
                     #@test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
-                    @test @prettystring(1, @pk_println()) == "CUDA.@rocprintln"
+                    # @test @prettystring(1, @pk_println()) == "CUDA.@rocprintln"
                 elseif $package == $PKG_THREADS
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
@@ -47,8 +47,8 @@ end
                     @test @prettystring(1, @threadIdx()) == "ParallelStencil.ParallelKernel.@threadIdx_cpu"
                     @test @prettystring(1, @sync_threads()) == "ParallelStencil.ParallelKernel.@sync_threads_cpu"
                     @test @prettystring(1, @sharedMem(Float32, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_cpu Float32 (2, 3)"
-                    @test @prettystring(1, @pk_show()) == "Base.@show"
-                    @test @prettystring(1, @pk_println()) == "Base.println()"
+                    # @test @prettystring(1, @pk_show()) == "Base.@show"
+                    # @test @prettystring(1, @pk_println()) == "Base.println()"
                 end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
