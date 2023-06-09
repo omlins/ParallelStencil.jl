@@ -34,6 +34,5 @@ for it = 1:nt
     @parallel diffusion3D_step!(T2, T, Ci, lam, dt, dx, dy, dz);
     T, T2 = T2, T;
 end
-
 return true
 end
