@@ -14,7 +14,7 @@ exename = joinpath(Sys.BINDIR, Base.julia_exename())
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "incremental compilation" begin
-            test_script = joinpath(@__DIR__, "test_projects", "Diffusion3D_$(nameof($package))", "src", "test_diffusion.jl")
+            test_script = joinpath(@__DIR__, "test_projects", "Diffusion3D_$(nameof($package))", "test", "localtest_diffusion.jl")
             was_success = true
             try
                 run(`$exename -O3 --startup-file=no --check-bounds=no $test_script`)
