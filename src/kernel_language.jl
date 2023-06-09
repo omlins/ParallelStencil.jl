@@ -122,8 +122,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
             end
         end
 
-        @show nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups)) # TODO: a group must not be counted if none of the variables uses the shmem indices symbols.
-        @show nb_cell_vars     = sum(values(nb_regs_heads)) + sum(values(nb_regs_tails))
+        nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups)) # TODO: a group must not be counted if none of the variables uses the shmem indices symbols.
+        nb_cell_vars     = sum(values(nb_regs_heads)) + sum(values(nb_regs_tails))
 
         #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
@@ -131,8 +131,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
 $((quote
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
-                    $nx_l          = @blockDim().x + $(hx1+hx2)
-                    $ny_l          = @blockDim().y + $(hy1+hy2)
+                    $nx_l          = @blockDim().x + $(UInt32(hx1+hx2))                 # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
+                    $ny_l          = @blockDim().y + $(UInt32(hy1+hy2))                 # ...
                     $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x  # NOTE: here it must be bx, not @blockDim().x
                     $t_h2          = $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y
                     $ty_h          = ($t_h-1) ÷ $nx_l + 1
