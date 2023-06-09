@@ -469,10 +469,10 @@ end
 
 
 function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
-    loopdim             = isa(indices,Expr) ? length(indices.args) : 1
+    loopdim            = isa(indices,Expr) ? length(indices.args) : 1
     loopsize           = LOOPSIZE
     optranges          = nothing
-    use_shmemhalos      = nothing
+    use_shmemhalos     = nothing
     optimize_halo_read = true
     return memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, body; package=package)
 end
