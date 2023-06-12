@@ -14,7 +14,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 AMDGPU = "0.4"
 CellArrays = "0.1"
-CUDA = "3.12"
+CUDA = "3.12, 4"
 MacroTools = "0.5"
 StaticArrays = "1"
 julia = "1.7"

@@ -31,9 +31,9 @@ const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
-const INT_CUDA                     = Int64
-const INT_AMDGPU                   = Int64
-const INT_THREADS                  = Int64
+const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
+const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
@@ -51,13 +51,13 @@ const BOUNDARY_WIDTH_TYPE_1D       = Integer
 const BOUNDARY_WIDTH_TYPE_1D_TUPLE = Tuple{T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE_2D       = Tuple{T, T} where T <: Integer
 const BOUNDARY_WIDTH_TYPE          = Tuple{T, T, T} where T <: Integer
-const OPERATORS                    = [:-, :+, :*, :/, :%, :!, :&&, :||] #NOTE: ^ is not contained as causes an error.
+const INDEXING_OPERATORS           = [:-, :+, :*, :÷, :%, :<, :>, :<=, :>=, :(==), :(!=), :(:), :!, :&&, :||] #NOTE: ^ is not contained as causes an error. :(:),
 const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}, Int128, Int16, Int32, Int64, Int8, UInt128, UInt16, UInt32, UInt64, UInt8] # NOTE: Not isbitstype as required for CUDA: BigFloat, BigInt, Complex{BigFloat}, Complex{BigInt}
 const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
-const ERRMSG_CHECK_PACKAGE         = "package has to be one of the following: $(join(SUPPORTED_PACKAGES,", "))"
+const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
@@ -144,9 +144,17 @@ end
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
 
-extract_kernel_args(kernel::Expr)   = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
-get_body(kernel::Expr)              = return kernel.args[2]
-set_body!(kernel::Expr, body::Expr) = ((kernel.args[2] = body); return kernel)
+extract_kernel_args(kernel::Expr)     = return (splitdef(kernel)[:args], splitdef(kernel)[:kwargs])
+get_body(kernel::Expr)                = return kernel.args[2]
+set_body!(kernel::Expr, body::Expr)   = ((kernel.args[2] = body); return kernel)
+get_name(kernel::Expr)                = return splitdef(kernel)[:name]
+
+function set_name(kernel::Expr, name::Symbol)
+    kernel_elems = splitdef(kernel)
+    kernel_elems[:name] = name
+    kernel = combinedef(kernel_elems)
+    return kernel
+end
 
 function push_to_signature!(kernel::Expr, arg::Expr)
     kernel_elems = splitdef(kernel)
@@ -274,6 +282,18 @@ function substitute(expr::Expr, old, new)
     end
 end
 
+substitute(expr, old, new) = (old == expr) ? new : expr
+
+function cast(expr::Expr, f::Symbol, type::DataType)
+    return postwalk(expr) do ex
+        if @capture(ex, $f(args__))
+            return :($type($ex))
+        else
+            return ex
+        end
+    end
+end
+
 function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
     postwalk(expr) do x
@@ -283,6 +303,9 @@ function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     end
     return found
 end
+
+inexpr_walk(expr::Symbol, s::Symbol; match_only_head=false) = (s == expr)
+inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
 
 Base.unquoted(s::Symbol) = s
 
@@ -346,7 +369,7 @@ function simplify_varnames!(expr::Expr)
     for i=1:length(args)
         if isa(args[i], Symbol)
             varname = string(args[i]);
-            if startswith(varname, "##")
+            if startswith(varname, "@##") || startswith(varname, "##")
                 varname = replace(varname, "##" => "")
                 varname = replace(varname, r"#\d*" => "")
                 varname = split(varname, GENSYM_SEPARATOR)[1]

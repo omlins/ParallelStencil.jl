@@ -18,7 +18,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
-    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is whenever reasonable set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
 
 See also: [`@init_parallel_kernel`](@ref)
 """
@@ -110,9 +110,10 @@ parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_
 
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream,), "@parallel <kernelcall>", true)
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch), "@parallel <kernelcall>", true; eval_args=(:launch,))
+    launch = haskey(kwargs, :launch) ? kwargs.launch : true
     if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
-    elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async) # Ignore keyword args as they are not for the threads case (noted in doc).
+    elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch) # Ignore keyword args as they are not for the threads case (noted in doc).
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -156,79 +157,85 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
     if isgpu(package)
-        body = add_threadids(indices, ranges, body)
-        body = literaltypes(numbertype, body)
+        body = add_threadids(indices, ranges, body)        
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
+        body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
     elseif (package == PKG_THREADS)
         body = add_loop(indices, ranges, body)
-        body = literaltypes(numbertype, body)
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
     else
         @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
     body = add_return(body)
     set_body!(kernel, body)
+    # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
     return kernel
 end
 
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
     end
-    push!(kernelcall.args, ranges)
+    push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
     push!(kernelcall.args, :($int_type(length($ranges[2]))))
     push!(kernelcall.args, :($int_type(length($ranges[3]))))
-    return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream)
+    return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
 end
 
-function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
+function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package))
+function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream)
+    parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool)
+function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
-    push!(kernelcall.args, ranges)
+    push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$INT_THREADS},UnitRange{$INT_THREADS},UnitRange{$INT_THREADS}}, $ranges)))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[1]))))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[2]))))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[3]))))
-    if async
-        return kernelcall # NOTE: This cannot be used currently as there is no obvious solution how to sync in this case.
+    if launch
+        if async
+            return kernelcall # NOTE: This cannot be used currently as there is no obvious solution how to sync in this case.
+        else
+            return kernelcall
+        end
     else
-        return kernelcall
+        return :(@which $kernelcall)
     end
 end
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool)
-    parallel_call_threads(ranges, kernelcall, async)
+function parallel_call_threads(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
+    parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 
-function parallel_call_threads(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool)
+function parallel_call_threads(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_threads(ranges, kernelcall, async)
+    parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 
-function parallel_call_threads(kernelcall::Expr, async::Bool)
+function parallel_call_threads(kernelcall::Expr, async::Bool; launch::Bool=true)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_threads(ranges, kernelcall, async)
+    parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 
 
@@ -259,7 +266,7 @@ function literaltypes(type::DataType, expr::Expr)
     args = expr.args
     head = expr.head
     for i=1:length(args)
-        if type <: Integer && typeof(args[i]) <: Integer && head == :call && args[1] in OPERATORS # NOTE: only integers in operator calls are modified (not in other function calls as e.g. size).
+        if type <: Integer && typeof(args[i]) <: Integer && (head == :comparison || (head == :call && args[1] in INDEXING_OPERATORS)) # NOTE: only integers in comparisons or operator calls are modified (not in other function calls as e.g. size).
             literal = type(args[i])
             args[i] = :($literal)
         elseif type <: AbstractFloat && typeof(args[i]) <: AbstractFloat
@@ -409,13 +416,13 @@ promote_ranges(ranges::RANGES_TYPE_1D)          = (ranges,    1:1, 1:1)
 promote_ranges(ranges::RANGES_TYPE_1D_TUPLE)    = (ranges..., 1:1, 1:1)
 promote_ranges(ranges::RANGES_TYPE_2D)          = (ranges..., 1:1)
 promote_ranges(ranges::RANGES_TYPE)             = ranges
-promote_ranges(ranges)                          = @ModuleInternalError("ranges must be a Tuple of UnitRange of size 1, 2 or 3 (obtained: $ranges; its type is: $(typeof(ranges))).")
+promote_ranges(ranges)                          = @ArgumentError("ranges must be a Tuple of UnitRange of size 1, 2 or 3 (obtained: $ranges; its type is: $(typeof(ranges))).")
 
 promote_maxsize(maxsize::MAXSIZE_TYPE_1D)       = (maxsize,    1, 1)
 promote_maxsize(maxsize::MAXSIZE_TYPE_1D_TUPLE) = (maxsize..., 1, 1)
 promote_maxsize(maxsize::MAXSIZE_TYPE_2D)       = (maxsize..., 1)
 promote_maxsize(maxsize::MAXSIZE_TYPE)          = maxsize
-promote_maxsize(maxsize)                        = @ModuleInternalError("maxsize must be a Tuple of Integer of size 1, 2 or 3 (obtained: $maxsize; its type is: $(typeof(maxsize))).")
+promote_maxsize(maxsize)                        = @ArgumentError("maxsize must be a Tuple of Integer of size 1, 2 or 3 (obtained: $maxsize; its type is: $(typeof(maxsize))).")
 
 maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
 maxsize(a::T) where T<:Number        = (1, 1, 1)
@@ -450,11 +457,26 @@ end
 
 ## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
 
-function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr})
+function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
     synccall = async ? :(begin end) : create_synccall(package, stream)
-    if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
-    elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
-    else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+    backend_kwargs_expr = (backend_kwargs_expr...,)
+    if launch
+        if !isnothing(shmem)
+            if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
+            elseif (package == PKG_AMDGPU) shmem_expr = :(localmem = $shmem)
+            else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+            end
+            backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+        end
+        if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+        elseif (package == PKG_AMDGPU) return :( ParallelStencil.ParallelKernel.push_signal!($stream, AMDGPU.@roc gridsize=($nblocks .* $nthreads) groupsize=$nthreads $(backend_kwargs_expr...) queue=$stream.queue $kernelcall); $synccall )
+        else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+        end
+    else
+        if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
+        elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
+        else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
+        end
     end
 end
 

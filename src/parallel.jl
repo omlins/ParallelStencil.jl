@@ -1,44 +1,73 @@
-import .ParallelKernel: get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids
+import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
 
 const PARALLEL_DOC = """
     @parallel kernel
+    @parallel memopt=... kernel
 
 Declare the `kernel` parallel and containing stencil computations be performed with one of the submodules `ParallelStencil.FiniteDifferences{1D|2D|3D}` (or with a compatible custom module or set of macros).
+
+# Optional keyword arguments
+- `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
 
 See also: [`@init_parallel_stencil`](@ref)
 
 --------------------------------------------------------------------------------
-$(replace(ParallelKernel.PARALLEL_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
+    @parallel kernelcall
+    @parallel memopt=... kernelcall
+
+!!! note "Advanced"
+        @parallel ranges kernelcall
+        @parallel nblocks nthreads kernelcall
+        @parallel ranges nblocks nthreads kernelcall
+        @parallel (...) kwargs... kernelcall
+
+Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream).
+
+# Arguments
+- `kernelcall`: a call to a kernel that is declared parallel.
+!!! note "Advanced optional arguments"
+    - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
+
+# Optional keyword arguments
+- `memopt::Bool=false`: whether the kernel to be launched was generated with `memopt=true` (meaning the keyword was set in the kernel declaration).
+
+!!! note "Performance note"
+    Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+
+See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_DOC
-macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...)); end
+macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
 
 
 const PARALLEL_INDICES_DOC = """
 $(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
 """
 @doc PARALLEL_INDICES_DOC
-macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
+macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
 
 
 const PARALLEL_ASYNC_DOC = """
 $(replace(ParallelKernel.PARALLEL_ASYNC_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
 """
 @doc PARALLEL_ASYNC_DOC
-macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...)); end
+macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...)); end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
@@ -65,33 +94,53 @@ end
 
 ## GATEWAY FUNCTIONS
 
-parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(caller, args...; package=package, async=true)
+parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(source, caller, args...; package=package, async=true)
 
-function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs     = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel <kernel>"; eval_args=(:loopopt, :optdim, :halosize))
+        kwargs     = extract_kwargs(caller, kwargs_expr, (:memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
         numbertype = get_numbertype()
         ndims      = get_ndims()
-        parallel_kernel(caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
+        if !haskey(kwargs, :metadata_module)
+            get_name(kernelarg)
+            metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+        else
+            metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+        end
+        parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel <kernelcall>", true; eval_args=(:loopopt, :optdim, :halosize))
-        if haskey(kwargs, :loopopt) && kwargs.loopopt
-            parallel_call_loopopt(posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt,), "@parallel <kernelcall>", true; eval_args=(:memopt,))
+        memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        if memopt
+            if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
+            parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
-            ParallelKernel.parallel(caller, args...; package=package)
+            ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., kernelarg; package=package)
         end
     end
 end
 
 
-function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+    is_parallel_kernel = false
     numbertype = get_numbertype()
     posargs, kwargs_expr = split_args(args)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:loopopt, :optvars, :optdim, :loopsize, :halosize), "@parallel_indices"; eval_args=(:loopopt, :optdim, :halosize))
-    if haskey(kwargs, :loopopt) && kwargs.loopopt
-        parallel_indices_loopopt(package, numbertype, posargs...; kwargs...)
+    kwargs = extract_kwargs(caller, kwargs_expr, (:memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kernelarg = args[end]
+    if !haskey(kwargs, :metadata_module)
+        get_name(kernelarg)
+        metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+    else
+        metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+    end
+    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+    if memopt
+        quote
+            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs...; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+            $metadata_function
+        end
     else
         ParallelKernel.parallel_indices(posargs...; package=package)
     end
@@ -100,24 +149,39 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_loopopt(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize(), indices_shift::Tuple{<:Integer,<:Integer,<:Integer}=(0,0,0))
-    if (!loopopt) @ModuleInternalError("parallel_indices_loopopt: called with `loopopt=false` which should never happen.") end
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; memopt::Bool=get_memopt(), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+    if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
-    indices = extract_tuple(indices)
+    if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_loopopt(body, indices, optvars, optdim, loopsize, halosize, indices_shift)
+    body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
     body = add_return(body)
     set_body!(kernel, body)
-    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+    indices = extract_tuple(indices)
+    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr; kwargs::NamedTuple)
-    loopopt = haskey(kwargs, :loopopt) && kwargs.loopopt
+function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr; kwargs::NamedTuple)
+    is_parallel_kernel = true
+    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
     indices = get_indices_expr(ndims).args
     body = get_body(kernel)
     body = remove_return(body)
     validate_body(body)
+    kernelargs = splitarg.(extract_kernel_args(kernel)[1])
+    argvars = (arg[1] for arg in kernelargs)
+    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
+    check_mask_macro(caller)
+    body = apply_masks(body, indices)
+    if length(onthefly_vars) > 0
+        body = macroexpand(caller, body)
+        onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
+        onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
+        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
+        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
+        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
+    end
     if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
@@ -126,7 +190,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
         kernel = substitute(kernel, :(Data.TCell),      :(Data.DeviceTCell))
         kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
     end
-    if !loopopt
+    if !memopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
         if     (package == PKG_CUDA)    int_type = INT_CUDA
         elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
@@ -138,21 +202,23 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
         ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
         if isgpu(package)
             body = add_threadids(indices, ranges, body)
-            body = literaltypes(numbertype, body)
+            body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
+            body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
         elseif (package == PKG_THREADS)
             body = add_loop(indices, ranges, body)
-            body = literaltypes(numbertype, body)
+            body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         else
             @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
     end
-    check_mask_macro(caller)
-    body = apply_masks(body, indices)
     body = add_return(body)
     set_body!(kernel, body)
-    if loopopt 
+    if memopt
         expanded_kernel = macroexpand(caller, kernel)
-        parallel_indices_loopopt(package, numbertype, get_indices_expr(ndims), expanded_kernel; indices_shift=(1,1,1), kwargs...)
+        quote
+            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+            $metadata_function
+        end
     else
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
@@ -161,60 +227,77 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_loopopt(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
-    if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
-    if isa(optvars, Expr) @ArgumentError("parallel_call_loopopt: at present, one and only one variable is supported in argument `optvars`.") end
-    if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when loopopt=true is set.") end
-    if     (optdim==3) loopsizes = :(1, 1, $loopsize)
-    elseif (optdim==2) loopsizes = :(1, $loopsize, 1)
-    elseif (optdim==1) loopsizes = :($loopsize, 1, 1)
-    end
-    maxsize   = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
-    nthreads  = :( ParallelStencil.compute_nthreads_loopopt($maxsize, $optdim, $halosize) )
-    nblocks   = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    numbertype = (optvars==Symbol("")) ? get_numbertype() : :(eltype(optvars))
-    if     (optdim==3) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[2]+2*$halosize[2])*sizeof($numbertype))
-    elseif (optdim==2) shmem = :(($nthreads[1]+2*$halosize[1])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
-    elseif (optdim==1) shmem = :(($nthreads[2]+2*$halosize[2])*($nthreads[3]+2*$halosize[3])*sizeof($numbertype)) # TODO: to be determined if that is what is desired.
-    end
-    if (async) return :(@parallel_async $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
-    else       return :(@parallel       $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
+function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false)
+    if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
+    metadata_call   = create_metadata_call(kernelcall)
+    metadata_module = metadata_call
+    stencilranges   = :($(metadata_module).stencilranges)
+    use_shmemhalos  = :($(metadata_module).use_shmemhalos)
+    optvars         = :($(metadata_module).optvars)
+    loopdim          = :($(metadata_module).loopdim)
+    loopsize        = :($(metadata_module).loopsize)
+    loopsizes       = :(($loopdim==3) ? (1, 1, $loopsize) : ($loopdim==2) ? (1, $loopsize, 1) : ($loopsize, 1, 1))
+    maxsize         = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
+    nthreads        = :( ParallelStencil.compute_nthreads_memopt($maxsize, $loopdim, $stencilranges) )
+    nblocks         = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
+    numbertype      = get_numbertype() # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
+    dim1 = :(($loopdim==3) ? 1 : ($loopdim==2) ? 1 : 2) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
+    dim2 = :(($loopdim==3) ? 2 : ($loopdim==2) ? 3 : 3) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
+    A = gensym("A")
+    shmem = :(sum(($nthreads[$dim1]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim1])-1))*($nthreads[$dim2]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim2])-1))*sizeof($numbertype) for $A in $optvars))
+    if (async) return :(@parallel_async memopt=false $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+    else       return :(@parallel       memopt=false $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
     end
 end
 
-function parallel_call_loopopt(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; loopopt::Bool=false, optvars::Union{Expr,Symbol}=Symbol(""), optdim::Integer=determine_optdim(), loopsize::Union{Expr,Symbol,Integer}=compute_loopsize(), halosize::Union{Integer,NTuple{N,Integer} where N}=compute_halosize())
-    if (!loopopt) @ModuleInternalError("parallel_call_loopopt: called with `loopopt=false` which should never happen.") end
-    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
-    parallel_call_loopopt(ranges, kernelcall, backend_kwargs_expr, async; loopopt=loopopt, optvars=optvars, optdim=optdim, loopsize=loopsize, halosize=halosize)
+function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false)
+    metadata_call      = create_metadata_call(kernelcall)
+    metadata_module    = metadata_call
+    loopdim             = :($(metadata_module).loopdim)
+    is_parallel_kernel = :($(metadata_module).is_parallel_kernel)
+    ranges             = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($loopdim, $(kernelcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)))
+    parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt)
 end
 
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_loopopt(body::Expr, indices::Array{<:Union{Expr,Symbol}}, optvars::Union{Expr,Symbol}, optdim::Integer, loopsize::Union{Expr,Symbol,Integer}, halosize::Union{Integer,NTuple{N,Integer} where N}, indices_shift::Tuple{<:Integer,<:Integer,<:Integer})
-    if (optvars == Symbol("")) @KeywordArgumentError("@parallel <kernel>: keyword argument `optvars` is mandatory when `loopopt=true` is set.") end
-    if isa(optvars, Expr) @ArgumentError("loopopt: at present, only one variable is supported in argument `optvars`.") end
-    quote
-        ParallelStencil.@loopopt $(Expr(:tuple, indices...)) $optvars $optdim $loopsize $(Expr(:tuple, halosize...)) $indices_shift begin
-            $body
-        end
-    end
+function add_memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool)
+    memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read, body; package=package)
 end
 
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-compute_halosize() = return (1,1,0)  # TODO: A heuristic will be needed here too.
-compute_loopsize() = return LOOPSIZE
-determine_optdim() = get_ndims() # NOTE: in @parallel_indices kernels, this could be determined from the indices, but not in the @parallel calls (the heuristic must be the same...): determine_optdim(indices) = return (isa(indices,Expr) ? length(indices.args) : 1)
+determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
+compute_loopsize() = LOOPSIZE
 
 
 ## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
 
-function compute_nthreads_loopopt(maxsize, optdim, halosize) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
-    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=optdim)
-    if (prod(nthreads) < sum(halosize .* nthreads) + 4*prod(max.(halosize,1))) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the number of halo cells in a 3-D scenario (4*prod(halosize) is to compute the amount of cells in the halo corners). For a 2-D or 1-D scenario this will give alwayse false and raise the error.
+function compute_nthreads_memopt(maxsize, loopdim, stencilranges) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
+    maxsize = promote_maxsize(maxsize)
+    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=loopdim)
+    for stencilranges_A in values(stencilranges)
+        haloextensions = ((length(stencilranges_A[1])-1)*(loopdim!=1), (length(stencilranges_A[2])-1)*(loopdim!=2), (length(stencilranges_A[3])-1)*(loopdim!=3))
+        if (2*prod(nthreads) < prod(nthreads .+ haloextensions)) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the total number of cells including halo.
+    end
+    # TODO: check if this can simply be removed or even the kernel something need to be adapted:
+    if any(maxsize .% nthreads .!= 0) @ArgumentError("@parallel <kernelcall>: memopt optimization not possible for the given maximum array size in the kernel arguments (the maximum array size must be dividable without rest by the number of threads per block)") end # NOTE: this is a requirement for the reading into shared memory because the re-indexing requires that no thread aborts the kernel early. A way around it, is to specify the range such that the condition verified here is true (meaning the range length must be dividable by the number of threads without rest). This can be done automatically for @parallel kernels, because there the array bounds are always verified, but it must be done explicitly by the user for @parallel_indices kernels.
     return nthreads
+end
+
+function get_ranges_memopt(loopdim, args...)
+    ranges   = ParallelKernel.get_ranges(args...)
+    maxsize  = length.(ranges)
+    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=loopdim)
+    # TODO: the following code reduces performance from ~482 GB/s to ~478 GB/s
+    rests    = maxsize .% nthreads
+    ranges_adjustment = ( (rests[1] != 0) ? (nthreads[1] - rests[1]) : 0,
+                          (rests[2] != 0) ? (nthreads[2] - rests[2]) : 0,
+                          (rests[3] != 0) ? (nthreads[3] - rests[3]) : 0 )
+    ranges = ParallelKernel.compute_ranges(maxsize .+ ranges_adjustment) # NOTE: this makes memopt possible also if the maximum array size is not dividable without rest by the number of threads; however, it requires that all array accesses in the kernel are bounds checked. For parallel indices kernels the user has to guarantee that himself.
+    return ranges
 end
 
 
@@ -264,4 +347,101 @@ function get_indices_expr(ndims::Integer)
     else
         @ModuleInternalError("argument 'ndims' must be 1, 2 or 3.")
     end
+end
+
+
+## FUNCTIONS TO CREATE METADATA STORAGE
+
+function create_metadata_storage(source::LineNumberNode, caller::Module, kernel::Expr)
+    kernelid = get_kernelid(get_name(kernel), source.file, source.line)
+    create_module(caller, MOD_METADATA)
+    topmodule = @eval(caller, $MOD_METADATA)
+    create_module(topmodule, kernelid)
+    metadata_module = @eval(topmodule, $kernelid)
+    metadata_function = create_metadata_function(kernel, metadata_module)
+    return metadata_module, metadata_function
+end
+
+function create_module(hostmodule::Module, modulename::Symbol; do_baremodule=true)
+    if !isdefined(hostmodule, modulename)
+        moduleexpr = (do_baremodule) ? :(baremodule $modulename end) : :(module $modulename end)
+        @eval(hostmodule, $moduleexpr)
+    end
+end
+
+function create_metadata_function(kernel::Expr, metadata_module::Module) # NOTE: unlike the creation of the module above, the creation of the matter data function has to happen every time: if we redefine the same function we to have to redefine the meta data...
+    metadata_function = deepcopy(kernel)
+    kernelname = get_name(kernel)
+    functionname = get_meta_function(kernelname)
+    metadata_function = set_name(metadata_function, functionname)
+    set_body!(metadata_function, :(return $metadata_module))
+    return metadata_function
+end
+
+function create_metadata_call(kernelcall::Expr)
+    metadata_call = deepcopy(kernelcall)
+    kernelname = metadata_call.args[1]
+    metadata_call.args[1] = get_meta_function(kernelname)
+    return metadata_call
+end
+
+get_kernelid(kernelname, file, line) = Symbol("$(kernelname)_$(file)_$(line)")
+get_meta_function(kernelname)        = Symbol("$(META_FUNCTION_PREFIX)$(GENSYM_SEPARATOR)$(kernelname)")
+
+
+## FUNCTIONS TO DEAL WITH ON-THE-FLY ASSIGNMENTS
+
+function extract_onthefly_arrays!(body, argvars)
+    onthefly_vars  = ()
+    onthefly_exprs = ()
+    write_vars     = ()
+    statements     = get_statements(body)
+    for statement in statements
+        if is_array_assignment(statement)
+            if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
+            if A ∈ argvars
+                write_vars = (write_vars..., A)
+            end
+        end
+    end
+    for statement in statements
+        if is_array_assignment(statement)
+            if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
+            if A ∉ argvars
+                if (m != Symbol("@all"))         @ArgumentError("unsupported kernel statements in @parallel kernel definition: partial assignments are not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel); use '@all' instead.") end
+                if (inexpr_walk(assign_expr, A)) @ArgumentError("unsupported kernel statements in @parallel kernel definition: auto-dependency is not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel).") end
+                if any(inexpr_walk.((assign_expr,), write_vars)) # NOTE: in this case here could later be allocated a local array instead
+                    @ArgumentError("unsupported kernel statements in @parallel kernel definition: the assignment of $A should be done on the fly as it is not among the arguments of the kernel; however, this is not possible because it depends on at least one variable that is not read-only within the scope of the kernel (any of: $write_vars).")
+                else
+                    onthefly_vars  = (onthefly_vars..., A)
+                    onthefly_exprs = (onthefly_exprs..., assign_expr)
+                    body           = substitute(body, statement, NOEXPR)
+                end
+            end
+        end
+    end
+    return onthefly_vars, onthefly_exprs, write_vars, body
+end
+
+function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array)
+    indices = (indices...,)
+    for (A, m) in zip(onthefly_vars, onthefly_syms)
+        expr = substitute(expr, A, m, indices)
+    end
+    return expr
+end
+
+function create_onthefly_macro(caller, m, expr, var, indices)
+    ndims         = length(indices)
+    ix, iy, iz    =  gensym_world.(("ix","iy","iz"), (@__MODULE__,))
+    local_indices = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+    for (index, local_index) in zip(indices, local_indices)
+        expr = substitute(expr, index, Expr(:$, local_index))
+    end
+    quote_expr = :($(Expr(:quote, expr)))
+    m_function = :($m($(local_indices...)) = $quote_expr)
+    m_macro = :(macro $m(args...) if (length(args)!=$ndims) ParallelStencil.@ArgumentError("unsupported kernel statements in @parallel kernel definition: wrong number of indices in $var (expected $ndims indices).") end; esc($m(args...)) end)
+    @eval(caller, $m_function)
+    @eval(caller, $m_macro)
+    return
 end
