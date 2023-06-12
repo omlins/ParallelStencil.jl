@@ -13,12 +13,13 @@ ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl
 A particularity of ParallelStencil is that it enables writing a single high-level Julia code that can be deployed both on a CPU or a GPU. In conjuction with [ImplicitGlobalGrid.jl] the same Julia code can even run on a single CPU thread or on thousands of GPUs/CPUs.
 
 ## Contents
-* [Parallelization with one macro call](#parallelization-with-one-macro-call)
+* [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)
 * [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
 * [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
 * [50-lines multi-xPU example](#50-lines-multi-xpu-example)
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
 * [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
+* [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
 * [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
@@ -26,11 +27,11 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [Questions, comments and discussions](#questions-comments-and-discussions)
 * [References](#references)
 
-## Parallelization with one macro call
-A simple call to `@parallel` is enough to parallelize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
+## Parallelization and optimization with one macro call
+A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
 ```julia
 #(...)
-@init_parallel_stencil(CUDA,...);
+@init_parallel_stencil(CUDA,...)
 #(...)
 @parallel function diffusion3D_step!(...)
     #(...)
@@ -38,10 +39,21 @@ end
 #(...)
 @parallel diffusion3D_step!(...)
 ```
+Automatic advanced fast memory usage optimization (of shared memory and registers) can be activated with the keyword argument `memopt=true`:
+```julia
+@parallel memopt=true function diffusion3D_step!(...)
+    #(...)
+end
+#(...)
+@parallel memopt=true diffusion3D_step!(...)
+```
 Note that arrays are automatically allocated on the hardware chosen for the computations (GPU or CPU) when using the provided allocation macros:
 - `@zeros`
 - `@ones`
 - `@rand`
+- `@falses`
+- `@trues`
+- `@fill`
 
 ## Stencil computations with math-close notation
 ParallelStencil provides submodules for computing finite differences in 1-D, 2-D and 3-D with a math-close notation (`FiniteDifferences1D`, `FiniteDifferences2D` and `FiniteDifferences3D`). Custom macros to extend the finite differences submodules or for other stencil-based numerical methods can be readily plugged in. The following example shows a complete function for computing a time step of a 3-D heat diffusion solver using `FiniteDifferences3D`.
@@ -258,6 +270,21 @@ It can be launched as follows:
 @parallel (1:size(A,1), 1:size(A,3)) bc_y!(A)
 ```
 Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
+
+## Support for logical arrays of small arrays / structs
+Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call]). ParallelStencil leverages `CellArray`s (from [CellArrays.jl]) to this purpose. To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
+```julia
+nx, ny, nz = 128, 128, 128
+celldims   = (4, 4)
+A = @rand(nx, ny, nz, celldims=celldims)
+```
+To create a logical array of structs, a custom cell type can be defined using the macro `@CellType` and then passed to any of the allocation macros via the keyword `celltype`, e.g.:
+```julia
+@CellType SymmetricTensor3D fieldnames=(xx, yy, zz, yz, xz, xy)
+#(...)
+A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
+```
+Details are found in the [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia).
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
@@ -478,6 +505,7 @@ To discuss numerical/domain-science issues, please post on Julia Discourse in th
 [ImplicitGlobalGrid.jl]: https://github.com/eth-cscs/ImplicitGlobalGrid.jl
 [JULIA_NUM_THREADS]:https://docs.julialang.org/en/v1.0.0/manual/environment-variables/#JULIA_NUM_THREADS-1
 [MPI.jl]: https://github.com/JuliaParallel/MPI.jl
+[CellArrays.jl]: https://github.com/omlins/CellArrays.jl
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
