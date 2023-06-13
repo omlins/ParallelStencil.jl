@@ -131,8 +131,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
 $((quote
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
-                    $nx_l          = @blockDim().x + $(UInt32(hx1+hx2))                 # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
-                    $ny_l          = @blockDim().y + $(UInt32(hy1+hy2))                 # ...
+                    $nx_l          = @blockDim().x + UInt32($(hx1+hx2))                 # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
+                    $ny_l          = @blockDim().y + UInt32($(hy1+hy2))                 # ...
                     $t_h           = (@threadIdx().y-1)*@blockDim().x + @threadIdx().x  # NOTE: here it must be bx, not @blockDim().x
                     $t_h2          = $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y
                     $ty_h          = ($t_h-1) ÷ $nx_l + 1
@@ -749,8 +749,8 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                         if use_shmem_x && use_shmem_y # NOTE: if the following expressions are noted with ":()" then it will cause a segmentation fault and run time.
                             tx    = quote @threadIdx().x + $hx1 end
                             ty    = quote @threadIdx().y + $hy1 end
-                            nx_l  = quote @blockDim().x + $(hx1+hx2) end
-                            ny_l  = quote @blockDim().y + $(hy1+hy2) end
+                            nx_l  = quote @blockDim().x + UInt32($(hx1+hx2)) end                 # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
+                            ny_l  = quote @blockDim().y + UInt32($(hy1+hy2)) end                 # ...
                             n_l   = quote $nx_l*$ny_l end
                             t_h   = quote (@threadIdx().y-1)*@blockDim().x + @threadIdx().x end  # NOTE: here it must be bx, not @blockDim().x
                             t_h2  = quote $t_h + $nx_l*$ny_l - @blockDim().x*@blockDim().y end
@@ -765,7 +765,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                         elseif use_shmem_x
                             tx    = quote @threadIdx().x + $hx1 end
                             ty    = quote @threadIdx().y + $hy1 end
-                            nx_l  = quote @blockDim().x + $(hx1+hx2) end
+                            nx_l  = quote @blockDim().x + UInt32($(hx1+hx2)) end      # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
                             ny_l  = quote @blockDim().y end
                             tx_h  = quote @threadIdx().x end
                             ty_h  = quote @threadIdx().y end
@@ -782,7 +782,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
                             tx    = quote @threadIdx().x + $hx1 end
                             ty    = quote @threadIdx().y + $hy1 end
                             nx_l  = quote @blockDim().x end
-                            ny_l  = quote @blockDim().y + $(hy1+hy2) end
+                            ny_l  = quote @blockDim().y + UInt32($(hy1+hy2)) end     # NOTE: cast to UInt32 is necessary to avoid promotion, which can lead to a tuple with different integers, resulting in an error.
                             tx_h  = quote @threadIdx().x end
                             ty_h  = quote @threadIdx().y end
                             tx_h2 = tx_h
