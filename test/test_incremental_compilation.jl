@@ -2,11 +2,11 @@ using Test
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
+    import ParallelStencil.CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
+    import ParallelStencil.AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 exename = joinpath(Sys.BINDIR, Base.julia_exename())

@@ -5,11 +5,11 @@ import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, 
 import ParallelStencil.ParallelKernel: @require, @symbols
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
+    import ParallelStencil.ParallelKernel.CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
+    import ParallelStencil.ParallelKernel.AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 
