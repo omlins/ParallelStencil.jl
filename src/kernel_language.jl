@@ -64,11 +64,12 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     optranges      = isnothing(optranges) ? optranges : eval_arg(caller, optranges)
     readonlyvars   = find_readonlyvars(body, indices)
+    if length(indices) != 3 @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: optimization can only be applied in 3-D @parallel kernels and @parallel_indices kernels with three indices.") end
     if optvars == (Symbol(""),)
         optvars = Tuple(keys(readonlyvars))
     else
         for A in optvars
-            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument optvars in memopt: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
+            if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
         end
     end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
