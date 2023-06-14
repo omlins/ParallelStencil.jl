@@ -26,10 +26,10 @@ end
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType; datadoc_call=:())
     if package == PKG_CUDA
         data_module = Data_cuda(numbertype)
-        import_cmd  = :(import CUDA)
+        import_cmd  = :(import ParallelStencil.ParallelKernel.CUDA)
     elseif package == PKG_AMDGPU
         data_module = Data_amdgpu(numbertype)
-        import_cmd  = :(import AMDGPU)
+        import_cmd  = :(import ParallelStencil.ParallelKernel.AMDGPU)
     elseif package == PKG_THREADS
         data_module = Data_threads(numbertype)
         import_cmd  = :()

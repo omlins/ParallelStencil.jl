@@ -82,7 +82,7 @@ Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S,
 function Data_cuda(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import CUDA, CellArrays, StaticArrays
+            import ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Array{T, N}                   = CUDA.CuArray{T, N}
             DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
             Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -92,7 +92,7 @@ function Data_cuda(numbertype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import CUDA, CellArrays, StaticArrays
+            import ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Number                         = $numbertype
             Array{N}                       = CUDA.CuArray{$numbertype, N}
             DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
@@ -113,7 +113,7 @@ end
 function Data_amdgpu(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import AMDGPU, CellArrays, StaticArrays
+            import ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Array{T, N}                   = AMDGPU.ROCArray{T, N}
             DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -123,7 +123,7 @@ function Data_amdgpu(numbertype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import AMDGPU, CellArrays, StaticArrays
+            import ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Number                         = $numbertype
             Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
             DeviceArray{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
@@ -144,7 +144,7 @@ end
 function Data_threads(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, CellArrays, StaticArrays
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Array{T, N}                    = Base.Array{T, N}
             DeviceArray{T, N}              = Base.Array{T, N}
             Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -154,7 +154,7 @@ function Data_threads(numbertype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, CellArrays, StaticArrays
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Number                         = $numbertype
             Array{N}                       = Base.Array{$numbertype, N}
             DeviceArray{N}                 = Base.Array{$numbertype, N}
