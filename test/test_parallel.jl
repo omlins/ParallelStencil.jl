@@ -557,7 +557,11 @@ import ParallelStencil.@gorgeousexpand
                                 end
                                 return
                             end
-                            @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            @static if $package == $PKG_CUDA
+                                @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            elseif $package == $PKG_AMDGPU
+                                @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                            end
                             @test occursin("for i = -4:3", kernel)
                             @test occursin("tz = i + loopoffset", kernel)
                             @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2.0A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
@@ -608,7 +612,11 @@ import ParallelStencil.@gorgeousexpand
                                 end
                                 return
                             end
-                            @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            @static if $package == $PKG_CUDA
+                                @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                            elseif $package == $PKG_AMDGPU
+                                @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                            end
                             @test occursin("for i = -4:3", kernel)
                             @test occursin("tz = i + loopoffset", kernel)
                             @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2.0A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
