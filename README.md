@@ -2,11 +2,11 @@
 
 [![Build Status](https://github.com/omlins/ParallelStencil.jl/workflows/CI/badge.svg)](https://github.com/omlins/ParallelStencil.jl/actions)
 
-ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C / HIP can be achieved, which is typically a large improvement over the performance reached when using only [CUDA.jl Array programming] or [AMDGPU.jl]. For example, a 2-D shallow ice solver presented at JuliaCon 2020 \[[1][JuliaCon20a]\] achieved a nearly 20 times better performance than a corresponding [CUDA.jl Array programming] implementation; in absolute terms, it reached 70% of the theoretical upper performance bound of the used Nvidia P100 GPU, as defined by the effective throughput metric, `T_eff` (note that `T_eff` is very different from common throughput metrics, see section [Performance metric](#performance-metric)). The GPU performance of the solver is reported in green, the CPU performance in blue:
+ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C / HIP can be achieved, which is typically a large improvement over the performance reached when using only [CUDA.jl] or [AMDGPU.jl] [GPU Array programming]. For example, a 2-D shallow ice solver presented at JuliaCon 2020 \[[1][JuliaCon20a]\] achieved a nearly 20 times better performance than a corresponding [CUDA.jl Array programming] implementation; in absolute terms, it reached 70% of the theoretical upper performance bound of the used Nvidia P100 GPU, as defined by the effective throughput metric, `T_eff` (note that `T_eff` is very different from common throughput metrics, see section [Performance metric](#performance-metric)). The GPU performance of the solver is reported in green, the CPU performance in blue:
 
 <a id="fig_teff">![Performance ParallelStencil Teff](docs/images/perf_ps2.png)</a>
 
-ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
+ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl] and [AMDGPU.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
 
 ![Parallel efficiency of ParallelStencil with CUDA C backend](docs/images/par_eff_c_julia2.png)
 
@@ -28,7 +28,7 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [References](#references)
 
 ## Parallelization and optimization with one macro call
-A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
+A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl] and [AMDGPU.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
 ```julia
 #(...)
 @init_parallel_stencil(CUDA,...)
@@ -272,7 +272,7 @@ It can be launched as follows:
 Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
 
 ## Support for logical arrays of small arrays / structs
-Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call]). ParallelStencil leverages `CellArray`s (from [CellArrays.jl]) to this purpose. To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
+Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call]). To this purpose, ParallelStencil leverages `CellArray`s (from [CellArrays.jl], which relies in turn on [StaticArrays.jl]). To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
 ```julia
 nx, ny, nz = 128, 128, 128
 celldims   = (4, 4)
@@ -317,6 +317,12 @@ search: ParallelStencil @init_parallel_stencil
     •  @ones
 
     •  @rand
+
+    •  @falses
+
+    •  @trues
+
+    •  @fill
 
   │ Advanced
   │
@@ -466,7 +472,7 @@ The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing 
 *The animation depicts the formation of fluid escape pipes in two-phase media, owing to decompaction weakening running the miniapp [HydroMech2D.jl](/miniapps/HydroMech2D.jl). Top row: evolution of the porosity distribution and effective pressure. Bottom row: Darcy flux (relative fluid to solid motion) and solid (porous matrix) deformation.*
 
 ## Dependencies
-ParallelStencil relies on the Julia CUDA package ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]), [MacroTools.jl] and [StaticArrays.jl].
+ParallelStencil relies on the Julia packages ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]), [AMDGPU.jl], [MacroTools.jl], [CellArrays.jl] and [StaticArrays.jl].
 
 ## Installation
 ParallelStencil may be installed directly with the [Julia package manager](https://docs.julialang.org/en/v1/stdlib/Pkg/index.html) from the REPL:
@@ -507,6 +513,7 @@ To discuss numerical/domain-science issues, please post on Julia Discourse in th
 [MPI.jl]: https://github.com/JuliaParallel/MPI.jl
 [CellArrays.jl]: https://github.com/omlins/CellArrays.jl
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
+[AMDGPU.jl]: https://github.com/JuliaGPU/AMDGPU.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
 [Julia CUDA paper 1]: https://doi.org/10.1109/TPDS.2018.2872064
@@ -515,7 +522,7 @@ To discuss numerical/domain-science issues, please post on Julia Discourse in th
 [STREAM benchmark]: https://www.researchgate.net/publication/51992086_Memory_bandwidth_and_machine_balance_in_high_performance_computers
 [Julia REPL]: https://docs.julialang.org/en/v1/stdlib/REPL/
 [IJulia]: https://github.com/JuliaLang/IJulia.jl
-[CUDA.jl Array programming]: https://juliagpu.github.io/CUDA.jl/stable/usage/array/#Array-programming
+[GPU Array programming]: https://juliagpu.github.io/CUDA.jl/stable/usage/array/#Array-programming
 [GPU topic]: https://discourse.julialang.org/c/domain/gpu/
 [Julia at Scale topic]: https://discourse.julialang.org/c/domain/parallel/
 [Numerics topic]: https://discourse.julialang.org/c/domain/numerics/
