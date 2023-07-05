@@ -93,21 +93,29 @@ end
                 @test SymmetricTensor2D_Bool <: FieldArray
             end;
             @testset "mapping to package (no celldims/celltype)" begin
-                @test @zeros(2,3)                 == parentmodule($package).zeros(Float16,2,3)
-                @test @zeros(2,3, eltype=Float32) == parentmodule($package).zeros(Float32,2,3)
-                @test @ones(2,3)                  == parentmodule($package).ones(Float16,2,3)
-                @test @ones(2,3, eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
                 @static if $package == $PKG_CUDA
+                    @test typeof(@zeros(2,3))                   == typeof(CUDA.CuArray(zeros(Float16,2,3)))
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(CUDA.CuArray(zeros(Float32,2,3)))
+                    @test typeof(@ones(2,3))                    == typeof(CUDA.CuArray(ones(Float16,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(CUDA.CuArray(ones(Float32,2,3)))
                     @test typeof(@rand(2,3))                    == typeof(CUDA.CuArray(rand(Float16,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3))                 == typeof(CUDA.CuArray(fill(convert(Float16, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
                 elseif $package == $PKG_AMDGPU
+                    @test typeof(@zeros(2,3))                   == typeof(AMDGPU.ROCArray(zeros(Float16,2,3)))
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(AMDGPU.ROCArray(zeros(Float32,2,3)))
+                    @test typeof(@ones(2,3))                    == typeof(AMDGPU.ROCArray(ones(Float16,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(AMDGPU.ROCArray(ones(Float32,2,3)))
                     @test typeof(@rand(2,3))                    == typeof(AMDGPU.ROCArray(rand(Float16,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3))                 == typeof(AMDGPU.ROCArray(fill(convert(Float16, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
                 else
+                    @test typeof(@zeros(2,3))                   == typeof(parentmodule($package).zeros(Float16,2,3))
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(parentmodule($package).zeros(Float32,2,3))
+                    @test typeof(@ones(2,3))                    == typeof(parentmodule($package).ones(Float16,2,3))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(parentmodule($package).ones(Float32,2,3))
                     @test typeof(@rand(2,3))                    == typeof(parentmodule($package).rand(Float16,2,3))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(parentmodule($package).rand(Float64,2,3))
                     @test typeof(@fill(9, 2,3))                 == typeof(fill(convert(Float16, 9), 2,3))
@@ -216,15 +224,19 @@ end
                 @test SymmetricTensor2D_Bool <: FieldArray
             end;
             @testset "mapping to package (no celldims/celltype)" begin
-                @test @zeros(2,3, eltype=Float32) == parentmodule($package).zeros(Float32,2,3)
-                @test @ones(2,3, eltype=Float32)  == parentmodule($package).ones(Float32,2,3)
                 @static if $package == $PKG_CUDA
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(CUDA.CuArray(zeros(Float32,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(CUDA.CuArray(ones(Float32,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(CUDA.CuArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
                 elseif $package == $PKG_AMDGPU
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(AMDGPU.ROCArray(zeros(Float32,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(AMDGPU.ROCArray(ones(Float32,2,3)))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
                 else
+                    @test typeof(@zeros(2,3, eltype=Float32))   == typeof(zeros(Float32,2,3))
+                    @test typeof(@ones(2,3, eltype=Float32))    == typeof(ones(Float32,2,3))
                     @test typeof(@rand(2,3, eltype=Float64))    == typeof(parentmodule($package).rand(Float64,2,3))
                     @test typeof(@fill(9, 2,3, eltype=Float64)) == typeof(fill(convert(Float64, 9), 2,3))
                 end

@@ -148,7 +148,7 @@ $((quote
     for vars in values(shmem_index_groups) for A in (vars[1],) if use_shmemindices[A] for s in (shmem_vars[A],) for (shmem_offset,  hx1, hx2, hy1, hy2,  tx, ty, nx_l, ny_l, t_h, t_h2, tx_h, tx_h2, ty_h, ty_h2, ix_h, ix_h2, iy_h, iy_h2, A_head) = ((shmem_exprs[A][:offset],  hx1s[A], hx2s[A], hy1s[A], hy2s[A],  s[:tx], s[:ty], s[:nx_l], s[:ny_l], s[:t_h], s[:t_h2], s[:tx_h], s[:tx_h2], s[:ty_h], s[:ty_h2], s[:ix_h], s[:ix_h2], s[:iy_h], s[:iy_h2], s[:A_head]),)
   )...
 )
-$((:(               $A_head        = @sharedMem(eltype($A), ($nx_l, $ny_l), $shmem_offset) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l), +(nx_l_A * ny_l_A)*eltype(A))
+$((:(               $A_head        = @sharedMem(eltype($A), (Int64($nx_l), Int64($ny_l)), $shmem_offset) # e.g. A_izp3 = @sharedMem(eltype(A), (nx_l, ny_l), +(nx_l_A * ny_l_A)*eltype(A))
     )
     for (A, s) in shmem_vars for (shmem_offset,  nx_l, ny_l, A_head) = ((shmem_exprs[A][:offset],  s[:nx_l], s[:ny_l], s[:A_head]),)
   )...
