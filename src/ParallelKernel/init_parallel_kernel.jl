@@ -25,15 +25,16 @@ end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType; datadoc_call=:())
     if package == PKG_CUDA
-        data_module = Data_cuda(numbertype)
-        import_cmd  = :(import ParallelStencil.ParallelKernel.CUDA)
+        data_module     = Data_cuda(numbertype)
+        pkg_import_cmd  = :(import ParallelStencil.ParallelKernel.CUDA)
     elseif package == PKG_AMDGPU
-        data_module = Data_amdgpu(numbertype)
-        import_cmd  = :(import ParallelStencil.ParallelKernel.AMDGPU)
+        data_module     = Data_amdgpu(numbertype)
+        pkg_import_cmd  = :(import ParallelStencil.ParallelKernel.AMDGPU)
     elseif package == PKG_THREADS
-        data_module = Data_threads(numbertype)
-        import_cmd  = :()
+        data_module     = Data_threads(numbertype)
+        pkg_import_cmd  = :()
     end
+    ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme)
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
         if (datadoc_call==:())
             if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
@@ -47,7 +48,8 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     else
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
-    @eval(caller, $import_cmd)
+    @eval(caller, $pkg_import_cmd)
+    @eval(caller, $ad_import_cmd)
     set_package(package)
     set_numbertype(numbertype)
     set_initialized(true)
