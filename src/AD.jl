@@ -7,8 +7,8 @@ Provides GPU-compatible functions for automatic differentiation. The functions r
     using ParallelStencil.AD
 
 # Functions
-- autodiff_deferred!
-- autodiff_deferred_thunk!
+- `autodiff_deferred!`
+- `autodiff_deferred_thunk!`
 
 # Examples
     const USE_GPU = true
