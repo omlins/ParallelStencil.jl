@@ -7,8 +7,8 @@ Provides GPU-compatible functions for automatic differentiation. The functions r
     using ParallelKernel.AD
 
 # Functions
-- autodiff_deferred!
-- autodiff_deferred_thunk!
+- `autodiff_deferred!`
+- `autodiff_deferred_thunk!`
 
 To see a description of a function type `?<functionname>`.
 """
