@@ -20,11 +20,12 @@ elseif ENABLE_AMDGPU
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
+import Enzyme
 using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
-## CONSTANTS AND TYPES
+## CONSTANTS AND TYPES (and the macros wrapping them)
 #NOTE: constants needs to be defined before including the submodules to have them accessible there.
 
 const GENSYM_SEPARATOR = ", "
@@ -43,6 +44,7 @@ const RANGES_TYPE_1D               = UnitRange{}
 const RANGES_TYPE_1D_TUPLE         = Tuple{UnitRange{}}
 const RANGES_TYPE_2D               = Tuple{UnitRange{},UnitRange{}}
 const RANGES_TYPE                  = Tuple{UnitRange{},UnitRange{},UnitRange{}}
+const RANGELENGTH_XYZ_TYPE         = T where T <: Integer
 const MAXSIZE_TYPE_1D              = Integer
 const MAXSIZE_TYPE_1D_TUPLE        = Tuple{T} where T <: Integer
 const MAXSIZE_TYPE_2D              = Tuple{T, T} where T <: Integer
@@ -71,6 +73,9 @@ struct Dim3
     y::INT_THREADS
     z::INT_THREADS
 end
+
+macro ranges()       esc(RANGES_VARNAME) end
+macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
 
 ## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "ROCSTREAMS"

@@ -110,10 +110,11 @@ parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_
 
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch), "@parallel <kernelcall>", true; eval_args=(:launch,))
-    launch = haskey(kwargs, :launch) ? kwargs.launch : true
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch, :configcall), "@parallel <kernelcall>", true; eval_args=(:launch,))
+    launch     = haskey(kwargs, :launch) ? kwargs.launch : true
+    configcall = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
     if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
-    elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch) # Ignore keyword args as they are not for the threads case (noted in doc).
+    elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -175,7 +176,7 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
@@ -187,26 +188,26 @@ function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Exp
     return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
 end
 
-function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
+function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
     parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true)
-    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
+function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
     parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
+function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$INT_THREADS},UnitRange{$INT_THREADS},UnitRange{$INT_THREADS}}, $ranges)))
     push!(kernelcall.args, :($INT_THREADS(length($ranges[1]))))
@@ -223,18 +224,18 @@ function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, asy
     end
 end
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
+function parallel_call_threads(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
     parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 
-function parallel_call_threads(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true)
+function parallel_call_threads(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
     parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 
-function parallel_call_threads(kernelcall::Expr, async::Bool; launch::Bool=true)
-    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)) )
+function parallel_call_threads(kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
+    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
     parallel_call_threads(ranges, kernelcall, async; launch=launch)
 end
 

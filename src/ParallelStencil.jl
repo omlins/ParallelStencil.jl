@@ -61,10 +61,11 @@ include("parallel.jl")
 include("reset_parallel_stencil.jl")
 
 ## Alphabetical include of computation-submodules (must be at end as needs to import from ParallelStencil, .e.g. INDICES).
+include("AD.jl")
 include("FiniteDifferences.jl")
 
 ## Exports (need to be after include of submodules as re-exports from them)
-export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D
+export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D, AD
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println
 export PSNumber

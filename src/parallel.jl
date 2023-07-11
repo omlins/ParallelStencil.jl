@@ -111,13 +111,15 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt,), "@parallel <kernelcall>", true; eval_args=(:memopt,))
-        memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall), "@parallel <kernelcall>", true; eval_args=(:memopt,))
+        memopt                  = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
+        configcall_kwarg_expr = :(configcall=$configcall)
         if memopt
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
             parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
-            ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., kernelarg; package=package)
+            ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package)
         end
     end
 end
@@ -227,9 +229,10 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false)
+function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
-    metadata_call   = create_metadata_call(kernelcall)
+    configcall_kwarg_expr = :(configcall=$configcall)
+    metadata_call   = create_metadata_call(configcall)
     metadata_module = metadata_call
     stencilranges   = :($(metadata_module).stencilranges)
     use_shmemhalos  = :($(metadata_module).use_shmemhalos)
@@ -245,18 +248,18 @@ function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernel
     dim2 = :(($loopdim==3) ? 2 : ($loopdim==2) ? 3 : 3) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
     A = gensym("A")
     shmem = :(sum(($nthreads[$dim1]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim1])-1))*($nthreads[$dim2]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim2])-1))*sizeof($numbertype) for $A in $optvars))
-    if (async) return :(@parallel_async memopt=false $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
-    else       return :(@parallel       memopt=false $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
+    if (async) return :(@parallel_async memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
+    else       return :(@parallel       memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
     end
 end
 
-function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false)
-    metadata_call      = create_metadata_call(kernelcall)
+function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
+    metadata_call      = create_metadata_call(configcall)
     metadata_module    = metadata_call
     loopdim             = :($(metadata_module).loopdim)
     is_parallel_kernel = :($(metadata_module).is_parallel_kernel)
-    ranges             = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($loopdim, $(kernelcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(kernelcall.args[2:end]...)))
-    parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt)
+    ranges             = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($loopdim, $(configcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)))
+    parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall)
 end
 
 
@@ -378,8 +381,8 @@ function create_metadata_function(kernel::Expr, metadata_module::Module) # NOTE:
     return metadata_function
 end
 
-function create_metadata_call(kernelcall::Expr)
-    metadata_call = deepcopy(kernelcall)
+function create_metadata_call(configcall::Expr)
+    metadata_call = deepcopy(configcall)
     kernelname = metadata_call.args[1]
     metadata_call.args[1] = get_meta_function(kernelname)
     return metadata_call
