@@ -112,10 +112,13 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall), "@parallel <kernelcall>", true; eval_args=(:memopt,))
-        memopt                  = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
-        if memopt
+        is_ad_highlevel       = haskey(kwargs, :∇)
+        if is_ad_highlevel
+            ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+        elseif memopt
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
             parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
