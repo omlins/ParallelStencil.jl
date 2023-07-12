@@ -110,12 +110,17 @@ parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_
 
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch, :configcall), "@parallel <kernelcall>", true; eval_args=(:launch,))
-    launch     = haskey(kwargs, :launch) ? kwargs.launch : true
-    configcall = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
-    if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
-    elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:launch,))
+    is_ad_highlevel = haskey(kwargs, :∇)
+    launch          = haskey(kwargs, :launch) ? kwargs.launch : true
+    configcall      = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
+    if is_ad_highlevel
+        parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+    else
+        if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
+        elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
+        else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        end
     end
 end
 
@@ -175,6 +180,43 @@ end
 
 
 ## @PARALLEL CALL FUNCTIONS
+
+function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol, posargs, kwargs)
+    ad_mode              = haskey(kwargs, :ad_mode) ? kwargs.ad_mode : AD_MODE_DEFAULT
+    ad_annotations_expr  = haskey(kwargs, :ad_annotations) ? extract_tuple(kwargs.ad_annotations; nested=true) : []
+    ad_vars_expr         = extract_tuple(kwargs.∇; nested=true)
+    ~, ~, ad_vars        = extract_kwargs(caller, ad_vars_expr, (), "", true; separator=:->)
+    ~, ~, ad_annotations = extract_kwargs(caller, ad_annotations_expr, (), "", true)
+    ad_vars              = map(x->unblock(x), ad_vars)
+    ad_annotations       = map(x->extract_tuple(x), ad_annotations)
+    f_name               = extract_kernelcall_name(kernelcall)
+    f_posargs, ~         = extract_kernelcall_args(kernelcall)
+    ad_annotations_byvar = Dict(a => [] for a in f_posargs)
+    for (keyword, vars) in zip(keys(ad_annotations), values(ad_annotations))
+        if (keyword ∉ keys(AD_SUPPORTED_ANNOTATIONS)) @KeywordArgumentError("annotation $keyword is not (yet) supported with high-level syntax; use the generic syntax calling directly `autodiff_deferred!`.") end
+        for var in vars
+            if (ad_annotations_byvar[var] != []) @KeywordArgumentError("variable $var has more than one annotation. Nested annotations are not (yet) supported with high-level syntax; use the generic syntax calling directly `autodiff_deferred!`.") end
+            push!(ad_annotations_byvar[var], AD_SUPPORTED_ANNOTATIONS[keyword])
+        end
+    end
+    for var in keys(ad_vars)
+        if ad_annotations_byvar[var] == []
+            push!(ad_annotations_byvar[var], AD_DUPLICATE_DEFAULT)
+        end
+    end
+    for var in f_posargs
+        if ad_annotations_byvar[var] == []
+            push!(ad_annotations_byvar[var], AD_ANNOTATION_DEFAULT)
+        end
+    end
+    annotated_args        = (:($(ad_annotations_byvar[var][1])($((var ∈ keys(ad_vars) ? (var, ad_vars[var]) : (var,))...))) for var in f_posargs)
+    ad_call               = :(autodiff_deferred!($ad_mode, $f_name, $(annotated_args...)))
+    kwargs_remaining      = filter(x->!(x in (:∇, :ad_mode, :ad_annotations)), keys(kwargs))
+    kwargs_remaining_expr = [:($key=$val) for (key,val) in kwargs_remaining]
+    if (async) return :( @parallel       $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #TODO: the package needs to be passed further here later.
+    else       return :( @parallel_async $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #...
+    end
+end
 
 function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
