@@ -22,7 +22,7 @@ else
 end
 import Enzyme
 using CellArrays, StaticArrays, MacroTools
-import MacroTools: postwalk, splitdef, combinedef, isexpr # NOTE: inexpr_walk used instead of MacroTools.inexpr
+import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
 ## CONSTANTS AND TYPES (and the macros wrapping them)
@@ -58,6 +58,10 @@ const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Fl
 const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
+const AD_MODE_DEFAULT              = :(Enzyme.Reverse)
+const AD_DUPLICATE_DEFAULT         = Enzyme.DuplicatedNoNeed
+const AD_ANNOTATION_DEFAULT        = Enzyme.Const
+const AD_SUPPORTED_ANNOTATIONS     = (Const=Enzyme.Const, Active=Enzyme.Active, Duplicated=Enzyme.Duplicated, DuplicatedNoNeed=Enzyme.DuplicatedNoNeed)
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
@@ -200,10 +204,11 @@ function extract_args(call::Expr, macroname::Symbol)
 end
 
 extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_kernelcall=true)
+extract_kernelcall_name(call::Expr)         = call.args[1]
 
-function is_kwarg(arg; in_kernelcall=false)
+function is_kwarg(arg; in_kernelcall=false, separator=:(=))
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == :(=)) && isa(arg.args[1], Symbol))
+    else             return ( isa(arg, Expr) && (arg.head == separator) && isa(arg.args[1], Symbol))
     end
 end
 
@@ -220,8 +225,8 @@ function split_args(args; in_kernelcall=false)
     return posargs, kwargs
 end
 
-function split_kwargs(kwargs)
-    if !all(is_kwarg.(kwargs)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
+function split_kwargs(kwargs; separator=:(=))
+    if !all(is_kwarg.(kwargs; separator=separator)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
     return Dict(x.args[1] => x.args[2] for x in kwargs)
 end
 
@@ -241,8 +246,8 @@ function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
     return extract_values(kwargs, valid_kwargs)
 end
 
-function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=())
-    kwargs = split_kwargs(kwargs_expr)
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=(), separator=:(=))
+    kwargs = split_kwargs(kwargs_expr, separator=separator)
     if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
     for k in keys(kwargs)
         if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
@@ -250,7 +255,7 @@ function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, ha
     kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
     kwargs_unknown      = NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs))
     kwargs_unknown_expr = [:($k = $(kwargs_unknown[k])) for k in keys(kwargs_unknown)]
-    return kwargs_known, kwargs_unknown_expr
+    return kwargs_known, kwargs_unknown_expr, kwargs_unknown
 end
 
 function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
@@ -314,9 +319,11 @@ inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
 
 Base.unquoted(s::Symbol) = s
 
-function extract_tuple(t::Union{Expr,Symbol}) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
-    if isa(t, Expr) 
-        return Base.unquoted.(t.args)
+function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
+    if isa(t, Expr) && t.head == :tuple
+        if (nested) return t.args
+        else        return Base.unquoted.(t.args)
+        end
     else 
         return [t]
     end
