@@ -1,11 +1,13 @@
 const PARALLEL_DOC = """
     @parallel kernelcall
+    @parallel ∇=... kernelcall
 
 !!! note "Advanced"
         @parallel ranges kernelcall
         @parallel nblocks nthreads kernelcall
         @parallel ranges nblocks nthreads kernelcall
-        @parallel (...) kwargs... kernelcall
+        @parallel (...) configcall=... backendkwargs... kernelcall
+        @parallel ∇=... ad_mode=... ad_annotations=... (...) backendkwargs... kernelcall
 
 Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream).
 
@@ -15,7 +17,11 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
     - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
     - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
-    - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
+
+# Keyword arguments
+!!! note "Advanced"
+    - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -39,12 +45,14 @@ macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(
 ##
 const PARALLEL_ASYNC_DOC = """
 @parallel_async kernelcall
+@parallel_async ∇=... kernelcall
 
 !!! note "Advanced"
         @parallel_async ranges kernelcall
         @parallel_async nblocks nthreads kernelcall
         @parallel_async ranges nblocks nthreads kernelcall
-        @parallel_async (...) kwargs... kernelcall
+        @parallel_async (...) configcall=... backendkwargs... kernelcall
+        @parallel_async ∇=... ad_mode=... ad_annotations=... (...) backendkwargs... kernelcall
 
 Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`](@ref) for more information); deactivates however automatic synchronization at the end of the call. Use [`@synchronize`](@ref) for synchronizing.
 
@@ -210,11 +218,11 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
         end
     end
     annotated_args        = (:($(ad_annotations_byvar[var][1])($((var ∈ keys(ad_vars) ? (var, ad_vars[var]) : (var,))...))) for var in f_posargs)
-    ad_call               = :(autodiff_deferred!($ad_mode, $f_name, $(annotated_args...)))
+    ad_call               = :(ParallelStencil.ParallelKernel.AD.autodiff_deferred!($ad_mode, $f_name, $(annotated_args...)))
     kwargs_remaining      = filter(x->!(x in (:∇, :ad_mode, :ad_annotations)), keys(kwargs))
     kwargs_remaining_expr = [:($key=$val) for (key,val) in kwargs_remaining]
-    if (async) return :( @parallel       $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #TODO: the package needs to be passed further here later.
-    else       return :( @parallel_async $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #...
+    if (async) return :( @parallel_async $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #TODO: the package needs to be passed further here later.
+    else       return :( @parallel       $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #...
     end
 end
 

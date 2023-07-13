@@ -14,12 +14,15 @@ See also: [`@init_parallel_stencil`](@ref)
 --------------------------------------------------------------------------------
     @parallel kernelcall
     @parallel memopt=... kernelcall
+    @parallel ∇=... kernelcall
+    @parallel ∇=... memopt=... kernelcall
 
 !!! note "Advanced"
         @parallel ranges kernelcall
         @parallel nblocks nthreads kernelcall
         @parallel ranges nblocks nthreads kernelcall
-        @parallel (...) kwargs... kernelcall
+        @parallel (...) memopt=... configcall=... backendkwargs... kernelcall
+        @parallel ∇=... ad_mode=... ad_annotations=... (...) memopt=... backendkwargs... kernelcall
 
 Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream).
 
@@ -29,10 +32,12 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
     - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
     - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
-    - `kwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
-# Optional keyword arguments
+# Keyword arguments
 - `memopt::Bool=false`: whether the kernel to be launched was generated with `memopt=true` (meaning the keyword was set in the kernel declaration).
+!!! note "Advanced"
+    - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -111,7 +116,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall), "@parallel <kernelcall>", true; eval_args=(:memopt,))
+        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
         memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
