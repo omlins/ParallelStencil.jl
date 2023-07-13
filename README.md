@@ -290,7 +290,7 @@ A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
 Details are found in the [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia).
 
 ## Support for automatic differentiation of architecture-agnostic parallel kernels
-The automatic differentiation of architecture-agnostic parallel kernels is fully integrated into ParallelStencil's API and exposed both with high-level and generic syntax. The keyword argument `∇` is enough to trigger a parallel call to the gradient kernel instead of the kernel itself, e.g:
+[Enzyme.jl]-powered automatic differentiation of architecture-agnostic parallel kernels is fully integrated into ParallelStencil's API and exposed both with high-level and generic syntax. The keyword argument `∇` is enough to trigger a parallel call to the gradient kernel instead of the kernel itself, e.g:
 ```julia
 #(...)
 @parallel_indices (ix) function f!(A, B, a)
