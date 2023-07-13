@@ -12,6 +12,8 @@ ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl
 
 A particularity of ParallelStencil is that it enables writing a single high-level Julia code that can be deployed both on a CPU or a GPU. In conjuction with [ImplicitGlobalGrid.jl] the same Julia code can even run on a single CPU thread or on thousands of GPUs/CPUs.
 
+Beyond traditional high-performance computing, ParallelStencil supports automatic differentiation of architecture-agnostic parallel kernels relying on [Enzyme.jl], enabling both high-level and generic syntax for maximal flexibility.
+
 ## Contents
 * [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)
 * [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
@@ -20,6 +22,7 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 * [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
 * [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
 * [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
+* [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
 * [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
 * [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
 * [Dependencies](#dependencies)
@@ -286,6 +289,36 @@ A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
 ```
 Details are found in the [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia).
 
+## Support for automatic differentiation of architecture-agnostic parallel kernels
+The automatic differentiation of architecture-agnostic parallel kernels is fully integrated into ParallelStencil's API and exposed both with high-level and generic syntax. The keyword argument `∇` is enough to trigger a parallel call to the gradient kernel instead of the kernel itself, e.g:
+```julia
+#(...)
+@parallel_indices (ix) function f!(A, B, a)
+    A[ix] += a * B[ix] * 100.65
+    return
+end
+
+N = 16
+a = 6.5
+A = @rand(N)
+B = @rand(N)
+Ā = @ones(N)
+B̄ = @ones(N)
+
+@parallel f!(A, B, a)                 # normal call of f!
+@parallel ∇=(A->Ā, B->B̄) f!(A, B, a)  # call to the gradient of f!, differentiated with respect to A and B
+```
+Keyword arguments to `@parallel` allow to customize the automatic differentiation (type `?@parallel` to read the corresponding documentation).
+
+The generic syntax, which is accessible via the submodule `ParallelStencil.AD`, enables maximal flexibility. For the above example it looks as follows:
+```julia
+using ParallelStencil.AD, Enzyme
+#(...)
+@parallel f!(A, B, a)                                                                                                  # normal call of f!
+@parallel configcall=f!(A, B, a) autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), Duplicated(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
+```
+The keyword argument `configcall` makes it trivial to call the generic functions for automatic differentiation (here `autodiff_deferred`) with the right launch parameters.
+
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
 ```julia-repl
@@ -514,6 +547,7 @@ To discuss numerical/domain-science issues, please post on Julia Discourse in th
 [CellArrays.jl]: https://github.com/omlins/CellArrays.jl
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
 [AMDGPU.jl]: https://github.com/JuliaGPU/AMDGPU.jl
+[Enzyme.jl]: https://github.com/EnzymeAD/Enzyme.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
 [Julia CUDA paper 1]: https://doi.org/10.1109/TPDS.2018.2872064
