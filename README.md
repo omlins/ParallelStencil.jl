@@ -317,7 +317,7 @@ using ParallelStencil.AD, Enzyme
 @parallel f!(A, B, a)                                                                                                  # normal call of f!
 @parallel configcall=f!(A, B, a) autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), Duplicated(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
 ```
-The keyword argument `configcall` makes it trivial to call the generic functions for automatic differentiation (here `autodiff_deferred`) with the right launch parameters.
+The keyword argument `configcall` makes it trivial to call the generic functions for automatic differentiation (here `autodiff_deferred!`) with the right launch parameters.
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
