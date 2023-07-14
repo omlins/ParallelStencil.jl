@@ -124,6 +124,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
+        if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
         if is_ad_highlevel
             ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
         elseif memopt
