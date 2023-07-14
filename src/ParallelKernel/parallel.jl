@@ -122,9 +122,10 @@ parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_
 function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args)
     kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:launch,))
-    is_ad_highlevel = haskey(kwargs, :∇)
     launch          = haskey(kwargs, :launch) ? kwargs.launch : true
     configcall      = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
+    is_ad_highlevel = haskey(kwargs, :∇)
+    if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
     if is_ad_highlevel
         parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
     else
