@@ -308,7 +308,7 @@ B̄ = @ones(N)
 @parallel f!(A, B, a)                 # normal call of f!
 @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)  # call to the gradient of f!, differentiated with respect to A and B
 ```
-Keyword arguments to `@parallel` allow to customize the automatic differentiation (type `?@parallel` to read the corresponding documentation).
+Keyword arguments to `@parallel` allow to customize the automatic differentiation (type `?@parallel` to read the corresponding documentation). Automatic differentiation is supported for both `@parallel` and `@parallel_indices` kernels.
 
 The generic syntax, which is enabled by the submodule `ParallelStencil.AD`, provides maximal flexibility. For the above example it looks as follows:
 ```julia
