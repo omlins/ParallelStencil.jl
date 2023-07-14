@@ -310,14 +310,15 @@ B̄ = @ones(N)
 ```
 Keyword arguments to `@parallel` allow to customize the automatic differentiation (type `?@parallel` to read the corresponding documentation).
 
-The generic syntax, which is accessible via the submodule `ParallelStencil.AD`, enables maximal flexibility. For the above example it looks as follows:
+The generic syntax, which is enabled by the submodule `ParallelStencil.AD`, provides maximal flexibility. For the above example it looks as follows:
 ```julia
-using ParallelStencil.AD, Enzyme
+import ParallelStencil.AD
+using Enzyme
 #(...)
-@parallel f!(A, B, a)                                                                                                  # normal call of f!
-@parallel configcall=f!(A, B, a) autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), Duplicated(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
+@parallel f!(A, B, a)                                                                                                                 # normal call of f!
+@parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
 ```
-The keyword argument `configcall` makes it trivial to call the generic functions for automatic differentiation (here `autodiff_deferred!`) with the right launch parameters.
+The submodule `ParallelStencil.AD` contains GPU-compatible wrappers of Enzyme functions (returning always `nothing` as required by the backend packages [CUDA.jl] and [AMDGPU.jl]); the wrapper `AD.autodiff_deferred!` maps, e.g., `Enzyme.autodiff_deferred`. The keyword argument `configcall` makes it trivial to call these generic functions for automatic differentiation with the right launch parameters.
 
 ## Module documentation callable from the Julia REPL / IJulia
 The module documentation can be called from the [Julia REPL] or in [IJulia]:
