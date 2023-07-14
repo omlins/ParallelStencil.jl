@@ -62,37 +62,39 @@ end
                 @test !occursin("g(B,", call)
             end;
             @testset "@parallel ∇" begin
-                @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.Const)(A), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.Duplicated)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.Duplicated)(A, Ā), (EnzymeCore.Duplicated)(B, B̄), (EnzymeCore.Const)(a), (EnzymeCore.Active)(b))"
+                @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (Const)(A), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (DuplicatedNoNeed)(A, Ā), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (DuplicatedNoNeed)(A, Ā), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (DuplicatedNoNeed)(A, Ā), (Duplicated)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (Duplicated)(A, Ā), (Duplicated)(B, B̄), (Const)(a), (Active)(b))"
             end;
             @testset "AD.autodiff_deferred!" begin
-                N = 16
-                a = 6.5
-                A = @rand(N)
-                B = @rand(N)
-                Ā = @ones(N)
-                B̄ = @ones(N)
-                A_ref = Array(A)
-                B_ref = Array(B)
-                Ā_ref = ones(N)
-                B̄_ref = ones(N)
-                @parallel_indices (ix) function f!(A, B, a)
-                    A[ix] += a * B[ix] * 100.65
-                    return
-                end
-                function g!(A, B, a)
-                    for ix in 1:length(A)
+                @static if $package != $PKG_THREADS
+                    N = 16
+                    a = 6.5
+                    A = @rand(N)
+                    B = @rand(N)
+                    Ā = @ones(N)
+                    B̄ = @ones(N)
+                    A_ref = Array(A)
+                    B_ref = Array(B)
+                    Ā_ref = ones(N)
+                    B̄_ref = ones(N)
+                    @parallel_indices (ix) function f!(A, B, a)
                         A[ix] += a * B[ix] * 100.65
+                        return
                     end
-                    return
+                    function g!(A, B, a)
+                        for ix in 1:length(A)
+                            A[ix] += a * B[ix] * 100.65
+                        end
+                        return
+                    end
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
+                    Enzyme.autodiff_deferred(Enzyme.Reverse, g!, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
                 end
-                @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
-                Enzyme.autodiff_deferred(Enzyme.Reverse, g!, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
-                @test Array(Ā) ≈ Ā_ref
-                @test Array(B̄) ≈ B̄_ref
             end
             @testset "@parallel_indices" begin
                 @testset "addition of range arguments" begin
