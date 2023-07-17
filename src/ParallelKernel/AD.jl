@@ -1,14 +1,14 @@
 """
 Module AD
 
-Provides GPU-compatible functions for automatic differentiation. The functions rely on the Enzyme.jl package.
+Provides GPU-compatible wrappers for automatic differentiation functions of the Enzyme.jl package. Consult the Enzyme documentation to learn how to use the wrapped functions.
 
 # Usage
-    using ParallelKernel.AD
+    import ParallelKernel.AD
 
 # Functions
-- `autodiff_deferred!`
-- `autodiff_deferred_thunk!`
+- `autodiff_deferred!`: wraps function `autodiff_deferred`.
+- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`.
 
 To see a description of a function type `?<functionname>`.
 """

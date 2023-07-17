@@ -1,19 +1,20 @@
 """
 Module AD
 
-Provides GPU-compatible functions for automatic differentiation. The functions rely on the Enzyme.jl package.
+Provides GPU-compatible wrappers for automatic differentiation functions of the Enzyme.jl package. Consult the Enzyme documentation to learn how to use the wrapped functions.
 
 # Usage
-    using ParallelStencil.AD
+    import ParallelStencil.AD
 
 # Functions
-- `autodiff_deferred!`
-- `autodiff_deferred_thunk!`
+- `autodiff_deferred!`: wraps function `autodiff_deferred`.
+- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`.
 
 # Examples
     const USE_GPU = true
     using ParallelStencil
-    using ParallelStencil.AD, Enzyme
+    import ParallelStencil.AD
+    using Enzyme
     @static if USE_GPU
         @init_parallel_stencil(CUDA, Float64, 3);
     else
@@ -35,7 +36,7 @@ Provides GPU-compatible functions for automatic differentiation. The functions r
 
         @info "running on CPU/GPU"
         @parallel f!(A, B, a) # normal call of f!
-        @parallel configcall=f!(A, B, a) autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), Duplicated(B, B̄), Const(a)) # automatic differentiation of f!
+        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # automatic differentiation of f!
         
         return
     end

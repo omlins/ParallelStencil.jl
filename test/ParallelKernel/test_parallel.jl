@@ -1,6 +1,8 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
+using ParallelStencil.ParallelKernel.Enzyme
+import ParallelStencil.ParallelKernel.AD
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
@@ -53,14 +55,47 @@ end
                     @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                     @test @prettystring(1, @parallel stream=mystream f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                 end;
+                call = @prettystring(1, @parallel configcall=g(B) f(A))
+                @test  occursin("get_ranges(B)", call)
+                @test !occursin("get_ranges(A)", call)
+                @test  occursin("f(A,", call)
+                @test !occursin("g(B,", call)
             end;
             @testset "@parallel ∇" begin
-                @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.Const)(A), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.DuplicatedNoNeed)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.DuplicatedNoNeed)(A, Ā), (EnzymeCore.Duplicated)(B, B̄), (EnzymeCore.Const)(a))"
-                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (EnzymeCore.Duplicated)(A, Ā), (EnzymeCore.Duplicated)(B, B̄), (EnzymeCore.Const)(a), (EnzymeCore.Active)(b))"
+                @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (Const)(A), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (DuplicatedNoNeed)(A, Ā), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (DuplicatedNoNeed)(A, Ā), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (DuplicatedNoNeed)(A, Ā), (Duplicated)(B, B̄), (Const)(a))"
+                @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, (Duplicated)(A, Ā), (Duplicated)(B, B̄), (Const)(a), (Active)(b))"
             end;
+            @testset "AD.autodiff_deferred!" begin
+                @static if $package == $PKG_THREADS
+                    N = 16
+                    a = 6.5
+                    A = @rand(N)
+                    B = @rand(N)
+                    Ā = @ones(N)
+                    B̄ = @ones(N)
+                    A_ref = Array(A)
+                    B_ref = Array(B)
+                    Ā_ref = ones(N)
+                    B̄_ref = ones(N)
+                    @parallel_indices (ix) function f!(A, B, a)
+                        A[ix] += a * B[ix] * 100.65
+                        return
+                    end
+                    function g!(A, B, a)
+                        for ix in 1:length(A)
+                            A[ix] += a * B[ix] * 100.65
+                        end
+                        return
+                    end
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
+                    Enzyme.autodiff_deferred(Enzyme.Reverse, g!, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                    #@test Array(Ā) ≈ Ā_ref # NOTE: this test does not pass when run with the package manager.
+                    @test Array(B̄) ≈ B̄_ref
+                end
+            end
             @testset "@parallel_indices" begin
                 @testset "addition of range arguments" begin
                     expansion = @gorgeousstring(1, @parallel_indices (ix,iy) f(a::T, b::T) where T <: Union{Array{Float32}, Array{Float64}} = (println("a=$a, b=$b)"); return))

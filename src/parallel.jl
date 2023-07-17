@@ -24,7 +24,7 @@ See also: [`@init_parallel_stencil`](@ref)
         @parallel (...) memopt=... configcall=... backendkwargs... kernelcall
         @parallel ∇=... ad_mode=... ad_annotations=... (...) memopt=... backendkwargs... kernelcall
 
-Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream).
+Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below).
 
 # Arguments
 - `kernelcall`: a call to a kernel that is declared parallel.
@@ -36,6 +36,9 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 # Keyword arguments
 - `memopt::Bool=false`: whether the kernel to be launched was generated with `memopt=true` (meaning the keyword was set in the kernel declaration).
 !!! note "Advanced"
+    - `∇`: the variable(s) with respect to which the kernel is to be differentiated automatically and a duplicate for each variable to store the result in, separated by `->`, e.g., `∇=(A->Ā, B->B̄)`. Setting this keyword triggers a parallel call to the gradient kernel instead of the kernel itself. The duplicate variables are by default passed to Enzyme with the annotation `DuplicatedNoNeed`, e.g., `DuplicatedNoNeed(A, Ā)`. Use the keyword argument `ad_annotations` to modify this behavior.
+    - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
+    - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
     - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
 
@@ -121,6 +124,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
+        if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
         if is_ad_highlevel
             ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
         elseif memopt
