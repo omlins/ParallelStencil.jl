@@ -82,6 +82,13 @@ macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
 
+## MODULE INITIALIZATION FUNCTION
+
+function __init__()
+    if (get_package() == PKG_THREADS) Enzyme.API.runtimeActivity!(true) end # NOTE: Enzyme requires this currently to work correctly with threads.
+end
+
+
 ## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "ROCSTREAMS"
 
 @static if ENABLE_CUDA
