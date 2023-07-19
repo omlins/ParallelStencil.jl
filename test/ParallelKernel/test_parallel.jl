@@ -92,7 +92,7 @@ end
                     end
                     @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
                     Enzyme.autodiff_deferred(Enzyme.Reverse, g!, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
-                    #@test Array(Ā) ≈ Ā_ref # NOTE: this test does not pass when run with the package manager.
+                    @test Array(Ā) ≈ Ā_ref
                     @test Array(B̄) ≈ B̄_ref
                 end
             end

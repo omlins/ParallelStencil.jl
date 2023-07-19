@@ -43,6 +43,9 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 
     main()
 
+!!! note "Enzyme runtime activity default"
+    If ParallelStencil is initialized with Threads, then `Enzyme.API.runtimeActivity!(true)` is called to ensure correct behavior of Enzyme. If you want to disable this behavior, then call `Enzyme.API.runtimeActivity!(false)` after loading ParallelStencil.
+
 To see a description of a function type `?<functionname>`.
 """
 module AD
