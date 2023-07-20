@@ -114,7 +114,7 @@ end
         end
 
         function get_rocstream(id::Integer)
-            while (id > length(priority_rocstreams)) push!(priority_rocstreams, AMDGPU.HIPStream(:low)) end
+            while (id > length(rocstreams)) push!(rocstreams, AMDGPU.HIPStream(:low)) end
             return rocstreams[id]
         end
     end
