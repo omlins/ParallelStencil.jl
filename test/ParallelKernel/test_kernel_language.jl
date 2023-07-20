@@ -37,7 +37,7 @@ end
                     @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
                     @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
                     @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
-                    #@test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_println()) == "CUDA.@rocprintln"
                 elseif $package == $PKG_THREADS

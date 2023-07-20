@@ -103,49 +103,19 @@ macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 end
 
 @static if ENABLE_AMDGPU
-    ## Stream implementation for AMDGPU. It is the responsibility of the package developers to keep the ROCStreams consistent by pushing each signal received from a kernel launch on queue=stream.queue to the ROCStream using push_signal!. If ROCQueues are to be exposed to the users, then a macro should be implemented to automatize this (e.g. overwrite @roc to accept the kwarg stream...).
-    mutable struct ROCStream
-        queue::AMDGPU.ROCQueue
-        last_signal::Union{Nothing, AMDGPU.ROCKernelSignal}
-
-        function ROCStream(device::ROCDevice; priority::Union{Nothing,Symbol}=nothing)
-            queue = ROCQueue(device; priority=priority)
-            new(queue, nothing)
-        end
-        function ROCStream(queue::ROCQueue)
-            new(queue, nothing)
-        end
-    end
-
-    function push_signal!(stream::ROCStream, signal::AMDGPU.ROCKernelSignal)
-        AMDGPU.barrier_and!(stream.queue, [signal])
-        stream.last_signal = signal
-    end
-
-    function synchronize_rocstream(stream::ROCStream)
-        AMDGPU.wait(stream.last_signal)
-    end
-
     let
-        global get_priority_rocstream, get_rocstream, get_default_rocstream
-        priority_rocstreams = Array{ROCStream}(undef, 0)
-        rocstreams          = Array{ROCStream}(undef, 0)
-        default_rocstreams  = Array{ROCStream}(undef, 0)
+        global get_priority_rocstream, get_rocstream
+        priority_rocstreams = Array{AMDGPU.HIPStream}(undef, 0)
+        rocstreams          = Array{AMDGPU.HIPStream}(undef, 0)
 
         function get_priority_rocstream(id::Integer)
-            while (id > length(priority_rocstreams)) push!(priority_rocstreams, ROCStream(AMDGPU.default_device(); priority=:high)) end # :high is max priority.
+            while (id > length(priority_rocstreams)) push!(priority_rocstreams, AMDGPU.HIPStream(:high)) end
             return priority_rocstreams[id]
         end
 
-        #TODO: check if set priority to normal!
         function get_rocstream(id::Integer)
-            while (id > length(rocstreams)) push!(rocstreams, ROCStream(AMDGPU.default_device(); priority=:low)) end # :low min priority.
+            while (id > length(priority_rocstreams)) push!(priority_rocstreams, AMDGPU.HIPStream(:low)) end
             return rocstreams[id]
-        end
-
-        function get_default_rocstream()
-            if (length(default_rocstreams)==0) push!(default_rocstreams, ROCStream(AMDGPU.default_queue())) end # NOTE: this implementation is extensible to multiple defaults as available in CUDA for streams.
-            return default_rocstreams[1]
         end
     end
 end
@@ -267,7 +237,7 @@ function split_parallel_args(args; is_call=true)
     posargs, kwargs = split_args(args[1:end-1])
     kernelarg = args[end]
     if (is_call && any([x.args[1] in [:blocks, :threads] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: blocks / threads. They must be passed as positional arguments or been omited.") end
-    if (is_call && any([x.args[1] in [:groupsize, :gridsize, :queue] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: groupsize / gridsize / queue. CUDA nomenclature and concepts are to be used for @parallel calls (and kernels).") end
+    if (is_call && any([x.args[1] in [:groupsize, :gridsize] for x in kwargs])) @KeywordArgumentError("Invalid keyword argument in @parallel <kernelcall>: groupsize / gridsize. CUDA nomenclature and concepts are to be used for @parallel calls (and kernels).") end
     return posargs, kwargs, kernelarg
 end
 
