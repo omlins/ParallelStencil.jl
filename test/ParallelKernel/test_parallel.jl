@@ -162,6 +162,7 @@ end
                         return
                     end
                     @parallel write_indices!(A);
+                    if $package == $PKG_AMDGPU AMDGPU.HIP.device_synchronize() end
                     @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (1D in 3D)" begin
@@ -171,6 +172,7 @@ end
                         return
                     end
                     @parallel 1:size(A,2) write_indices!(A);
+                    if $package == $PKG_AMDGPU AMDGPU.HIP.device_synchronize() end
                     @test all(Array(A)[1,:,1] .== [iy for iy=1:size(A,2)])
                 end;
                 @testset "@parallel_indices (2D in 3D)" begin
@@ -180,6 +182,7 @@ end
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
+                    if $package == $PKG_AMDGPU AMDGPU.HIP.device_synchronize() end
                     @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
             end;
@@ -194,8 +197,8 @@ end
                     @test @prettystring(1, @synchronize()) == "CUDA.synchronize()"
                     @test @prettystring(1, @synchronize(mystream)) == "CUDA.synchronize(mystream)"
                 elseif $package == $PKG_AMDGPU
-                    #@test @prettystring(1, @synchronize()) == "CUDA.synchronize()" # NOTE: not yet available for AMDGPU backend 
-                    @test @prettystring(1, @synchronize(mystream)) == "ParallelStencil.ParallelKernel.synchronize_rocstream(mystream)"
+                    @test @prettystring(1, @synchronize()) == "AMDGPU.synchronize()"
+                    @test @prettystring(1, @synchronize(mystream)) == "AMDGPU.synchronize(mystream)"
                 end;
             end;
             @reset_parallel_kernel()
