@@ -101,7 +101,7 @@ end
 
 function gridDim(args...; package::Symbol=get_package())
     if     (package == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridDimWG($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
