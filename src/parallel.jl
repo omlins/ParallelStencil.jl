@@ -67,14 +67,14 @@ macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)          check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_amdgpu(args...)  check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
 macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
 macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
 
 
@@ -268,7 +268,7 @@ end
 function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     metadata_call      = create_metadata_call(configcall)
     metadata_module    = metadata_call
-    loopdim             = :($(metadata_module).loopdim)
+    loopdim            = :($(metadata_module).loopdim)
     is_parallel_kernel = :($(metadata_module).is_parallel_kernel)
     ranges             = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($loopdim, $(configcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)))
     parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall)
