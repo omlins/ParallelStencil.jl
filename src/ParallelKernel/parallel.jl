@@ -250,7 +250,7 @@ end
 
 function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
-    nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize, $package) )
+    nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize, package) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end

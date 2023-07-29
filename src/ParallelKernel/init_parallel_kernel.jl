@@ -47,7 +47,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
         @info "Module Data from previous module initialization found in caller module ($caller); module Data not created."
     else
-        @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. "
+        @info "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. "
     end
     @eval(caller, $pkg_import_cmd)
     @eval(caller, $ad_import_cmd)
