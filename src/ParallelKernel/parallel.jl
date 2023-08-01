@@ -497,9 +497,9 @@ end
 
 function compute_nthreads(maxsize, package; nthreads_max=NTHREADS_MAX, flatdim=0) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
     maxsize = promote_maxsize(maxsize)
-    if     (Symbol(package) == PKG_CUDA)   nthreads_x = min(32,              (flatdim==1) ? 1 : maxsize[1])
-    elseif (Symbol(package) == PKG_AMDGPU) nthreads_x = min(128,             (flatdim==1) ? 1 : maxsize[1])
-    else                                   nthreads_x = min(32,              (flatdim==1) ? 1 : maxsize[1])
+    if     (Symbol(package) == PKG_CUDA)   nthreads_x = min(32,      (flatdim==1) ? 1 : maxsize[1])
+    elseif (Symbol(package) == PKG_AMDGPU) nthreads_x = min(128,     (flatdim==1) ? 1 : maxsize[1])
+    else                                   nthreads_x = min(32,      (flatdim==1) ? 1 : maxsize[1])
     end
     nthreads_y = min(ceil(Int,nthreads_max/nthreads_x),              (flatdim==2) ? 1 : maxsize[2])
     nthreads_z = min(ceil(Int,nthreads_max/(nthreads_x*nthreads_y)), (flatdim==3) ? 1 : maxsize[3])
