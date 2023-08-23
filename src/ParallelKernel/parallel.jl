@@ -544,7 +544,7 @@ end
 
 function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.HIPStream()) # Use the default stream of the task.
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
