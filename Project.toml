@@ -1,7 +1,7 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
 authors = ["Samuel Omlin", "Ludovic Räss"]
-version = "0.8.1"
+version = "0.8.2"
 
 [deps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
