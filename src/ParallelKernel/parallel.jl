@@ -159,7 +159,7 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     body = remove_return(body)
     if !all(indices .== INDICES[1:length(indices)])
         indices_aliases = indices
-        indices = INDICES[1:length(indices)]
+        indices = [INDICES[1:length(indices)]...]
         body = substitute(body, indices_aliases, indices)
     end
     if isgpu(package)
