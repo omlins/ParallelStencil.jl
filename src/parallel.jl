@@ -156,7 +156,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             $metadata_function
         end
     else
-        ParallelKernel.parallel_indices(posargs...; package=package)
+        ParallelKernel.parallel_indices(caller, posargs...; package=package)
     end
 end
 
