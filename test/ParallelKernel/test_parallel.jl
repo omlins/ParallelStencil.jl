@@ -3,7 +3,7 @@ import ParallelStencil
 using ParallelStencil.ParallelKernel
 using ParallelStencil.ParallelKernel.Enzyme
 import ParallelStencil.ParallelKernel.AD
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, INDICES
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
 using ParallelStencil.ParallelKernel.Exceptions
@@ -16,6 +16,8 @@ end
     import ParallelStencil.ParallelKernel.AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
+macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
@@ -182,6 +184,24 @@ end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
                     @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
+                @testset "@parallel_indices (2D in 3D with macro)" begin
+                    A  = @zeros(4, 5, 6)
+                    @parallel_indices (ix,iz) function write_indices!(A)
+                        A[ix,end,iz] = @compute(A);
+                        return
+                    end
+                    @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
+                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                end;
+                @testset "@parallel_indices (2D in 3D with macro with aliases)" begin
+                    A  = @zeros(4, 5, 6)
+                    @parallel_indices (ix,iz) function write_indices!(A)
+                        A[ix,end,iz] = @compute_with_aliases(A);
+                        return
+                    end
+                    @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
+                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                end;
             end;
             @testset "@parallel_async" begin
                 @static if @isgpu($package)
@@ -279,25 +299,25 @@ end
             @init_parallel_kernel($package, Float64)
             @require @is_initialized
             @testset "arguments @parallel" begin
-                @test_throws ArgumentError checkargs_parallel();                                                    # Error: isempty(args)
-                @test_throws ArgumentError checkargs_parallel(:(f()), :(something));                                # Error: last arg is not function call.
-                @test_throws ArgumentError checkargs_parallel(:(f()=99));                                           # Error: last arg is not function call.
+                @test_throws ArgumentError checkargs_parallel();                                                        # Error: isempty(args)
+                @test_throws ArgumentError checkargs_parallel(:(f()), :(something));                                    # Error: last arg is not function call.
+                @test_throws ArgumentError checkargs_parallel(:(f()=99));                                               # Error: last arg is not function call.
                 #TODO: kw for calls look very different: head :kw - fix in parallel.jl/shared.jl
-                @test_throws ArgumentError checkargs_parallel(:(f(;s=1)));                                          # Error: function call with keyword argument.
-                @test_throws ArgumentError checkargs_parallel(:ranges, :nblocks, :nthreads, :something, :(f()));    # Error: length(posargs) > 3
-                @test_throws KeywordArgumentError checkargs_parallel(:(blocks=blocks), :(f()));                     # Error: blocks keyword argument is not allowed
-                @test_throws KeywordArgumentError checkargs_parallel(:(threads=threads), :(f()));                   # Error: threads keyword argument is not allowed
+                @test_throws ArgumentError checkargs_parallel(:(f(;s=1)));                                              # Error: function call with keyword argument.
+                @test_throws ArgumentError checkargs_parallel(:ranges, :nblocks, :nthreads, :something, :(f()));        # Error: length(posargs) > 3
+                @test_throws KeywordArgumentError checkargs_parallel(:(blocks=blocks), :(f()));                         # Error: blocks keyword argument is not allowed
+                @test_throws KeywordArgumentError checkargs_parallel(:(threads=threads), :(f()));                       # Error: threads keyword argument is not allowed
             end;
             @testset "arguments @parallel_indices" begin
-                @test_throws ArgumentError checkargs_parallel_indices();                                            # Error: length(args) != 2
-                @test_throws ArgumentError checkargs_parallel_indices(:(f()=99));                                   # Error: length(args) != 2
-                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f()=99), :(something));      # Error: length(args) != 2
-                @test_throws ArgumentError checkargs_parallel_indices(:ix, :iy, :iz, :(f()=99));                    # Error: length(args) != 2
-                @test_throws ArgumentError checkargs_parallel_indices(:(f()=99), :((ix,iy,iz)));                    # Error: last arg is not function.
-                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f()));                       # Error: last arg is not function.
-                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f(;s=1)=(99*s; return)))     # Error: function defines keyword.
-                @test_throws ArgumentError parallel_indices(:((ix,iy,iz)), :(f()=99))                               # Error: no return statement in function.
-                @test_throws ArgumentError parallel_indices(:((ix,iy,iz)), :(f()=(99; return something)))           # Error: function does not return nothing.
+                @test_throws ArgumentError checkargs_parallel_indices();                                                # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_parallel_indices(:(f()=99));                                       # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f()=99), :(something));          # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_parallel_indices(:ix, :iy, :iz, :(f()=99));                        # Error: length(args) != 2
+                @test_throws ArgumentError checkargs_parallel_indices(:(f()=99), :((ix,iy,iz)));                        # Error: last arg is not function.
+                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f()));                           # Error: last arg is not function.
+                @test_throws ArgumentError checkargs_parallel_indices(:((ix,iy,iz)), :(f(;s=1)=(99*s; return)))         # Error: function defines keyword.
+                @test_throws ArgumentError parallel_indices(@__MODULE__, :((ix,iy,iz)), :(f()=99))                      # Error: no return statement in function.
+                @test_throws ArgumentError parallel_indices(@__MODULE__, :((ix,iy,iz)), :(f()=(99; return something)))  # Error: function does not return nothing.
                 #TODO: this tests does not pass anymore for unknown reasons:
                 #@test_throws ArgumentError parallel_indices(:((ix,iy,iz)), :(f()=(99; if x return y end; return)))  # Error: function contains more than one return statement.
             end;
