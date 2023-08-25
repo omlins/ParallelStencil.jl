@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @is_warned, @get_package, @get_numbertype, @get_ndims, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -19,6 +19,7 @@ end
                 @require !@is_initialized()
                 @reset_parallel_stencil()
                 @test !@is_initialized()
+                @test !@is_warned()
                 @test @get_package() == $PKG_NONE
                 @test @get_numbertype() == $NUMBERTYPE_NONE
                 @test @get_ndims() == $NDIMS_NONE
@@ -30,6 +31,7 @@ end
                 @reset_parallel_stencil()
                 @test length(@symbols($(@__MODULE__), Data)) == 1
                 @test !@is_initialized()
+                @test !@is_warned()
                 @test @get_package() == $PKG_NONE
                 @test @get_numbertype() == $NUMBERTYPE_NONE
                 @test @get_ndims() == $NDIMS_NONE

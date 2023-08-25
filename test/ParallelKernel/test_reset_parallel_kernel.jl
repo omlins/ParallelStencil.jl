@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @is_warned, @get_package, @get_numbertype, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE
 import ParallelStencil.ParallelKernel: @require, @symbols
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -20,7 +20,6 @@ end
                 @require !@is_initialized()
                 @reset_parallel_kernel()
                 @test !@is_initialized()
-                @test !@is_warned()
                 @test @get_package() == $PKG_NONE
                 @test @get_numbertype() == $NUMBERTYPE_NONE
             end;
@@ -31,7 +30,6 @@ end
                 @reset_parallel_kernel()
                 @test length(@symbols($(@__MODULE__), Data)) == 1
                 @test !@is_initialized()
-                @test !@is_warned()
                 @test @get_package() == $PKG_NONE
                 @test @get_numbertype() == $NUMBERTYPE_NONE
             end;
