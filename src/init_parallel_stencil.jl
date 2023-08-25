@@ -30,6 +30,9 @@ Initialize the package ParallelStencil, giving access to its main functionality.
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels (1, 2 or 3).
 
+!!! note "Meaning of message 'ParallelStencil has already been initialized, with the same arguments.'"
+     If you are using ParallelStencil interactively in the REPL/IJulia, then you can ignore this message. If you are using ParallelStencil non-interactively, then you are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'.
+
 See also: [`Data`](@ref)
 """
 macro init_parallel_stencil(args...)
@@ -63,19 +66,23 @@ end
 
 
 macro is_initialized() is_initialized() end
+macro is_warned() is_warned() end
 macro get_package() get_package() end
 macro get_numbertype() get_numbertype() end
 macro get_ndims() get_ndims() end
 macro get_memopt() get_memopt() end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_memopt, get_memopt, check_initialized, check_already_initialized
+    global is_initialized, set_initialized, is_warned, set_warned, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_memopt, get_memopt, check_initialized, check_already_initialized
     _is_initialized::Bool       = false
+    _is_warned::Bool            = false
     package::Symbol             = PKG_NONE
     numbertype::DataType        = NUMBERTYPE_NONE
     ndims::Integer              = NDIMS_NONE
     memopt::Bool               = false
     set_initialized(flag::Bool) = (_is_initialized = flag)
     is_initialized()            = _is_initialized
+    set_warned(flag::Bool)      = (_is_warned = flag)
+    is_warned()                 = _is_warned
     set_package(pkg::Symbol)    = (package = pkg)
     get_package()               = package
     set_numbertype(T::DataType) = (numbertype = T)
@@ -89,7 +96,10 @@ let
     function check_already_initialized(package::Symbol, numbertype::DataType, ndims::Integer, memopt::Bool)
         if is_initialized()
             if package==get_package() && numbertype==get_numbertype() && ndims==get_ndims() && memopt==get_memopt()
-                @warn "ParallelStencil has already been initialized, with the same arguments. If you are using ParallelStencil interactively in the REPL, then you can ignore this message. If you are using ParallelStencil non-interactively, then you are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'."
+                if !is_warned()
+                    @info "ParallelStencil has already been initialized, with the same arguments (type @init_parallel_stencil to learn about this message's meaning). "
+                    set_warned(true)
+                end
             else
                 @IncoherentCallError("ParallelStencil has already been initialized, with different arguments. If you are using ParallelStencil interactively in the REPL and want to avoid restarting Julia, then you can call ParallelStencil.@reset_parallel_stencil() and rerun all parts of your code that use ParallelStencil features (including kernel definitions and array allocations). If you are using ParallelStencil non-interactively, then you are using ParallelStencil in an invalid way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'.")
             end
