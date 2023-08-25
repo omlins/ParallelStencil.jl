@@ -42,7 +42,7 @@ const PARALLEL_INDICES_DOC = """
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 """
 @doc PARALLEL_INDICES_DOC
-macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...)); end
+macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
 
 
 ##
@@ -85,9 +85,9 @@ macro synchronize(args...) check_initialized(); esc(synchronize(args...)); end
 macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
 macro parallel_amdgpu(args...)          check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
 macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)  check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(args...; package=PKG_THREADS)); end
+macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)  check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
 macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
 macro parallel_async_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
 macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
@@ -136,9 +136,9 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     end
 end
 
-function parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=get_package())
+function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
-    parallel_kernel(package, numbertype, args...)
+    parallel_kernel(caller, package, numbertype, args...)
 end
 
 function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
@@ -152,11 +152,19 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr)
+function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
+    use_aliases = !all(indices .== INDICES[1:length(indices)])
+    if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
+        indices_aliases = indices
+        indices = [INDICES[1:length(indices)]...]
+        for i=1:length(indices_aliases)
+            body = substitute(body, indices_aliases[i], indices[i])
+        end
+    end
     if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
         kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
@@ -187,6 +195,12 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     body = add_return(body)
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
+    if use_aliases
+        kernel = macroexpand(caller, kernel)
+        for i=1:length(indices_aliases)
+            kernel = substitute(kernel, indices[i], indices_aliases[i])
+        end
+    end
     return kernel
 end
 
