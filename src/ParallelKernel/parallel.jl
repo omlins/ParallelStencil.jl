@@ -157,7 +157,8 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    if !all(indices .== INDICES[1:length(indices)])
+    use_aliases = !all(indices .== INDICES[1:length(indices)])
+    if use_aliases
         indices_aliases = indices
         indices = [INDICES[1:length(indices)]...]
         body = substitute(body, indices_aliases, indices)
@@ -192,6 +193,10 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     body = add_return(body)
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
+    if use_aliases
+        kernel = macroexpand(caller, kernel)
+        kernel = substitute(kernel, indices_aliases, indices)
+    end
     return kernel
 end
 
