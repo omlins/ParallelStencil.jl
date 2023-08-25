@@ -10,6 +10,7 @@ macro reset_parallel_stencil() esc(reset_parallel_stencil(__module__)) end
 function reset_parallel_stencil(caller::Module)
     ParallelKernel.reset_parallel_kernel(caller)
     set_initialized(false)
+    set_warned(false)
     set_package(PKG_NONE)
     set_numbertype(NUMBERTYPE_NONE)
     set_ndims(NDIMS_NONE)
