@@ -21,6 +21,7 @@ end
             @init_parallel_stencil($package, ComplexF32, 3)
             @testset "initialized" begin
                 @test @is_initialized()
+                @test !@is_warned()
                 @test @get_package() == $package
                 @test @get_numbertype() == ComplexF32
                 @test @get_ndims() == 3
@@ -50,6 +51,7 @@ end
             @init_parallel_stencil(package = $package, ndims = 3, memopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
+                @test !@is_warned()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_ndims() == 3
