@@ -161,7 +161,9 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     if use_aliases
         indices_aliases = indices
         indices = [INDICES[1:length(indices)]...]
-        body = substitute(body, indices_aliases, indices)
+        for i=1:length(indices_aliases)
+            body = substitute(body, indices_aliases[i], indices[i])
+        end
     end
     if isgpu(package)
         kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
@@ -195,7 +197,9 @@ function parallel_kernel(package::Symbol, numbertype::DataType, indices::Union{S
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
     if use_aliases
         kernel = macroexpand(caller, kernel)
-        kernel = substitute(kernel, indices_aliases, indices)
+        for i=1:length(indices_aliases)
+            kernel = substitute(kernel, indices[i], indices_aliases[i])
+        end
     end
     return kernel
 end
