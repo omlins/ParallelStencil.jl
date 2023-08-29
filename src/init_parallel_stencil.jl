@@ -88,8 +88,8 @@ let
 
     function check_already_initialized(package::Symbol, numbertype::DataType, ndims::Integer, memopt::Bool)
         if is_initialized()
-            if !isinteractive() && package==get_package() && numbertype==get_numbertype() && ndims==get_ndims() && memopt==get_memopt()
-                @warn "ParallelStencil has already been initialized, with the same arguments. You are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'."
+            if package==get_package() && numbertype==get_numbertype() && ndims==get_ndims() && memopt==get_memopt()
+                if !isinteractive() @warn "ParallelStencil has already been initialized, with the same arguments. You are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'. Note: this warning is only shown in non-interactive mode." end
             else
                 @IncoherentCallError("ParallelStencil has already been initialized, with different arguments. If you are using ParallelStencil interactively in the REPL and want to avoid restarting Julia, then you can call ParallelStencil.@reset_parallel_stencil() and rerun all parts of your code that use ParallelStencil features (including kernel definitions and array allocations). If you are using ParallelStencil non-interactively, then you are using ParallelStencil in an invalid way: @init_parallel_stencil should only be called once, right after 'using ParallelStencil'.")
             end
