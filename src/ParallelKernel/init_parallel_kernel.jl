@@ -44,8 +44,8 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         end
         @eval(caller, $data_module)
         @eval(caller, $datadoc_call)
-    elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
-        @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. If you are working interactively in the REPL, then you can ignore this message."
+    elseif !isinteractive() && isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
+        @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created."
     else
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
