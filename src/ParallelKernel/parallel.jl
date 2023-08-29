@@ -211,9 +211,9 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
     ad_mode              = haskey(kwargs, :ad_mode) ? kwargs.ad_mode : AD_MODE_DEFAULT
     ad_annotations_expr  = haskey(kwargs, :ad_annotations) ? extract_tuple(kwargs.ad_annotations; nested=true) : []
     ad_vars_expr         = extract_tuple(kwargs.∇; nested=true)
-    ~, ~, ad_vars        = extract_kwargs(caller, ad_vars_expr, (), "", true; separator=:->)
+    ~, ~, ~, ad_vars     = extract_kwargs(caller, ad_vars_expr, (), "", true; separator=:->, keyword_type=Any)
     ~, ~, ad_annotations = extract_kwargs(caller, ad_annotations_expr, (), "", true)
-    ad_vars              = map(x->unblock(x), ad_vars)
+    ad_vars              = Dict(key => unblock(val) for (key,val) in ad_vars)
     ad_annotations       = map(x->extract_tuple(x), ad_annotations)
     f_name               = extract_kernelcall_name(kernelcall)
     f_posargs, ~         = extract_kernelcall_args(kernelcall)
@@ -226,6 +226,7 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
         end
     end
     for var in keys(ad_vars)
+        if (var ∉ f_posargs) @KeywordArgumentError("variable $var in $(kwargs.∇) is not a positional argument of the kernel call $kernelcall.") end
         if ad_annotations_byvar[var] == []
             push!(ad_annotations_byvar[var], AD_DUPLICATE_DEFAULT)
         end
