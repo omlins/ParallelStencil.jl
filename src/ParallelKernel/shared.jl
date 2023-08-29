@@ -176,9 +176,9 @@ end
 extract_kernelcall_args(call::Expr)         = split_args(call.args[2:end]; in_kernelcall=true)
 extract_kernelcall_name(call::Expr)         = call.args[1]
 
-function is_kwarg(arg; in_kernelcall=false, separator=:(=))
+function is_kwarg(arg; in_kernelcall=false, separator=:(=), keyword_type=Symbol)
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == separator) && isa(arg.args[1], Symbol))
+    else             return ( isa(arg, Expr) && (arg.head == separator) && isa(arg.args[1], keyword_type))
     end
 end
 
@@ -195,8 +195,8 @@ function split_args(args; in_kernelcall=false)
     return posargs, kwargs
 end
 
-function split_kwargs(kwargs; separator=:(=))
-    if !all(is_kwarg.(kwargs; separator=separator)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
+function split_kwargs(kwargs; separator=:(=), keyword_type=Symbol)
+    if !all(is_kwarg.(kwargs; separator=separator, keyword_type=keyword_type)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
     return Dict(x.args[1] => x.args[2] for x in kwargs)
 end
 
@@ -216,16 +216,17 @@ function extract_kwargvalues(kwargs_expr, valid_kwargs, macroname)
     return extract_values(kwargs, valid_kwargs)
 end
 
-function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=(), separator=:(=))
-    kwargs = split_kwargs(kwargs_expr, separator=separator)
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, has_unknown_kwargs; eval_args=(), separator=:(=), keyword_type=Symbol)
+    kwargs = split_kwargs(kwargs_expr, separator=separator, keyword_type=keyword_type)
     if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
     for k in keys(kwargs)
         if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
     end
     kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
-    kwargs_unknown      = NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs))
-    kwargs_unknown_expr = [:($k = $(kwargs_unknown[k])) for k in keys(kwargs_unknown)]
-    return kwargs_known, kwargs_unknown_expr, kwargs_unknown
+    kwargs_unknown      = (keyword_type == Symbol) ? NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs)) : NamedTuple()
+    kwargs_unknown_dict = Dict(filter(x -> x.first ∉ valid_kwargs, kwargs))
+    kwargs_unknown_expr = [:($k = $(kwargs_unknown_dict[k])) for k in keys(kwargs_unknown_dict)]
+    return kwargs_known, kwargs_unknown_expr, kwargs_unknown, kwargs_unknown_dict
 end
 
 function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
