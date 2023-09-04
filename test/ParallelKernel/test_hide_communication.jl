@@ -26,7 +26,27 @@ end
                     block = string(@gorgeousexpand(1, @hide_communication(boundary_width, begin @parallel f(A, B); communication(); end)))
                     @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
                     @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B))", block)
-                    @test occursin("@hide_communication ranges_outer ranges_inner begin\n            @parallel f(A, B)\n            communication()\n        end\nend", block)
+                    @test occursin("@hide_communication ranges_outer ranges_inner computation_calls = 1 begin\n            @parallel f(A, B)\n            communication()\n        end\nend", block)
+
+                    block = string(@gorgeousexpand(1, @hide_communication(boundary_width, begin @parallel ranges f(A, B); communication(); end)))
+                    @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ranges)", block)
+                    @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ranges)", block)
+                    @test occursin("@hide_communication ranges_outer ranges_inner computation_calls = 1 begin\n            @parallel f(A, B)\n            communication()\n        end\nend", block)
+
+                    block = string(@gorgeousexpand(1, @hide_communication(boundary_width, computation_calls=2, begin @parallel f(A, B); @parallel g(B, C); communication(); end)))
+                    @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B), ParallelStencil.ParallelKernel.get_ranges(B, C))", block)
+                    @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ParallelStencil.ParallelKernel.get_ranges(A, B), ParallelStencil.ParallelKernel.get_ranges(B, C))", block)
+                    @test occursin("@hide_communication ranges_outer ranges_inner computation_calls = 2 begin\n            @parallel f(A, B)\n            @parallel g(B, C)\n            communication()\n        end\nend", block)
+
+                    block = string(@gorgeousexpand(1, @hide_communication(boundary_width, computation_calls=2, begin @parallel ranges1 f(A, B); @parallel g(B, C); communication(); end)))
+                    @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ranges1, ParallelStencil.ParallelKernel.get_ranges(B, C))", block)
+                    @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ranges1, ParallelStencil.ParallelKernel.get_ranges(B, C))", block)
+                    @test occursin("@hide_communication ranges_outer ranges_inner computation_calls = 2 begin\n            @parallel f(A, B)\n            @parallel g(B, C)\n            communication()\n        end\nend", block)
+
+                    block = string(@gorgeousexpand(1, @hide_communication(boundary_width, computation_calls=2, begin @parallel ranges1 f(A, B); @parallel ranges2 g(B, C); communication(); end)))
+                    @test occursin("ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer(boundary_width, ranges1, ranges2)", block)
+                    @test occursin("ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner(boundary_width, ranges1, ranges2)", block)
+                    @test occursin("@hide_communication ranges_outer ranges_inner computation_calls = 2 begin\n            @parallel f(A, B)\n            @parallel g(B, C)\n            communication()\n        end\nend", block)
                 end;
             end;
             @testset "@hide_communication" begin
@@ -53,6 +73,8 @@ end
                     A[  :,  :,end] .= A[    :,    :,    2]
                     return A
                 end
+                add_indices2! = add_indices!
+                add_indices3! = add_indices!
                 @testset "@hide_communication boundary_width block" begin
                     A  = @zeros(6, 7, 8)
                     @hide_communication (2,2,3) begin
@@ -89,6 +111,43 @@ end
                     end
                     @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
+                @testset "@hide_communication boundary_width computation_calls=2 block" begin
+                    A  = @zeros(6, 7, 8)
+                    @hide_communication (2,2,3) computation_calls=2 begin
+                        @parallel add_indices!(A);
+                        @parallel add_indices2!(A);
+                        communication!(A);
+                    end
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                end;
+                @testset "@hide_communication boundary_width computation_calls=2 block" begin
+                    A  = @zeros(6, 7, 8)
+                    @hide_communication (2,2,3) computation_calls=2 begin
+                        @parallel add_indices!(A);
+                        @parallel (1:6, 1:7, 1:8) add_indices2!(A);
+                        communication!(A);
+                    end
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                end;
+                @testset "@hide_communication boundary_width computation_calls=2 block" begin
+                    A  = @zeros(6, 7, 8)
+                    @hide_communication (2,2,3) computation_calls=2 begin
+                        @parallel (1:6, 1:7, 1:8) add_indices!(A);
+                        @parallel (1:6, 1:7, 1:8) add_indices2!(A);
+                        communication!(A);
+                    end
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                end;
+                @testset "@hide_communication boundary_width computation_calls=3 block" begin
+                    A  = @zeros(6, 7, 8)
+                    @hide_communication (2,2,3) computation_calls=3 begin
+                        @parallel add_indices!(A);
+                        @parallel (1:6, 1:7, 1:8) add_indices2!(A);
+                        @parallel add_indices3!(A);
+                        communication!(A);
+                    end
+                    @test all(Array(A) .== communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                end;
                 @testset "@hide_communication ranges_outer ranges_inner block" begin
                     A  = @zeros(6, 7, 8)
                     ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
@@ -114,9 +173,9 @@ end
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(communication()))                                                                    # Error: missing @parallel call.
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(begin @parallel f(); end))                                                           # Error: missing (bc and) communication code.
                     @test_throws ArgumentError hide_communication_gpu(:boundary_width, :(begin communication(); end))                                                         # Error: missing @parallel call.
+                    @test_throws KeywordArgumentError hide_communication_gpu(:boundary_width, :(begin @parallel ranges g(A, B); communication(); end); computation_calls=0)          # Error: computation_calls<1.
                     block = :(begin do_something(); @parallel f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: block does not start with @parallel call
                     block = :(begin @parallel stream=mystream f(); communication(); end);          @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid keyword argument 'stream'.
-                    block = :(begin @parallel ranges f(); communication(); end);                   @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional argument 'ranges'.
                     block = :(begin @parallel nblocks nthreads f(); communication(); end);         @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads'.
                     block = :(begin @parallel ranges nblocks nthreads f(); communication(); end);  @test_throws ArgumentError hide_communication_gpu(:boundary_width, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads'.
 
@@ -135,6 +194,11 @@ end
                     block = :(begin @parallel f(); @parallel nblocks nthreads g(); communication(); end);         @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'nblocks' and 'nthreads' in @parallel call for bc computations.
                     block = :(begin @parallel f(); @parallel ranges nblocks nthreads g(); communication(); end);  @test_throws ArgumentError hide_communication_gpu(:ranges_outer, :ranges_inner, block)  # Error: invalid optional arguments 'ranges', 'nblocks' and 'nthreads' in @parallel call for bc computations.
                 end
+            end;
+            @testset "@hide_communication ranges determination when computation_calls>1" begin
+                A  = @zeros(6, 7, 8)
+                @test_throws ArgumentError ParallelStencil.ParallelKernel.get_ranges_outer((2,2,3), ParallelStencil.ParallelKernel.get_ranges(A), (1:6, 1:9, 1:8), ParallelStencil.ParallelKernel.get_ranges(A))  # Error: the ranges of the computation calls are not all equal.
+                @test_throws ArgumentError ParallelStencil.ParallelKernel.get_ranges_inner((2,2,3), ParallelStencil.ParallelKernel.get_ranges(A), (1:6, 1:9, 1:8), ParallelStencil.ParallelKernel.get_ranges(A))  # Error: the ranges of the computation calls are not all equal.
             end;
             @reset_parallel_kernel()
         end;
