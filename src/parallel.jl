@@ -175,9 +175,8 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     if !@capture(alias_indices, (I_...)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     indices = get_indices_expr(ndims).args
     indices_expr = Expr(:tuple, indices...)
-    body = get_body(kernel)
-    body = substitute(body, I, indices_expr)
-    set_body!(kernel, body)
+    kernel = macroexpand(caller, kernel)
+    kernel = substitute(kernel, I, indices_expr)
     return :(@parallel_indices $indices_expr $(kwargs...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
