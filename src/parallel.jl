@@ -52,7 +52,7 @@ macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(pa
 
 
 const PARALLEL_INDICES_DOC = """
-$(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
+$(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil")) Using splat syntax for the `indices` (e.g., `@parallel_indices (I...)`) enables to generate a tuple of parallel indices (`I` in this example) of length `ndims` selected with [`@init_parallel_stencil`](@ref). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`).
 """
 @doc PARALLEL_INDICES_DOC
 macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
@@ -96,6 +96,8 @@ end
 
 function checkargs_parallel_indices(args...)
     posargs, = split_args(args)
+    indices = posargs[1]
+    if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     ParallelKernel.checkargs_parallel_indices(posargs...)
 end
 
@@ -140,32 +142,47 @@ end
 function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     is_parallel_kernel = false
     numbertype = get_numbertype()
+    ndims      = get_ndims()
     posargs, kwargs_expr = split_args(args)
     kwargs = extract_kwargs(caller, kwargs_expr, (:memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     kernelarg = args[end]
-    if !haskey(kwargs, :metadata_module)
-        get_name(kernelarg)
-        metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+    indices_expr = posargs[1]
+    if is_splatarg(indices_expr)
+        parallel_indices_splatarg(caller, package, ndims, posargs...; kwargs...)
     else
-        metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
-    end
-    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
-    if memopt
-        quote
-            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs...; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
-            $metadata_function
+        if !haskey(kwargs, :metadata_module)
+            get_name(kernelarg)
+            metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+        else
+            metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
         end
-    else
-        ParallelKernel.parallel_indices(caller, posargs...; package=package)
+        memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        if memopt
+            quote
+                $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs...; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                $metadata_function
+            end
+        else
+            ParallelKernel.parallel_indices(caller, posargs...; package=package)
+        end
     end
 end
 
 
 ## @PARALLEL KERNEL FUNCTIONS
 
+function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integer, alias_indices::Expr, kernel::Expr; kwargs...)
+    if !@capture(alias_indices, (I_...)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
+    indices = get_indices_expr(ndims).args
+    indices_expr = Expr(:tuple, indices...)
+    kernel = macroexpand(caller, kernel)
+    kernel = substitute(kernel, I, indices_expr)
+    return :(@parallel_indices $indices_expr $(kwargs...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
+end
+
 function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; memopt::Bool=get_memopt(), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
-    if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
+    if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     body = get_body(kernel)
     body = remove_return(body)
@@ -317,6 +334,8 @@ end
 
 
 ## FUNCTIONS TO DEAL WITH MASKS (@WITHIN) AND INDICES
+
+is_splatarg(x) = isa(x,Expr) && (x.head == :...)
 
 function check_mask_macro(caller::Module)
     if !isdefined(caller, Symbol("@within")) @MethodPluginError("the macro @within is not defined in the caller. You need to load one of the submodules ParallelStencil.FiniteDifferences{1|2|3}D (or a compatible custom module or set of macros).") end

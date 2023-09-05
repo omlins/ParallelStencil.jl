@@ -809,6 +809,47 @@ import ParallelStencil.@gorgeousexpand
             end;
             @reset_parallel_stencil()
         end;
+        @testset "@parallel_indices" begin
+            @testset "@parallel_indices (I...) (1D)" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, Float64, 1)
+                @require @is_initialized
+                A  = @zeros(4*5*6)
+                @parallel_indices (I...) function write_indices!(A)
+                    A[I...] = sum((I .- (1,)) .* (1.0));
+                    return
+                end
+                @parallel write_indices!(A);
+                @test all(Array(A) .== [(ix-1) for ix=1:size(A,1)])
+                @reset_parallel_stencil()
+            end;
+            @testset "@parallel_indices (I...) (2D)" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, Float64, 2)
+                @require @is_initialized
+                A  = @zeros(4, 5*6)
+                @parallel_indices (I...) function write_indices!(A)
+                    A[I...] = sum((I .- (1,)) .* (1.0, size(A,1)));
+                    return
+                end
+                @parallel write_indices!(A);
+                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
+                @reset_parallel_stencil()
+            end;
+            @testset "@parallel_indices (I...) (3D)" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, Float64, 3)
+                @require @is_initialized
+                A  = @zeros(4, 5, 6)
+                @parallel_indices (I...) function write_indices!(A)
+                    A[I...] = sum((I .- (1,)) .* (1.0, size(A,1), size(A,1)*size(A,2)));
+                    return
+                end
+                @parallel write_indices!(A);
+                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                @reset_parallel_stencil()
+            end;
+        end;
         @testset "3. parallel macros (numbertype ommited)" begin
             @require !@is_initialized()
             @init_parallel_stencil(package = $package, ndims = 3)
