@@ -198,7 +198,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if use_aliases
         kernel = macroexpand(caller, kernel)
         for i=1:length(indices_aliases)
-            kernel = substitute(kernel, indices[i], indices_aliases[i])
+            kernel = substitute(kernel, indices_aliases[i], indices[i])
         end
     end
     return kernel
