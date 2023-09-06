@@ -203,7 +203,7 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
                     @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
-                @testset "function closure (long definition, array modification)" begin
+                @testset "nested function (long definition, array modification)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function write_indices!(A)
                         function compute_indices!(A)
@@ -216,7 +216,7 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @parallel write_indices!(A);
                     @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
-                @testset "function closure (short definition, array modification)" begin
+                @testset "nested function (short definition, array modification)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function write_indices!(A)
                         compute_indices!(A) = (A[ix,iy,iz] = ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2); return)
@@ -226,7 +226,7 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @parallel write_indices!(A);
                     @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
-                @testset "function closure (long definition, return value)" begin
+                @testset "nested function (long definition, return value)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function write_indices!(A)
                         function compute_indices(A)
@@ -238,7 +238,7 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @parallel write_indices!(A);
                     @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
-                @testset "function closure (short definition, return value)" begin
+                @testset "nested function (short definition, return value)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function write_indices!(A)
                         compute_indices(A) = return ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)
