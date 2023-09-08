@@ -1,4 +1,4 @@
-import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_returns, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
+import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
 
 const PARALLEL_DOC = """
     @parallel kernel
@@ -185,7 +185,7 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     body = get_body(kernel)
-    body = remove_returns(body)
+    body = remove_return(body)
     body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
     body = add_return(body)
     set_body!(kernel, body)
@@ -198,7 +198,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
     indices = get_indices_expr(ndims).args
     body = get_body(kernel)
-    body = remove_returns(body)
+    body = remove_return(body)
     validate_body(body)
     kernelargs = splitarg.(extract_kernel_args(kernel)[1])
     argvars = (arg[1] for arg in kernelargs)

@@ -12,10 +12,6 @@ macro memopt(args...) check_initialized(); checkargs_memopt(args...); esc(memopt
 macro shortif(args...) check_initialized(); checktwoargs(args...); esc(shortif(args...)); end
 
 
-##
-macro return_nothing(args...) check_initialized(); checknoargs(args...); esc(return_nothing(args...)); end
-
-
 ## ARGUMENT CHECKS
 
 function checknoargs(args...)
@@ -484,11 +480,6 @@ function shortif(else_val, if_expr; package::Symbol=get_package())
     @capture(if_expr, if condition_ body_ end) || @ArgumentError("@shortif: the second argument must be an if statement.")
     @capture(body, lhs_ = rhs_) || @ArgumentError("@shortif: the if statement body must contain a assignement.")
     return :($lhs = $condition ? $rhs : $else_val)
-end
-
-
-function return_nothing()
-    return :(return)
 end
 
 

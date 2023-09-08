@@ -142,23 +142,23 @@ function push_to_signature!(kernel::Expr, arg::Expr)
     return kernel
 end
 
-function remove_returns(body::Expr)
+function remove_return(body::Expr)
     if !(body.args[end] in [:(return), :(return nothing), :(nothing)])
         @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any GPU kernels.")
     end
-    body = make_nested_returns_implicit(body)
+    body = disguise_nested_returns(body)
     remainder = copy(body)
     remainder.args = body.args[1:end-2]
     if inexpr_walk(remainder, :return) @ArgumentError("invalid kernel in @parallel kernel definition: only one return statement is allowed in the kernel (exception: nested function definitions) and it must return nothing and be the last statement (required to ensure equal behaviour with different packages for parallellization).") end
     return remainder
 end
 
-function make_nested_returns_implicit(body::Expr)
+function disguise_nested_returns(body::Expr)
     return postwalk(body) do ex
         if isdef(ex)
             f_elems = splitdef(ex)
             body = f_elems[:body]
-            f_elems[:body] = make_returns_implicit(body)
+            f_elems[:body] = disguise_returns(body)
             return combinedef(f_elems)
         else
             return ex
@@ -166,12 +166,12 @@ function make_nested_returns_implicit(body::Expr)
     end
 end
 
-function make_returns_implicit(body::Expr)
+function disguise_returns(body::Expr)
     return postwalk(body) do ex
         if @capture(ex, return x_)
-            return x
+            return :(ParallelStencil.ParallelKernel.@return_value($x))
         elseif @capture(ex, return)
-            return nothing
+            return :(ParallelStencil.ParallelKernel.@return_nothing)
         else
             return ex
         end

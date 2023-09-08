@@ -86,10 +86,22 @@ Call a macro analogue to `Base.@println`, compatible with the package for parall
 macro pk_println(args...) check_initialized(); esc(pk_println(args...)); end
 
 
+##
+macro return_value(args...) check_initialized(); checksinglearg(args...); esc(return_value(args...)); end
+
+
+##
+macro return_nothing(args...) check_initialized(); checknoargs(args...); esc(return_nothing(args...)); end
+
+
 ## ARGUMENT CHECKS
 
 function checknoargs(args...)
     if (length(args) != 0) @ArgumentError("no arguments allowed.") end
+end
+
+function checksinglearg(args...)
+    if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
 end
 
 function checkargs_sharedMem(args...)
@@ -174,6 +186,17 @@ function pk_println(args...; package::Symbol=get_package())
     elseif (package == PKG_THREADS) return :(Base.println($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+end
+
+
+## FUNCTION FOR DIVERSE TASKS
+
+function return_value(value)
+    return :(return $value)
+end
+
+function return_nothing()
+    return :(return)
 end
 
 
