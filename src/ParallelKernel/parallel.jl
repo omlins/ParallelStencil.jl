@@ -156,7 +156,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
     body = get_body(kernel)
-    body = remove_returns(body)
+    body = remove_return(body)
     use_aliases = !all(indices .== INDICES[1:length(indices)])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
