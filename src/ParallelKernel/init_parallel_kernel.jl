@@ -6,7 +6,7 @@ Initialize the package ParallelKernel, giving access to its main functionality. 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA, AMDGPU or Threads).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel.
-- `inbounds::Bool=false`: whether `@inbounds` should be applied to the kernels by default (overwritable in each kernel definition).
+- `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
 See also: [`Data`](@ref)
 """
