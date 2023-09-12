@@ -38,6 +38,10 @@ macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(pa
 ##
 const PARALLEL_INDICES_DOC = """
     @parallel_indices indices kernel
+    @parallel_indices indices inbounds=... kernel
+
+# Keyword arguments
+- `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_kernel`](@ref).
 
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 """
@@ -108,7 +112,8 @@ function checkargs_parallel(args...)
 end
 
 function checkargs_parallel_indices(args...)
-    if (length(args) != 2) @ArgumentError("wrong number of (positional) arguments.") end
+    posargs, = split_args(args)
+    if (length(posargs) != 2) @ArgumentError("wrong number of positional arguments.") end
     if !is_kernel(args[end]) @ArgumentError("the last argument must be a kernel definition (obtained: $(args[end])).") end
     kernel = args[end]
     if length(extract_kernel_args(kernel)[2]) > 0 @ArgumentError("keyword arguments are not allowed in the signature of @parallel_indices kernels.") end
@@ -136,9 +141,9 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     end
 end
 
-function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), inbounds::Bool=get_inbounds())
     numbertype = get_numbertype()
-    parallel_kernel(caller, package, numbertype, args...)
+    parallel_kernel(caller, package, numbertype, inbounds, args...)
 end
 
 function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
@@ -152,7 +157,7 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, indices::Union{Symbol,Expr}, kernel::Expr)
+function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
     body = get_body(kernel)
@@ -192,15 +197,16 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     else
         @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    if use_aliases
+        body = macroexpand(caller, body)
+        for i=1:length(indices_aliases)
+            body = substitute(body, indices_aliases[i], indices[i])
+        end
+    end
+    if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
-    if use_aliases
-        kernel = macroexpand(caller, kernel)
-        for i=1:length(indices_aliases)
-            kernel = substitute(kernel, indices_aliases[i], indices[i])
-        end
-    end
     return kernel
 end
 
