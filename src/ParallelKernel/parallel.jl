@@ -141,9 +141,12 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     end
 end
 
-function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), inbounds::Bool=get_inbounds())
+function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
     numbertype = get_numbertype()
-    parallel_kernel(caller, package, numbertype, inbounds, args...)
+    posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds,), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
+    inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds()
+    parallel_kernel(caller, package, numbertype, inbounds, posargs..., kernelarg)
 end
 
 function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
