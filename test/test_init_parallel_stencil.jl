@@ -1,8 +1,8 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_memopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_memopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
-import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_memopt
+import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_memopt
 using ParallelStencil.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -25,6 +25,7 @@ end
                 @test @get_numbertype() == ComplexF32
                 @test @get_ndims() == 3
                 @test @get_memopt() == false
+                @test @get_inbounds() == false
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -45,15 +46,16 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. initialization of ParallelStencil without numbertype, with memopt" begin
+        @testset "2. initialization of ParallelStencil without numbertype, with memopt, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3, memopt = true)
+            @init_parallel_stencil(package = $package, ndims = 3, inbounds = true, memopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_ndims() == 3
                 @test @get_memopt() == true
+                @test @get_inbounds() == true
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -75,12 +77,14 @@ end
                 set_numbertype(Float64)
                 set_ndims(3)
                 set_memopt(false)
+                set_inbounds(false)
                 @require is_initialized()
-                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2, false)
-                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, true)
-                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1, true)
+                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, false, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3, false, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2, false, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 3, true, false)
+                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 3, false, true)
+                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1, true, true)
                 set_initialized(false)
                 set_package(PKG_NONE)
                 set_numbertype(NUMBERTYPE_NONE)

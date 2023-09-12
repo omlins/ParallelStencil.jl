@@ -65,6 +65,7 @@ const AD_SUPPORTED_ANNOTATIONS     = (Const=Enzyme.Const, Active=Enzyme.Active, 
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
+const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
@@ -182,6 +183,14 @@ function add_return(body::Expr)
     quote
         $body
         return nothing
+    end
+end
+
+function add_inbounds(body::Expr)
+    quote
+        Base.@inbounds begin
+            $body
+        end
     end
 end
 
@@ -334,6 +343,7 @@ check_numbertype(T::DataType)   = ( if !(T in SUPPORTED_NUMBERTYPES) @ArgumentEr
 check_literaltype(T::DataType)  = ( if !(T in SUPPORTED_LITERALTYPES) @ArgumentError("$ERRMSG_CHECK_LITERALTYPES (obtained: $T)." ) end )
 check_numbertype(datatypes...)  = check_numbertype.(datatypes)
 check_literaltype(datatypes...) = check_literaltype.(datatypes)
+check_inbounds(inbounds)        = ( if !isa(inbounds, Bool) @ArgumentError("$ERRMSG_CHECK_INBOUNDS (obtained: $inbounds)." ) end )
 
 
 ## FUNCTIONS AND MACROS FOR UNIT TESTS

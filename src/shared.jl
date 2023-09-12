@@ -9,7 +9,7 @@ elseif ENABLE_AMDGPU
     using AMDGPU
 end
 import MacroTools: @capture, postwalk, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
-import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, inexpr_walk, cast, @ranges, @rangelengths, @return_value, @return_nothing
+import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, inexpr_walk, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing
 import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
 
@@ -29,7 +29,7 @@ const SUPPORTED_NDIMS           = [1, 2, 3]
 const NDIMS_NONE                = 0
 const ERRMSG_KERNEL_UNSUPPORTED = "unsupported kernel statements in @parallel kernel definition: @parallel is only applicable to kernels that contain exclusively array assignments using macros from FiniteDifferences{1|2|3}D or from another compatible computation submodule. @parallel_indices supports any kind of statements in the kernels."
 const ERRMSG_CHECK_NDIMS        = "ndims must be noted LITERALLY (NOT a variable containing the ndims) and has to be one of the following: $(join(SUPPORTED_NDIMS,", "))"
-const ERRMSG_CHECK_LOOPOPT      = "memopt must be noted LITERALLY (NOT a variable containing the memopt) and has to be of type Bool."
+const ERRMSG_CHECK_MEMOPT       = "memopt must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const PSNumber                  = PKNumber
 const LOOPSIZE                  = 16
 const LOOPDIM_NONE              = 0
@@ -81,4 +81,4 @@ end
 ## FUNCTIONS FOR ERROR HANDLING
 
 check_ndims(ndims)     = ( if !isa(ndims, Integer) || !(ndims in SUPPORTED_NDIMS) @ArgumentError("$ERRMSG_CHECK_NDIMS (obtained: $ndims)." ) end )
-check_memopt(memopt) = ( if !isa(memopt, Bool) @ArgumentError("$ERRMSG_CHECK_LOOPOPT (obtained: $memopt)." ) end )
+check_memopt(memopt) = ( if !isa(memopt, Bool) @ArgumentError("$ERRMSG_CHECK_MEMOPT (obtained: $memopt)." ) end )

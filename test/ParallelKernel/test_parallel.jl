@@ -100,6 +100,14 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 end
             end
             @testset "@parallel_indices" begin
+                @testset "inbounds" begin
+                    expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
+                    @test occursin("Base.@inbounds begin", expansion)
+                    expansion = @prettystring(1, @parallel_indices (ix) inbounds=false f(A) = (2*A; return))
+                    @test !occursin("Base.@inbounds begin", expansion)
+                    expansion = @prettystring(1, @parallel_indices (ix) f(A) = (2*A; return))
+                    @test !occursin("Base.@inbounds begin", expansion)
+                end
                 @testset "addition of range arguments" begin
                     expansion = @gorgeousstring(1, @parallel_indices (ix,iy) f(a::T, b::T) where T <: Union{Array{Float32}, Array{Float64}} = (println("a=$a, b=$b)"); return))
                     @test occursin("f(a::T, b::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
@@ -315,8 +323,22 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 @test occursin("A[ix] = ((Float16(2.0) - Float16(1.0) * im) - A[ix]) + Float16(1.0)\n", expansion)
                 @reset_parallel_kernel()
             end;
-        end
-        @testset "3. parallel macros (numbertype ommited)" begin
+        end;
+        @testset "3. global defaults" begin
+            @testset "inbounds=true" begin
+                @require !@is_initialized()
+                @init_parallel_kernel($package, Float64, inbounds=true)
+                @require @is_initialized
+                expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
+                @test occursin("Base.@inbounds begin", expansion)
+                expansion = @prettystring(1, @parallel_indices (ix) f(A) = (2*A; return))
+                @test occursin("Base.@inbounds begin", expansion)
+                expansion = @prettystring(1, @parallel_indices (ix) inbounds=false f(A) = (2*A; return))
+                @test !occursin("Base.@inbounds begin", expansion)
+                @reset_parallel_kernel()
+            end;
+        end;
+        @testset "4. parallel macros (numbertype ommited)" begin
             @require !@is_initialized()
             @init_parallel_kernel(package = $package)
             @require @is_initialized
@@ -325,22 +347,22 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Array{T}, B::Data.Array{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
-            end
+            end;
             @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
                 @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Cell{T}, B::Data.Cell{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
                 end
-            end
+            end;
             @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
                 @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArray{T}, B::Data.CellArray{T}, c<:Integer) where T <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
-            end
+            end;
             @reset_parallel_kernel()
-        end
-        @testset "4. Exceptions" begin
+        end;
+        @testset "5. Exceptions" begin
             @require !@is_initialized()
             @init_parallel_kernel($package, Float64)
             @require @is_initialized

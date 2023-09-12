@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -24,6 +24,7 @@ end
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == ComplexF16
+                @test @get_inbounds() == false
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -44,13 +45,14 @@ end
             end;
             @reset_parallel_kernel()
         end;
-        @testset "2. initialization of ParallelKernel without numbertype" begin
+        @testset "2. initialization of ParallelKernel without numbertype, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_kernel(package = $package)
+            @init_parallel_kernel(package = $package, inbounds = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
+                @test @get_inbounds() == true
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
