@@ -48,7 +48,7 @@ end
         end;
         @testset "2. initialization of ParallelStencil without numbertype, with memopt, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3, memopt = true)
+            @init_parallel_stencil(package = $package, ndims = 3, inbounds = true, memopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
