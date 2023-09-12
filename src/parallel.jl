@@ -144,12 +144,11 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     is_parallel_kernel = false
     numbertype = get_numbertype()
     ndims      = get_ndims()
-    posargs, kwargs_expr = split_args(args)
+    posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs = extract_kwargs(caller, kwargs_expr, (:inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
-    kernelarg = args[end]
     indices_expr = posargs[1]
     if is_splatarg(indices_expr)
-        parallel_indices_splatarg(caller, package, ndims, posargs...; kwargs...)
+        parallel_indices_splatarg(caller, package, ndims, posargs..., kernelarg; kwargs...)
     else
         if !haskey(kwargs, :metadata_module)
             get_name(kernelarg)
@@ -161,11 +160,12 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
         memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
         if memopt
             quote
-                $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs...; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                 $metadata_function
             end
         else
-            ParallelKernel.parallel_indices(caller, posargs...; package=package, inbounds=inbounds)
+            kwargs_expr = :(inbounds=$inbounds)
+            ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr, kernelarg; package=package)
         end
     end
 end
