@@ -76,6 +76,14 @@ import ParallelStencil.@gorgeousexpand
                 @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.DuplicatedNoNeed)(V.x, V̄.x), (EnzymeCore.DuplicatedNoNeed)(V.y, V̄.y), (EnzymeCore.Const)(a))"
             end;
             @testset "@parallel <kernel>" begin
+                @testset "inbounds" begin
+                    expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
+                    @test occursin("Base.@inbounds begin", expansion)
+                    expansion = @prettystring(1, @parallel_indices (ix) inbounds=false f(A) = (2*A; return))
+                    @test !occursin("Base.@inbounds begin", expansion)
+                    expansion = @prettystring(1, @parallel_indices (ix) f(A) = (2*A; return))
+                    @test !occursin("Base.@inbounds begin", expansion)
+                end
                 @testset "addition of range arguments" begin
                     expansion = @gorgeousstring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A, B, c::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
@@ -809,7 +817,19 @@ import ParallelStencil.@gorgeousexpand
             end;
             @reset_parallel_stencil()
         end;
-        @testset "@parallel_indices" begin
+        @testset "3. global defaults" begin
+            @testset "inbounds=true" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, Float64, 1, inbounds=true)
+                @require @is_initialized
+                expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
+                @test occursin("Base.@inbounds begin", expansion)
+                expansion = @prettystring(1, @parallel_indices (ix) f(A) = (2*A; return))
+                @test occursin("Base.@inbounds begin", expansion)
+                expansion = @prettystring(1, @parallel_indices (ix) inbounds=false f(A) = (2*A; return))
+                @test !occursin("Base.@inbounds begin", expansion)
+                @reset_parallel_stencil()
+            end;
             @testset "@parallel_indices (I...) (1D)" begin
                 @require !@is_initialized()
                 @init_parallel_stencil($package, Float64, 1)
@@ -850,7 +870,7 @@ import ParallelStencil.@gorgeousexpand
                 @reset_parallel_stencil()
             end;
         end;
-        @testset "3. parallel macros (numbertype ommited)" begin
+        @testset "4. parallel macros (numbertype ommited)" begin
             @require !@is_initialized()
             @init_parallel_stencil(package = $package, ndims = 3)
             @require @is_initialized
@@ -859,22 +879,22 @@ import ParallelStencil.@gorgeousexpand
                     expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
-            end
+            end;
             @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
                 @static if @isgpu($package)
                     expansion = @prettystring(1, @parallel f(A::Data.Cell{T}, B::Data.Cell{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
                 end
-            end
+            end;
             @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
                 @static if @isgpu($package)
                     expansion = @prettystring(1, @parallel f(A::Data.CellArray{T}, B::Data.CellArray{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
-            end
+            end;
             @reset_parallel_stencil()
-        end
-        @testset "4. Exceptions" begin
+        end;
+        @testset "5. Exceptions" begin
             @init_parallel_stencil($package, Float64, 3)
             @require @is_initialized
             @testset "arguments @parallel" begin
