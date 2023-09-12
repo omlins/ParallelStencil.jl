@@ -186,6 +186,14 @@ function add_return(body::Expr)
     end
 end
 
+function add_inbounds(body::Expr)
+    quote
+        Base.@inbounds begin
+            $body
+        end
+    end
+end
+
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
