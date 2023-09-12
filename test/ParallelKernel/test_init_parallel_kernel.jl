@@ -47,7 +47,7 @@ end
         end;
         @testset "2. initialization of ParallelKernel without numbertype, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_kernel(package = $package)
+            @init_parallel_kernel(package = $package, inbounds = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
