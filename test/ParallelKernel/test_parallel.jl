@@ -5,7 +5,7 @@ using ParallelStencil.ParallelKernel.Enzyme
 import ParallelStencil.ParallelKernel.AD
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, INDICES
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu
-import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
+import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -62,6 +62,21 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 @test !occursin("get_ranges(A)", call)
                 @test  occursin("f(A,", call)
                 @test !occursin("g(B,", call)
+                @testset "maxsize" begin
+                    struct BitstypeStruct
+                        x::Int
+                        y::Float64
+                    end
+                    @test maxsize([9 9; 9 9; 9 9]) == (3, 2, 1)
+                    @test maxsize(8) == (1, 1, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0)) == (1, 1, 1)
+                    @test maxsize([9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(8, [9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0), 8, [9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize((x=8, y=[9 9; 9 9; 9 9], z=[7 7 7; 7 7 7])) == (3, 3, 1)
+                    @test maxsize((x=8, y=[9 9; 9 9; 9 9]), [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0), 8, (x=[9 9; 9 9; 9 9], y=[9 9; 9 9; 9 9]), (x=[7 7 7; 7 7 7], y=[7 7 7; 7 7 7])) == (3, 3, 1)
+                end;
             end;
             @testset "@parallel ∇" begin
                 @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (Const)(A), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
@@ -394,6 +409,13 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 @test_throws ArgumentError parallel_indices(@__MODULE__, :((ix,iy,iz)), :(f()=(99; return something)))  # Error: function does not return nothing.
                 #TODO: this tests does not pass anymore for unknown reasons:
                 #@test_throws ArgumentError parallel_indices(:((ix,iy,iz)), :(f()=(99; if x return y end; return)))  # Error: function contains more than one return statement.
+            end;
+            @testset "maxsize" begin
+                struct NonBitstypeStruct
+                    x::Int
+                    y::Array
+                end
+                @test_throws ArgumentError maxsize(NonBitstypeStruct(5, [6.0]));                                        # Error: argument is not a bitstype.
             end;
             @reset_parallel_kernel()
         end;
