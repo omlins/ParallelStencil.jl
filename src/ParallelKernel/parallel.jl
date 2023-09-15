@@ -503,11 +503,14 @@ promote_maxsize(maxsize::MAXSIZE_TYPE_2D)       = (maxsize..., 1)
 promote_maxsize(maxsize::MAXSIZE_TYPE)          = maxsize
 promote_maxsize(maxsize)                        = @ArgumentError("maxsize must be a Tuple of Integer of size 1, 2 or 3 (obtained: $maxsize; its type is: $(typeof(maxsize))).")
 
-maxsize(A::T) where T<:AbstractArray = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
-maxsize(a::T) where T<:Number        = (1, 1, 1)
-maxsize(x)                           = @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars. Specify ranges or nthreads and nblocks manually.")
-maxsize(x, args...)                  = merge(maxsize(x), maxsize(args...))      # NOTE: maxsize is implemented as a recursive function, which results in optimal code; otherwise, the function is not performance-negligable for small problems.
-merge(a::Tuple, b::Tuple)            = max.(a,b)
+maxsize(t::T) where T<:Union{Tuple, NamedTuple} = maxsize(t...)
+maxsize(A::T) where T<:AbstractArray            = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
+maxsize(a::T) where T<:Number                   = (1, 1, 1)
+maxsize(x)                                      = _maxsize(Val{isbitstype(typeof(x))})
+_maxsize(::Type{Val{true}})                     = (1, 1, 1)
+_maxsize(::Type{Val{false}})                    = @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars nor any other bitstypes nor (named) tuple containing any of the former. Specify ranges or nthreads and nblocks manually.")
+maxsize(x, args...)                             = merge(maxsize(x), maxsize(args...))      # NOTE: maxsize is implemented as a recursive function, which results in optimal code; otherwise, the function is not performance-negligable for small problems.
+merge(a::Tuple, b::Tuple)                       = max.(a,b)
 
 function get_ranges(args...)
     maxsizes = maxsize(args...)
