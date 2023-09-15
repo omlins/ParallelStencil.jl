@@ -148,6 +148,12 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                             @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
                     end
                 end
+                @testset "Nested Data.Array to Data.DeviceArray" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::NamedTuple{T1, NTuple{T2,T3}} where {T1,T2} where T3 <: Data.Array, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::((NamedTuple{T1, NTuple{T2, T3}} where {T1, T2}) where T3 <: Data.DeviceArray),", expansion)
+                    end
+                end
                 @testset "@parallel_indices (1D)" begin
                     A  = @zeros(4)
                     @parallel_indices (ix) function write_indices!(A)
