@@ -172,6 +172,79 @@ function Data_threads(numbertype::DataType)
     end
 end
 
+function Data_shared(numbertype::DataType)
+    if numbertype == NUMBERTYPE_NONE
+        quote
+            NumberTuple{N_tuple, T}                                  = NTuple{N_tuple, T}
+            ArrayTuple{N_tuple, T, N}                                = NTuple{N_tuple, Array{T, N}}
+            DeviceArrayTuple{N_tuple, T, N}                          = NTuple{N_tuple, DeviceArray{T, N}}
+            CellTuple{N_tuple, T, S}                                 = NTuple{N_tuple, Cell{T, S}}
+            DeviceCellTuple{N_tuple, T, S}                           = NTuple{N_tuple, DeviceCell{T, S}}
+            CellArrayTuple{N_tuple, T_elem, N, B}                    = NTuple{N_tuple, CellArray{T_elem, N, B}}
+            DeviceCellArrayTuple{N_tuple, T_elem, N, B}              = NTuple{N_tuple, DeviceCellArray{T_elem, N, B}}
+            NamedNumberTuple{N_tuple, T, names}                      = NamedTuple{names, NumberTuple{N_tuple, T}}
+            NamedArrayTuple{N_tuple, T, N, names}                    = NamedTuple{names, ArrayTuple{N_tuple, T, N}}
+            NamedDeviceArrayTuple{N_tuple, T, N, names}              = NamedTuple{names, DeviceArrayTuple{N_tuple, T, N}}
+            NamedCellTuple{N_tuple, T, S, names}                     = NamedTuple{names, CellTuple{N_tuple, T, S}}
+            NamedDeviceCellTuple{N_tuple, T, S, names}               = NamedTuple{names, DeviceCellTuple{N_tuple, T, S}}
+            NamedCellArrayTuple{N_tuple, T_elem, N, B, names}        = NamedTuple{names, CellArrayTuple{N_tuple, T_elem, N, B}}
+            NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B, names}  = NamedTuple{names, DeviceCellArrayTuple{N_tuple, T_elem, N, B}}
+            NumberCollection{N_tuple, T}                             = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
+            ArrayCollection{N_tuple, T, N}                           = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
+            DeviceArrayCollection{N_tuple, T, N}                     = Union{DeviceArrayTuple{N_tuple, T, N}, NamedDeviceArrayTuple{N_tuple, T, N}}
+            CellCollection{N_tuple, T, S}                            = Union{CellTuple{N_tuple, T, S}, NamedCellTuple{N_tuple, T, S}}
+            DeviceCellCollection{N_tuple, T, S}                      = Union{DeviceCellTuple{N_tuple, T, S}, NamedDeviceCellTuple{N_tuple, T, S}}
+            CellArrayCollection{N_tuple, T_elem, N, B}               = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}
+            DeviceCellArrayCollection{N_tuple, T_elem, N, B}         = Union{DeviceCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B}}
+        end
+    else
+        quote
+            NumberTuple{N_tuple}                                     = NTuple{N_tuple, Number}
+            ArrayTuple{N_tuple, N}                                   = NTuple{N_tuple, Array{N}}
+            DeviceArrayTuple{N_tuple, N}                             = NTuple{N_tuple, DeviceArray{N}}
+            CellTuple{N_tuple, S}                                    = NTuple{N_tuple, Cell{S}}
+            DeviceCellTuple{N_tuple, S}                              = NTuple{N_tuple, DeviceCell{S}}
+            CellArrayTuple{N_tuple, N, B}                            = NTuple{N_tuple, CellArray{N, B}}
+            DeviceCellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, DeviceCellArray{N, B}}
+            TNumberTuple{N_tuple, T}                                 = NTuple{N_tuple, T}
+            TArrayTuple{N_tuple, T, N}                               = NTuple{N_tuple, TArray{T, N}}
+            DeviceTArrayTuple{N_tuple, T, N}                         = NTuple{N_tuple, DeviceTArray{T, N}}
+            TCellTuple{N_tuple, T, S}                                = NTuple{N_tuple, TCell{T, S}}
+            DeviceTCellTuple{N_tuple, T, S}                          = NTuple{N_tuple, DeviceTCell{T, S}}
+            TCellArrayTuple{N_tuple, T_elem, N, B}                   = NTuple{N_tuple, TCellArray{T_elem, N, B}}
+            DeviceTCellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, DeviceTCellArray{T_elem, N, B}}
+            NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, NumberTuple{N_tuple}}
+            NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, ArrayTuple{N_tuple, N}}
+            NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, DeviceArrayTuple{N_tuple, N}}
+            NamedCellTuple{N_tuple, S, names}                        = NamedTuple{names, CellTuple{N_tuple, S}}
+            NamedDeviceCellTuple{N_tuple, S, names}                  = NamedTuple{names, DeviceCellTuple{N_tuple, S}}
+            NamedCellArrayTuple{N_tuple, N, B, names}                = NamedTuple{names, CellArrayTuple{N_tuple, N, B}}
+            NamedDeviceCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, DeviceCellArrayTuple{N_tuple, N, B}}
+            NamedTNumberTuple{N_tuple, T, names}                     = NamedTuple{names, TNumberTuple{N_tuple, T}}
+            NamedTArrayTuple{N_tuple, T, N, names}                   = NamedTuple{names, TArrayTuple{N_tuple, T, N}}
+            NamedDeviceTArrayTuple{N_tuple, T, N, names}             = NamedTuple{names, DeviceTArrayTuple{N_tuple, T, N}}
+            NamedTCellTuple{N_tuple, T, S, names}                    = NamedTuple{names, TCellTuple{N_tuple, T, S}}
+            NamedDeviceTCellTuple{N_tuple, T, S, names}              = NamedTuple{names, DeviceTCellTuple{N_tuple, T, S}}
+            NamedTCellArrayTuple{N_tuple, T_elem, N, B, names}       = NamedTuple{names, TCellArrayTuple{N_tuple, T_elem, N, B}}
+            NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, DeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
+            NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
+            ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
+            DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
+            CellCollection{N_tuple, S}                               = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
+            DeviceCellCollection{N_tuple, S}                         = Union{DeviceCellTuple{N_tuple, S}, NamedDeviceCellTuple{N_tuple, S}}
+            CellArrayCollection{N_tuple, N, B}                       = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
+            DeviceCellArrayCollection{N_tuple, N, B}                 = Union{DeviceCellArrayTuple{N_tuple, N, B}, NamedDeviceCellArrayTuple{N_tuple, N, B}}
+            TNumberCollection{N_tuple, T}                            = Union{TNumberTuple{N_tuple, T}, NamedTNumberTuple{N_tuple, T}}
+            TArrayCollection{N_tuple, T, N}                          = Union{TArrayTuple{N_tuple, T, N}, NamedTArrayTuple{N_tuple, T, N}}
+            DeviceTArrayCollection{N_tuple, T, N}                    = Union{DeviceTArrayTuple{N_tuple, T, N}, NamedDeviceTArrayTuple{N_tuple, T, N}}
+            TCellCollection{N_tuple, T, S}                           = Union{TCellTuple{N_tuple, T, S}, NamedTCellTuple{N_tuple, T, S}}
+            DeviceTCellCollection{N_tuple, T, S}                     = Union{DeviceTCellTuple{N_tuple, T, S}, NamedDeviceTCellTuple{N_tuple, T, S}}
+            TCellArrayCollection{N_tuple, T_elem, N, B}              = Union{TCellArrayTuple{N_tuple, T_elem, N, B}, NamedTCellArrayTuple{N_tuple, T_elem, N, B}}
+            DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
+        end
+    end
+end
+
 function Data_none()
     :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
     end)
