@@ -24,6 +24,26 @@ Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the dataty
 Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S, numbertype}}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref).
 
 --------------------------------------------------------------------------------
+    Data.NumberTuple{N_tuple} | Data.NamedNumberTuple{N_tuple, names} | Data.NumberCollection{N_tuple}
+
+Expands to `NTuple{N_tuple, Data.Number}` | `NamedTuple{names, NTuple{N_tuple, Data.Number}}` | `Union{NTuple{N_tuple, Data.Number}, NamedTuple{names, NTuple{N_tuple, Data.Number}}}`.
+
+--------------------------------------------------------------------------------
+    Data.ArrayTuple{N_tuple, N} | Data.NamedArrayTuple{N_tuple, N, names} | Data.ArrayCollection{N_tuple, N}
+
+Expands to `NTuple{N_tuple, Data.Array{N}}` | `NamedTuple{names, NTuple{N_tuple, Data.Array{N}}}` | `Union{NTuple{N_tuple, Data.Array{N}}, NamedTuple{names, NTuple{N_tuple, Data.Array{N}}}}`.
+
+--------------------------------------------------------------------------------
+    Data.CellArrayTuple{N_tuple, N, B} | Data.NamedCellArrayTuple{N_tuple, N, B, names} | Data.CellArrayCollection{N_tuple, N, B}
+
+Expands to `NTuple{N_tuple, Data.CellArray{N, B}}` | `NamedTuple{names, NTuple{N_tuple, Data.CellArray{N, B}}}` | `Union{NTuple{N_tuple, Data.CellArray{N, B}}, NamedTuple{names, NTuple{N_tuple, Data.CellArray{N, B}}}}`.
+
+--------------------------------------------------------------------------------
+    Data.CellTuple{N_tuple, S} | Data.NamedCellTuple{N_tuple, S, names} | Data.CellCollection{N_tuple, S}
+
+Expands to `NTuple{N_tuple, Data.Cell{S}}` | `NamedTuple{names, NTuple{N_tuple, Data.Cell{S}}}` | `Union{NTuple{N_tuple, Data.Cell{S}}, NamedTuple{names, NTuple{N_tuple, Data.Cell{S}}}}`.
+
+--------------------------------------------------------------------------------
 !!! note "Advanced"
         Data.DeviceArray{ndims}
 
@@ -82,7 +102,7 @@ Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S,
 function Data_cuda(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Array{T, N}                   = CUDA.CuArray{T, N}
             DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
             Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -92,7 +112,7 @@ function Data_cuda(numbertype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Number                         = $numbertype
             Array{N}                       = CUDA.CuArray{$numbertype, N}
             DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
@@ -113,7 +133,7 @@ end
 function Data_amdgpu(numbertype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Array{T, N}                   = AMDGPU.ROCArray{T, N}
             DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -123,7 +143,7 @@ function Data_amdgpu(numbertype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             Number                         = $numbertype
             Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
             DeviceArray{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
@@ -182,6 +202,7 @@ function Data_shared(numbertype::DataType)
             DeviceCellTuple{N_tuple, T, S}                           = NTuple{N_tuple, DeviceCell{T, S}}
             CellArrayTuple{N_tuple, T_elem, N, B}                    = NTuple{N_tuple, CellArray{T_elem, N, B}}
             DeviceCellArrayTuple{N_tuple, T_elem, N, B}              = NTuple{N_tuple, DeviceCellArray{T_elem, N, B}}
+
             NamedNumberTuple{N_tuple, T, names}                      = NamedTuple{names, NumberTuple{N_tuple, T}}
             NamedArrayTuple{N_tuple, T, N, names}                    = NamedTuple{names, ArrayTuple{N_tuple, T, N}}
             NamedDeviceArrayTuple{N_tuple, T, N, names}              = NamedTuple{names, DeviceArrayTuple{N_tuple, T, N}}
@@ -189,6 +210,7 @@ function Data_shared(numbertype::DataType)
             NamedDeviceCellTuple{N_tuple, T, S, names}               = NamedTuple{names, DeviceCellTuple{N_tuple, T, S}}
             NamedCellArrayTuple{N_tuple, T_elem, N, B, names}        = NamedTuple{names, CellArrayTuple{N_tuple, T_elem, N, B}}
             NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B, names}  = NamedTuple{names, DeviceCellArrayTuple{N_tuple, T_elem, N, B}}
+
             NumberCollection{N_tuple, T}                             = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
             ArrayCollection{N_tuple, T, N}                           = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
             DeviceArrayCollection{N_tuple, T, N}                     = Union{DeviceArrayTuple{N_tuple, T, N}, NamedDeviceArrayTuple{N_tuple, T, N}}
@@ -196,6 +218,14 @@ function Data_shared(numbertype::DataType)
             DeviceCellCollection{N_tuple, T, S}                      = Union{DeviceCellTuple{N_tuple, T, S}, NamedDeviceCellTuple{N_tuple, T, S}}
             CellArrayCollection{N_tuple, T_elem, N, B}               = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}
             DeviceCellArrayCollection{N_tuple, T_elem, N, B}         = Union{DeviceCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B}}
+
+            NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
+            NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
+            NamedDeviceArrayTuple{}(T, t::NamedTuple)                = Base.map(Data.DeviceArray{T}, t)
+            NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
+            NamedDeviceCellTuple{}(T, t::NamedTuple)                 = Base.map(Data.DeviceCell{T}, t)
+            NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
+            NamedDeviceCellArrayTuple{}(T, t::NamedTuple)            = Base.map(Data.DeviceCellArray{T}, t)
         end
     else
         quote
@@ -213,6 +243,7 @@ function Data_shared(numbertype::DataType)
             DeviceTCellTuple{N_tuple, T, S}                          = NTuple{N_tuple, DeviceTCell{T, S}}
             TCellArrayTuple{N_tuple, T_elem, N, B}                   = NTuple{N_tuple, TCellArray{T_elem, N, B}}
             DeviceTCellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, DeviceTCellArray{T_elem, N, B}}
+
             NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, NumberTuple{N_tuple}}
             NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, ArrayTuple{N_tuple, N}}
             NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, DeviceArrayTuple{N_tuple, N}}
@@ -227,6 +258,7 @@ function Data_shared(numbertype::DataType)
             NamedDeviceTCellTuple{N_tuple, T, S, names}              = NamedTuple{names, DeviceTCellTuple{N_tuple, T, S}}
             NamedTCellArrayTuple{N_tuple, T_elem, N, B, names}       = NamedTuple{names, TCellArrayTuple{N_tuple, T_elem, N, B}}
             NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, DeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
+
             NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
             ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
             DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
@@ -241,6 +273,21 @@ function Data_shared(numbertype::DataType)
             DeviceTCellCollection{N_tuple, T, S}                     = Union{DeviceTCellTuple{N_tuple, T, S}, NamedDeviceTCellTuple{N_tuple, T, S}}
             TCellArrayCollection{N_tuple, T_elem, N, B}              = Union{TCellArrayTuple{N_tuple, T_elem, N, B}, NamedTCellArrayTuple{N_tuple, T_elem, N, B}}
             DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
+
+            NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
+            NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
+            NamedDeviceArrayTuple{}(t::NamedTuple)                   = Base.map(Data.DeviceArray, t)
+            NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
+            NamedDeviceCellTuple{}(t::NamedTuple)                    = Base.map(Data.DeviceCell, t)
+            NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
+            NamedDeviceCellArrayTuple{}(t::NamedTuple)               = Base.map(Data.DeviceCellArray, t)
+            NamedTNumberTuple{}(T, t::NamedTuple)                    = Base.map(T, t)
+            NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
+            NamedDeviceTArrayTuple{}(T, t::NamedTuple)               = Base.map(Data.DeviceTArray{T}, t)
+            NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
+            NamedDeviceTCellTuple{}(T, t::NamedTuple)                = Base.map(Data.DeviceTCell{T}, t)
+            NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
+            NamedDeviceTCellArrayTuple{}(T, t::NamedTuple)           = Base.map(Data.DeviceTCellArray{T}, t)
         end
     end
 end
