@@ -81,6 +81,8 @@ end
 
 ## FUNCTIONS AND MACROS FOR USAGE IN CUSTOM MACRO DEFINITIONS
 
+macro expandargs(args...) esc(quote $(args...), = ParallelStencil.expandargs(__module__, $(args...)) end) end
+
 function expandargs(caller, args...; valid_types::NTuple{N,Type}=(Symbol, Expr)) where N
     for arg in args
         if (typeof(arg) ∉ valid_types) @ArgumentError("argument $arg is not of type $(join(valid_types, ", ", " or ")).") end
