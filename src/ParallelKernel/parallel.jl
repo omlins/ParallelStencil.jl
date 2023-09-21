@@ -173,14 +173,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package)
-        kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
-        kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
-        kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
-        kernel = substitute(kernel, :(Data.TArray),     :(Data.DeviceTArray))
-        kernel = substitute(kernel, :(Data.TCell),      :(Data.DeviceTCell))
-        kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
-    end
+    if isgpu(package) kernel = insert_device_types(kernel) end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
