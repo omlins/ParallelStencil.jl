@@ -430,7 +430,7 @@ function extract_onthefly_arrays!(body, argvars)
     for statement in statements
         if is_array_assignment(statement)
             if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
-            if A ∈ argvars
+            if any(inexpr_walk.((A,), argvars))
                 write_vars = (write_vars..., A)
             end
         end
@@ -438,7 +438,7 @@ function extract_onthefly_arrays!(body, argvars)
     for statement in statements
         if is_array_assignment(statement)
             if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
-            if A ∉ argvars
+            if !any(inexpr_walk.((A,), argvars))
                 if (m != Symbol("@all"))         @ArgumentError("unsupported kernel statements in @parallel kernel definition: partial assignments are not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel); use '@all' instead.") end
                 if (inexpr_walk(assign_expr, A)) @ArgumentError("unsupported kernel statements in @parallel kernel definition: auto-dependency is not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel).") end
                 if any(inexpr_walk.((assign_expr,), write_vars)) # NOTE: in this case here could later be allocated a local array instead
