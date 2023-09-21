@@ -241,11 +241,8 @@ function Data_shared(numbertype::DataType)
 
             NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
             NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
-            NamedDeviceArrayTuple{}(T, t::NamedTuple)                = Base.map(Data.DeviceArray{T}, t)
             NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
-            NamedDeviceCellTuple{}(T, t::NamedTuple)                 = Base.map(Data.DeviceCell{T}, t)
             NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
-            NamedDeviceCellArrayTuple{}(T, t::NamedTuple)            = Base.map(Data.DeviceCellArray{T}, t)
         end
     else
         quote
@@ -296,18 +293,12 @@ function Data_shared(numbertype::DataType)
 
             NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
             NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
-            NamedDeviceArrayTuple{}(t::NamedTuple)                   = Base.map(Data.DeviceArray, t)
             NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
-            NamedDeviceCellTuple{}(t::NamedTuple)                    = Base.map(Data.DeviceCell, t)
             NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
-            NamedDeviceCellArrayTuple{}(t::NamedTuple)               = Base.map(Data.DeviceCellArray, t)
             NamedTNumberTuple{}(T, t::NamedTuple)                    = Base.map(T, t)
             NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
-            NamedDeviceTArrayTuple{}(T, t::NamedTuple)               = Base.map(Data.DeviceTArray{T}, t)
             NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
-            NamedDeviceTCellTuple{}(T, t::NamedTuple)                = Base.map(Data.DeviceTCell{T}, t)
             NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
-            NamedDeviceTCellArrayTuple{}(T, t::NamedTuple)           = Base.map(Data.DeviceTCellArray{T}, t)
         end
     end
 end
