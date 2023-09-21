@@ -145,6 +145,60 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                             @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
                     end
                 end
+                @testset "Data.ArrayTuple to Data.DeviceArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.ArrayTuple, B::Data.ArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceArrayTuple, B::Data.DeviceArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.CellTuple to Data.DeviceCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellTuple, B::Data.CellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceCellTuple, B::Data.DeviceCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.CellArrayTuple to Data.DeviceCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArrayTuple, B::Data.CellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceCellArrayTuple, B::Data.DeviceCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedArrayTuple to Data.NamedDeviceArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedArrayTuple, B::Data.NamedArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceArrayTuple, B::Data.NamedDeviceArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedCellTuple to Data.NamedDeviceCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedCellTuple, B::Data.NamedCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceCellTuple, B::Data.NamedDeviceCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedCellArrayTuple to Data.NamedDeviceCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedCellArrayTuple, B::Data.NamedCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceCellArrayTuple, B::Data.NamedDeviceCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.ArrayCollection to Data.DeviceArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.ArrayCollection, B::Data.ArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceArrayCollection, B::Data.DeviceArrayCollection,", expansion)
+                    end
+                end
+                @testset "Data.CellCollection to Data.DeviceCellCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.CellCollection, B::Data.CellCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceCellCollection, B::Data.DeviceCellCollection,", expansion)
+                    end
+                end
+                @testset "Data.CellArrayCollection to Data.DeviceCellArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.CellArrayCollection, B::Data.CellArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceCellArrayCollection, B::Data.DeviceCellArrayCollection,", expansion)
+                    end
+                end
                 @testset "Data.TArray to Data.DeviceTArray" begin
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
@@ -161,6 +215,60 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
+                    end
+                end
+                @testset "Data.TArrayTuple to Data.DeviceTArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArrayTuple, B::Data.TArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTArrayTuple, B::Data.DeviceTArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.TCellTuple to Data.DeviceTCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellTuple, B::Data.TCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTCellTuple, B::Data.DeviceTCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.TCellArrayTuple to Data.DeviceTCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArrayTuple, B::Data.TCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTCellArrayTuple, B::Data.DeviceTCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTArrayTuple to Data.NamedDeviceTArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTArrayTuple, B::Data.NamedTArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTArrayTuple, B::Data.NamedDeviceTArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTCellTuple to Data.NamedDeviceTCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTCellTuple, B::Data.NamedTCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTCellTuple, B::Data.NamedDeviceTCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTCellArrayTuple to Data.NamedDeviceTCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTCellArrayTuple, B::Data.NamedTCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTCellArrayTuple, B::Data.NamedDeviceTCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.TArrayCollection to Data.DeviceTArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TArrayCollection, B::Data.TArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTArrayCollection, B::Data.DeviceTArrayCollection,", expansion)
+                    end
+                end
+                @testset "Data.TCellCollection to Data.DeviceTCellCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TCellCollection, B::Data.TCellCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTCellCollection, B::Data.DeviceTCellCollection,", expansion)
+                    end
+                end
+                @testset "Data.TCellArrayCollection to Data.DeviceTCellArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TCellArrayCollection, B::Data.TCellArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTCellArrayCollection, B::Data.DeviceTCellArrayCollection,", expansion)
                     end
                 end
                 @testset "Nested Data.Array to Data.DeviceArray" begin
