@@ -194,6 +194,35 @@ function add_inbounds(body::Expr)
     end
 end
 
+function insert_device_types(kernel::Expr)
+    kernel = substitute(kernel, :(Data.Array),                :(Data.DeviceArray))
+    kernel = substitute(kernel, :(Data.Cell),                 :(Data.DeviceCell))
+    kernel = substitute(kernel, :(Data.CellArray),            :(Data.DeviceCellArray))
+    kernel = substitute(kernel, :(Data.ArrayTuple),           :(Data.DeviceArrayTuple))
+    kernel = substitute(kernel, :(Data.CellTuple),            :(Data.DeviceCellTuple))
+    kernel = substitute(kernel, :(Data.CellArrayTuple),       :(Data.DeviceCellArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedArrayTuple),      :(Data.NamedDeviceArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedCellTuple),       :(Data.NamedDeviceCellTuple))
+    kernel = substitute(kernel, :(Data.NamedCellArrayTuple),  :(Data.NamedDeviceCellArrayTuple))
+    kernel = substitute(kernel, :(Data.ArrayCollection),      :(Data.DeviceArrayCollection))
+    kernel = substitute(kernel, :(Data.CellCollection),       :(Data.DeviceCellCollection))
+    kernel = substitute(kernel, :(Data.CellArrayCollection),  :(Data.DeviceCellArrayCollection))
+    kernel = substitute(kernel, :(Data.TArray),               :(Data.DeviceTArray))
+    kernel = substitute(kernel, :(Data.TCell),                :(Data.DeviceTCell))
+    kernel = substitute(kernel, :(Data.TCellArray),           :(Data.DeviceTCellArray))
+    kernel = substitute(kernel, :(Data.TArrayTuple),          :(Data.DeviceTArrayTuple))
+    kernel = substitute(kernel, :(Data.TCellTuple),           :(Data.DeviceTCellTuple))
+    kernel = substitute(kernel, :(Data.TCellArrayTuple),      :(Data.DeviceTCellArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedTArrayTuple),     :(Data.NamedDeviceTArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedTCellTuple),      :(Data.NamedDeviceTCellTuple))
+    kernel = substitute(kernel, :(Data.NamedTCellArrayTuple), :(Data.NamedDeviceTCellArrayTuple))
+    kernel = substitute(kernel, :(Data.TArrayCollection),     :(Data.DeviceTArrayCollection))
+    kernel = substitute(kernel, :(Data.TCellCollection),      :(Data.DeviceTCellCollection))
+    kernel = substitute(kernel, :(Data.TCellArrayCollection), :(Data.DeviceTCellArrayCollection))
+    return kernel
+end
+
+
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
