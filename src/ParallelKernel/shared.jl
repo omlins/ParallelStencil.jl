@@ -31,6 +31,7 @@ import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexp
 const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
+gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
@@ -339,6 +340,15 @@ function cast(expr::Expr, f::Symbol, type::DataType)
     end
 end
 
+function inexpr_walk(expr::Expr, e::Expr)
+    found = false
+    postwalk(expr) do x
+        if (isa(x,Expr) && x==e) found = true end
+        return x
+    end
+    return found
+end
+
 function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
     postwalk(expr) do x
@@ -351,6 +361,7 @@ end
 
 inexpr_walk(expr::Symbol, s::Symbol; match_only_head=false) = (s == expr)
 inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
+inexpr_walk(expr,         e::Expr)                          = false
 
 Base.unquoted(s::Symbol) = s
 
