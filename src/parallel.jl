@@ -216,14 +216,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
     end
-    if isgpu(package)
-        kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
-        kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
-        kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
-        kernel = substitute(kernel, :(Data.TArray),     :(Data.DeviceTArray))
-        kernel = substitute(kernel, :(Data.TCell),      :(Data.DeviceTCell))
-        kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
-    end
+    if isgpu(package) kernel = insert_device_types(kernel) end
     if !memopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
         if     (package == PKG_CUDA)    int_type = INT_CUDA
