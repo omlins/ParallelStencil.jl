@@ -216,14 +216,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
     end
-    if isgpu(package)
-        kernel = substitute(kernel, :(Data.Array),      :(Data.DeviceArray))
-        kernel = substitute(kernel, :(Data.Cell),       :(Data.DeviceCell))
-        kernel = substitute(kernel, :(Data.CellArray),  :(Data.DeviceCellArray))
-        kernel = substitute(kernel, :(Data.TArray),     :(Data.DeviceTArray))
-        kernel = substitute(kernel, :(Data.TCell),      :(Data.DeviceTCell))
-        kernel = substitute(kernel, :(Data.TCellArray), :(Data.DeviceTCellArray))
-    end
+    if isgpu(package) kernel = insert_device_types(kernel) end
     if !memopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
         if     (package == PKG_CUDA)    int_type = INT_CUDA
@@ -344,7 +337,7 @@ is_splatarg(x) = isa(x,Expr) && (x.head == :...)
 function check_mask_macro(caller::Module)
     if !isdefined(caller, Symbol("@within")) @MethodPluginError("the macro @within is not defined in the caller. You need to load one of the submodules ParallelStencil.FiniteDifferences{1|2|3}D (or a compatible custom module or set of macros).") end
     methods_str = string(methods(getfield(caller, Symbol("@within"))))
-    if !occursin(r"(var\"@within\"|@within)\(__source__::LineNumberNode, __module__::Module, .*::String, .*::Symbol\)", methods_str) @MethodPluginError("the signature of the macro @within is not compatible with ParallelStencil (detected signature: \"$methods_str\"). The signature must correspond to the description in ParallelStencil.WITHIN_DOC. See in ParallelStencil.FiniteDifferences{1|2|3}D for examples.") end
+    if !occursin(r"(var\"@within\"|@within)\(__source__::LineNumberNode, __module__::Module, .*::String, .*\)", methods_str) @MethodPluginError("the signature of the macro @within is not compatible with ParallelStencil (detected signature: \"$methods_str\"). The signature must correspond to the description in ParallelStencil.WITHIN_DOC. See in ParallelStencil.FiniteDifferences{1|2|3}D for examples.") end
 end
 
 function apply_masks(expr::Expr, indices::Array{Any}; do_shortif=false)
@@ -437,7 +430,7 @@ function extract_onthefly_arrays!(body, argvars)
     for statement in statements
         if is_array_assignment(statement)
             if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
-            if A ∈ argvars
+            if any(inexpr_walk.((A,), argvars))
                 write_vars = (write_vars..., A)
             end
         end
@@ -445,7 +438,7 @@ function extract_onthefly_arrays!(body, argvars)
     for statement in statements
         if is_array_assignment(statement)
             if !@capture(statement, @m_(A_) = assign_expr_) @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
-            if A ∉ argvars
+            if !any(inexpr_walk.((A,), argvars))
                 if (m != Symbol("@all"))         @ArgumentError("unsupported kernel statements in @parallel kernel definition: partial assignments are not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel); use '@all' instead.") end
                 if (inexpr_walk(assign_expr, A)) @ArgumentError("unsupported kernel statements in @parallel kernel definition: auto-dependency is not possible for arrays that are not stored in global memory (arrays that are not among the arguments of the kernel).") end
                 if any(inexpr_walk.((assign_expr,), write_vars)) # NOTE: in this case here could later be allocated a local array instead

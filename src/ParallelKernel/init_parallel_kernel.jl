@@ -36,6 +36,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         data_module     = Data_threads(numbertype)
         pkg_import_cmd  = :()
     end
+    data_module_shared = Data_shared(numbertype)
     ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme)
     if (package == PKG_THREADS) ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme; Enzyme.API.runtimeActivity!(true)) end # NOTE: Enzyme requires this currently to work correctly with threads.
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
@@ -45,6 +46,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             end
         end
         @eval(caller, $data_module)
+        @eval(caller.Data, $data_module_shared)
         @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
         if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end

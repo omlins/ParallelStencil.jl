@@ -5,7 +5,7 @@ using ParallelStencil.ParallelKernel.Enzyme
 import ParallelStencil.ParallelKernel.AD
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, INDICES
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu
-import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices
+import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -62,6 +62,21 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 @test !occursin("get_ranges(A)", call)
                 @test  occursin("f(A,", call)
                 @test !occursin("g(B,", call)
+                @testset "maxsize" begin
+                    struct BitstypeStruct
+                        x::Int
+                        y::Float64
+                    end
+                    @test maxsize([9 9; 9 9; 9 9]) == (3, 2, 1)
+                    @test maxsize(8) == (1, 1, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0)) == (1, 1, 1)
+                    @test maxsize([9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(8, [9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0), 8, [9 9; 9 9; 9 9], [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize((x=8, y=[9 9; 9 9; 9 9], z=[7 7 7; 7 7 7])) == (3, 3, 1)
+                    @test maxsize((x=8, y=[9 9; 9 9; 9 9]), [7 7 7; 7 7 7]) == (3, 3, 1)
+                    @test maxsize(BitstypeStruct(5, 6.0), 8, (x=[9 9; 9 9; 9 9], y=[9 9; 9 9; 9 9]), (x=[7 7 7; 7 7 7], y=[7 7 7; 7 7 7])) == (3, 3, 1)
+                end;
             end;
             @testset "@parallel ∇" begin
                 @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (Const)(A), (DuplicatedNoNeed)(B, B̄), (Const)(a))"
@@ -130,6 +145,60 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                             @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
                     end
                 end
+                @testset "Data.ArrayTuple to Data.DeviceArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.ArrayTuple, B::Data.ArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceArrayTuple, B::Data.DeviceArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.CellTuple to Data.DeviceCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellTuple, B::Data.CellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceCellTuple, B::Data.DeviceCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.CellArrayTuple to Data.DeviceCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.CellArrayTuple, B::Data.CellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceCellArrayTuple, B::Data.DeviceCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedArrayTuple to Data.NamedDeviceArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedArrayTuple, B::Data.NamedArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceArrayTuple, B::Data.NamedDeviceArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedCellTuple to Data.NamedDeviceCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedCellTuple, B::Data.NamedCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceCellTuple, B::Data.NamedDeviceCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedCellArrayTuple to Data.NamedDeviceCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedCellArrayTuple, B::Data.NamedCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceCellArrayTuple, B::Data.NamedDeviceCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.ArrayCollection to Data.DeviceArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.ArrayCollection, B::Data.ArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceArrayCollection, B::Data.DeviceArrayCollection,", expansion)
+                    end
+                end
+                @testset "Data.CellCollection to Data.DeviceCellCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.CellCollection, B::Data.CellCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceCellCollection, B::Data.DeviceCellCollection,", expansion)
+                    end
+                end
+                @testset "Data.CellArrayCollection to Data.DeviceCellArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.CellArrayCollection, B::Data.CellArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceCellArrayCollection, B::Data.DeviceCellArrayCollection,", expansion)
+                    end
+                end
                 @testset "Data.TArray to Data.DeviceTArray" begin
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
@@ -146,6 +215,66 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
+                    end
+                end
+                @testset "Data.TArrayTuple to Data.DeviceTArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TArrayTuple, B::Data.TArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTArrayTuple, B::Data.DeviceTArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.TCellTuple to Data.DeviceTCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellTuple, B::Data.TCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTCellTuple, B::Data.DeviceTCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.TCellArrayTuple to Data.DeviceTCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.TCellArrayTuple, B::Data.TCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.DeviceTCellArrayTuple, B::Data.DeviceTCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTArrayTuple to Data.NamedDeviceTArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTArrayTuple, B::Data.NamedTArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTArrayTuple, B::Data.NamedDeviceTArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTCellTuple to Data.NamedDeviceTCellTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTCellTuple, B::Data.NamedTCellTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTCellTuple, B::Data.NamedDeviceTCellTuple,", expansion)
+                    end
+                end
+                @testset "Data.NamedTCellArrayTuple to Data.NamedDeviceTCellArrayTuple" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.NamedTCellArrayTuple, B::Data.NamedTCellArrayTuple, c::T) where T <: Integer = return)
+                            @test occursin("f(A::Data.NamedDeviceTCellArrayTuple, B::Data.NamedDeviceTCellArrayTuple,", expansion)
+                    end
+                end
+                @testset "Data.TArrayCollection to Data.DeviceTArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TArrayCollection, B::Data.TArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTArrayCollection, B::Data.DeviceTArrayCollection,", expansion)
+                    end
+                end
+                @testset "Data.TCellCollection to Data.DeviceTCellCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TCellCollection, B::Data.TCellCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTCellCollection, B::Data.DeviceTCellCollection,", expansion)
+                    end
+                end
+                @testset "Data.TCellArrayCollection to Data.DeviceTCellArrayCollection" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f!(A::Data.TCellArrayCollection, B::Data.TCellArrayCollection, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f!(A::Data.DeviceTCellArrayCollection, B::Data.DeviceTCellArrayCollection,", expansion)
+                    end
+                end
+                @testset "Nested Data.Array to Data.DeviceArray" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::NamedTuple{T1, NTuple{T2,T3}} where {T1,T2} where T3 <: Data.Array, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+                            @test occursin("f(A::((NamedTuple{T1, NTuple{T2, T3}} where {T1, T2}) where T3 <: Data.DeviceArray),", expansion)
                     end
                 end
                 @testset "@parallel_indices (1D)" begin
@@ -388,6 +517,13 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
                 @test_throws ArgumentError parallel_indices(@__MODULE__, :((ix,iy,iz)), :(f()=(99; return something)))  # Error: function does not return nothing.
                 #TODO: this tests does not pass anymore for unknown reasons:
                 #@test_throws ArgumentError parallel_indices(:((ix,iy,iz)), :(f()=(99; if x return y end; return)))  # Error: function contains more than one return statement.
+            end;
+            @testset "maxsize" begin
+                struct NonBitstypeStruct
+                    x::Int
+                    y::Array
+                end
+                @test_throws ArgumentError maxsize(NonBitstypeStruct(5, [6.0]));                                        # Error: argument is not a bitstype.
             end;
             @reset_parallel_kernel()
         end;

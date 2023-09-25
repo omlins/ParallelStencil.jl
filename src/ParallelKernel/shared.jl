@@ -31,6 +31,7 @@ import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexp
 const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
+gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
@@ -194,6 +195,35 @@ function add_inbounds(body::Expr)
     end
 end
 
+function insert_device_types(kernel::Expr)
+    kernel = substitute(kernel, :(Data.Array),                :(Data.DeviceArray))
+    kernel = substitute(kernel, :(Data.Cell),                 :(Data.DeviceCell))
+    kernel = substitute(kernel, :(Data.CellArray),            :(Data.DeviceCellArray))
+    kernel = substitute(kernel, :(Data.ArrayTuple),           :(Data.DeviceArrayTuple))
+    kernel = substitute(kernel, :(Data.CellTuple),            :(Data.DeviceCellTuple))
+    kernel = substitute(kernel, :(Data.CellArrayTuple),       :(Data.DeviceCellArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedArrayTuple),      :(Data.NamedDeviceArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedCellTuple),       :(Data.NamedDeviceCellTuple))
+    kernel = substitute(kernel, :(Data.NamedCellArrayTuple),  :(Data.NamedDeviceCellArrayTuple))
+    kernel = substitute(kernel, :(Data.ArrayCollection),      :(Data.DeviceArrayCollection))
+    kernel = substitute(kernel, :(Data.CellCollection),       :(Data.DeviceCellCollection))
+    kernel = substitute(kernel, :(Data.CellArrayCollection),  :(Data.DeviceCellArrayCollection))
+    kernel = substitute(kernel, :(Data.TArray),               :(Data.DeviceTArray))
+    kernel = substitute(kernel, :(Data.TCell),                :(Data.DeviceTCell))
+    kernel = substitute(kernel, :(Data.TCellArray),           :(Data.DeviceTCellArray))
+    kernel = substitute(kernel, :(Data.TArrayTuple),          :(Data.DeviceTArrayTuple))
+    kernel = substitute(kernel, :(Data.TCellTuple),           :(Data.DeviceTCellTuple))
+    kernel = substitute(kernel, :(Data.TCellArrayTuple),      :(Data.DeviceTCellArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedTArrayTuple),     :(Data.NamedDeviceTArrayTuple))
+    kernel = substitute(kernel, :(Data.NamedTCellTuple),      :(Data.NamedDeviceTCellTuple))
+    kernel = substitute(kernel, :(Data.NamedTCellArrayTuple), :(Data.NamedDeviceTCellArrayTuple))
+    kernel = substitute(kernel, :(Data.TArrayCollection),     :(Data.DeviceTArrayCollection))
+    kernel = substitute(kernel, :(Data.TCellCollection),      :(Data.DeviceTCellCollection))
+    kernel = substitute(kernel, :(Data.TCellArrayCollection), :(Data.DeviceTCellArrayCollection))
+    return kernel
+end
+
+
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
@@ -310,6 +340,15 @@ function cast(expr::Expr, f::Symbol, type::DataType)
     end
 end
 
+function inexpr_walk(expr::Expr, e::Expr)
+    found = false
+    postwalk(expr) do x
+        if (isa(x,Expr) && x==e) found = true end
+        return x
+    end
+    return found
+end
+
 function inexpr_walk(expr::Expr, s::Symbol; match_only_head=false)
     found = false
     postwalk(expr) do x
@@ -322,6 +361,7 @@ end
 
 inexpr_walk(expr::Symbol, s::Symbol; match_only_head=false) = (s == expr)
 inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
+inexpr_walk(expr,         e::Expr)                          = false
 
 Base.unquoted(s::Symbol) = s
 
