@@ -86,6 +86,8 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 - [`@d_ya`](@ref)
 - [`@d_xi`](@ref)
 - [`@d_yi`](@ref)
+- [`@d2_xa`](@ref)
+- [`@d2_ya`](@ref)
 - [`@d2_xi`](@ref)
 - [`@d2_yi`](@ref)
 
@@ -116,7 +118,7 @@ Provides macros for 2-D finite differences computations. The dimensions x and y 
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FiniteDifferences2D
-export @d_xa, @d_ya, @d_xi, @d_yi, @d2_xi, @d2_yi
+export @d_xa, @d_ya, @d_xi, @d_yi, @d2_xa, @d2_ya, @d2_xi, @d2_yi
 export @all, @inn, @inn_x, @inn_y
 export @av, @av_xa, @av_ya, @av_xi, @av_yi
 export @harm, @harm_xa, @harm_ya, @harm_xi, @harm_yi
@@ -127,6 +129,8 @@ export @within
 @doc "`@d_ya(A)`: Compute differences between adjacent elements of `A` along the dimension y." :(@d_ya)
 @doc "`@d_xi(A)`: Compute differences between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@d_xa(A))`." :(@d_xi)
 @doc "`@d_yi(A)`: Compute differences between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@d_ya(A))`." :(@d_yi)
+@doc "`@d2_xa(A)`: Compute the 2nd order differences between adjacent elements of `A` along the dimension x." :(@d2_xa)
+@doc "`@d2_ya(A)`: Compute the 2nd order differences between adjacent elements of `A` along the dimension y." :(@d2_ya)
 @doc "`@d2_xi(A)`: Compute the 2nd order differences between adjacent elements of `A` along the dimension x and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_y(@d2_xa(A))`." :(@d2_xi)
 @doc "`@d2_yi(A)`: Compute the 2nd order differences between adjacent elements of `A` along the dimension y and select the inner elements of `A` in the remaining dimension. Corresponds to `@inn_x(@d2_ya(A))`." :(@d2_yi)
 @doc "`@all(A)`: Select all elements of `A`. Corresponds to `A[:,:]`." :(@all)
@@ -155,6 +159,8 @@ macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ix+1,$iy  ] - $A[$ix  ,$iy ] )) e
 macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy+1] - $A[$ix  ,$iy ] )) end
 macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ix+1,$iyi ] - $A[$ix  ,$iyi] )) end
 macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi ,$iy+1] - $A[$ixi ,$iy ] )) end
+macro    d2_xa(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iy   ] - $A[$ixi ,$iy ])  -  ($A[$ixi ,$iy ] - $A[$ixi-1,$iy   ]) )) end
+macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ix   ,$iyi+1] - $A[$ix  ,$iyi])  -  ($A[$ix  ,$iyi] - $A[$ix   ,$iyi-1]) )) end
 macro    d2_xi(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi-1,$iyi  ]) )) end
 macro    d2_yi(A)  @expandargs(A);  esc(:( ($A[$ixi  ,$iyi+1] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi  ,$iyi-1]) )) end
 macro      all(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy  ] )) end
