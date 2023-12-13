@@ -159,8 +159,8 @@ macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ix+1,$iy  ] - $A[$ix  ,$iy ] )) e
 macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy+1] - $A[$ix  ,$iy ] )) end
 macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ix+1,$iyi ] - $A[$ix  ,$iyi] )) end
 macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi ,$iy+1] - $A[$ixi ,$iy ] )) end
-macro    d2_xa(A)  @expandargs(A);  esc(:( ($A[$ix+1,$iy  ] - $A[$ix ,$iy])  -  ($A[$ix ,$iy] - $A[$ix-1,$iy  ]) )) end
-macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ix  ,$iy+1] - $A[$ix ,$iy])  -  ($A[$ix ,$iy] - $A[$ix  ,$iy-1]) )) end
+macro    d2_xa(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iy   ] - $A[$ixi ,$iy ])  -  ($A[$ixi ,$iy ] - $A[$ixi-1,$iy   ]) )) end
+macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ix   ,$iyi+1] - $A[$ix  ,$iyi])  -  ($A[$ix  ,$iyi] - $A[$ix   ,$iyi-1]) )) end
 macro    d2_xi(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi-1,$iyi  ]) )) end
 macro    d2_yi(A)  @expandargs(A);  esc(:( ($A[$ixi  ,$iyi+1] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi  ,$iyi-1]) )) end
 macro      all(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy  ] )) end
