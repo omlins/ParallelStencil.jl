@@ -1,4 +1,4 @@
-module CUDAExt
+module Diffusion3D_CUDAExt
     using Diffusion3D
     import CUDA
     using ParallelStencil

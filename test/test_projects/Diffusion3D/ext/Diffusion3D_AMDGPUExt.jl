@@ -1,4 +1,4 @@
-module AMDGPUExt
+module Diffusion3D_AMDGPUExt
     using Diffusion3D
     import AMDGPU
     using ParallelStencil
