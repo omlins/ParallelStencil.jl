@@ -12,8 +12,8 @@ function reset_parallel_kernel(caller::Module)
         data_module = Data_none()
         @eval(caller, $data_module)
     end
-    set_initialized(false)
-    set_package(PKG_NONE)
-    set_numbertype(NUMBERTYPE_NONE)
+    set_initialized(caller, false)
+    set_package(caller, PKG_NONE)
+    set_numbertype(caller, NUMBERTYPE_NONE)
     return nothing
 end
