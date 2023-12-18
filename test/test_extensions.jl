@@ -10,11 +10,12 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 exename = joinpath(Sys.BINDIR, Base.julia_exename())
+const TEST_PROJECTS = ["Diffusion"] # ["Diffusion3D_minimal", "Diffusion3D", "Diffusion"]
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
-        @testset "extensions" begin
-            test_script = joinpath(@__DIR__, "test_projects", "Diffusion3D", "test", "localtest_diffusion_$(nameof($package)).jl")
+        @testset "extensions ($project)" for project in TEST_PROJECTS
+            test_script = joinpath(@__DIR__, "test_projects", project, "test", "localtest_diffusion_$(nameof($package)).jl")
             was_success = true
             try
                 run(`$exename -O3 --startup-file=no --check-bounds=no $test_script`)
