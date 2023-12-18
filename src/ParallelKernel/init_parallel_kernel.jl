@@ -11,7 +11,7 @@ Initialize the package ParallelKernel, giving access to its main functionality. 
 See also: [`Data`](@ref)
 """
 macro init_parallel_kernel(args...)
-    check_already_initialized()
+    check_already_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     if (length(args) > 3)            @ArgumentError("too many arguments.")
     elseif (0 < length(posargs) < 2) @ArgumentError("there must be either two or zero positional arguments.")
@@ -55,34 +55,34 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     end
     @eval(caller, $pkg_import_cmd)
     @eval(caller, $ad_import_cmd)
-    set_package(package)
-    set_numbertype(numbertype)
-    set_inbounds(inbounds)
-    set_initialized(true)
+    set_package(caller, package)
+    set_numbertype(caller, numbertype)
+    set_inbounds(caller, inbounds)
+    set_initialized(caller, true)
     return nothing
 end
 
 
-macro is_initialized() is_initialized() end
-macro get_package() get_package() end
-macro get_numbertype() get_numbertype() end
-macro get_inbounds() get_inbounds() end
+macro is_initialized() is_initialized(__module__) end
+macro get_package() get_package(__module__) end
+macro get_numbertype() get_numbertype(__module__) end
+macro get_inbounds() get_inbounds(__module__) end
 let
     global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, check_initialized, check_already_initialized
-    _is_initialized::Bool       = false
-    package::Symbol             = PKG_NONE
-    numbertype::DataType        = NUMBERTYPE_NONE
-    inbounds::Bool              = false
-    set_initialized(flag::Bool) = (_is_initialized = flag)
-    is_initialized()            = _is_initialized
-    set_package(pkg::Symbol)    = (package = pkg)
-    get_package()               = package
-    set_numbertype(T::DataType) = (numbertype = T)
-    get_numbertype()            = numbertype
-    set_inbounds(flag::Bool)    = (inbounds = flag)
-    get_inbounds()              = inbounds
-    check_initialized()         = if !is_initialized() @NotInitializedError("no macro or function of the module can be called before @init_parallel_kernel.") end
-    check_already_initialized() = if is_initialized() @IncoherentCallError("ParallelKernel has already been initialized.") end
+    _is_initialized::Dict{Module, Bool}         = Dict{Module, Bool}()
+    package::Dict{Module, Symbol}               = Dict{Module, Symbol}()
+    numbertype::Dict{Module, DataType}          = Dict{Module, DataType}()
+    inbounds::Dict{Module, Bool}                = Dict{Module, Bool}()
+    set_initialized(caller::Module, flag::Bool) = (_is_initialized[caller] = flag)
+    is_initialized(caller::Module)              = haskey(_is_initialized, caller) && _is_initialized[caller]
+    set_package(caller::Module, pkg::Symbol)    = (package[caller] = pkg)
+    get_package(caller::Module)                 =  package[caller]
+    set_numbertype(caller::Module, T::DataType) = (numbertype[caller] = T)
+    get_numbertype(caller::Module)              =  numbertype[caller]
+    set_inbounds(caller::Module, flag::Bool)    = (inbounds[caller] = flag)
+    get_inbounds(caller::Module)                =  inbounds[caller]
+    check_initialized(caller::Module)           = if !is_initialized(caller) @NotInitializedError("no ParallelKernel macro or function can be called before @init_parallel_kernel in each module (missing call in $caller).") end
+    check_already_initialized(caller::Module)   = if is_initialized(caller) @IncoherentCallError("ParallelKernel has already been initialized for the module $caller.") end
 end
 
 function extract_posargs_init(caller::Module, package, numbertype)  # NOTE: this function takes not only symbols: numbertype can be anything that evaluates to a type in the caller and for package will be checked wether it is a symbol in check_package and a proper error message given if not.
