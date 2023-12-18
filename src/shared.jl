@@ -94,5 +94,5 @@ end
 
 ## FUNCTIONS FOR ERROR HANDLING
 
-check_ndims(ndims)     = ( if !isa(ndims, Integer) || !(ndims in SUPPORTED_NDIMS) @ArgumentError("$ERRMSG_CHECK_NDIMS (obtained: $ndims)." ) end )
+check_ndims(ndims)   = ( if !isa(ndims, Integer) || !(ndims in SUPPORTED_NDIMS) @ArgumentError("$ERRMSG_CHECK_NDIMS (obtained: $ndims)." ) end )
 check_memopt(memopt) = ( if !isa(memopt, Bool) @ArgumentError("$ERRMSG_CHECK_MEMOPT (obtained: $memopt)." ) end )
