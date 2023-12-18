@@ -19,10 +19,10 @@ See also: [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref),
 """
 @doc ZEROS_DOC
 macro zeros(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros")
-    esc(_zeros(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
 
@@ -47,10 +47,10 @@ See also: [`@zeros`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 """
 @doc ONES_DOC
 macro ones(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones")
-    esc(_ones(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
 ##
@@ -74,10 +74,10 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 """
 @doc RAND_DOC
 macro rand(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand")
-    esc(_rand(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
 
@@ -97,10 +97,10 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), 
 """
 @doc FALSES_DOC
 macro falses(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@falses")
-    esc(_falses(posargs...; celldims=celldims, blocklength=blocklength))
+    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength))
 end
 
 
@@ -120,10 +120,10 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref),
 """
 @doc TRUES_DOC
 macro trues(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues")
-    esc(_trues(posargs...; celldims=celldims, blocklength=blocklength))
+    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength))
 end
 
 
@@ -148,10 +148,10 @@ See also: [`@fill!`](@ref), [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), 
 """
 @doc FILL_DOC
 macro fill(args...)
-    check_initialized()
+    check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
     eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@fill")
-    esc(_fill(posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    esc(_fill(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
 
@@ -169,7 +169,7 @@ Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compat
 See also: [`@fill`](@ref)
 """
 @doc FILL!_DOC
-macro fill!(args...) check_initialized(); esc(_fill!(args...)); end
+macro fill!(args...) check_initialized(__module__); esc(_fill!(__module__, args...)); end
 
 
 ##
@@ -216,37 +216,37 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref),
 """
 @doc CELLTYPE_DOC
 macro CellType(args...)
-    check_initialized()
+    check_initialized(__module__)
     checkargs_CellType(args...)
     posargs, kwargs_expr = split_args(args)
     eltype, fieldnames, dims, parametric = extract_kwargvalues(kwargs_expr, (:eltype, :fieldnames, :dims, :parametric), "@CellType")
-    esc(_CellType(posargs...; eltype=eltype, fieldnames=fieldnames, dims=dims, parametric=parametric))
+    esc(_CellType(__module__, posargs...; eltype=eltype, fieldnames=fieldnames, dims=dims, parametric=parametric))
 end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro zeros_cuda(args...)     check_initialized(); esc(_zeros(args...; package=PKG_CUDA)); end
-macro ones_cuda(args...)      check_initialized(); esc(_ones(args...; package=PKG_CUDA)); end
-macro rand_cuda(args...)      check_initialized(); esc(_rand(args...; package=PKG_CUDA)); end
-macro falses_cuda(args...)    check_initialized(); esc(_falses(args...; package=PKG_CUDA)); end
-macro trues_cuda(args...)     check_initialized(); esc(_trues(args...; package=PKG_CUDA)); end
-macro fill_cuda(args...)      check_initialized(); esc(_fill(args...; package=PKG_CUDA)); end
-macro fill!_cuda(args...)     check_initialized(); esc(_fill!(args...; package=PKG_CUDA)); end
-macro zeros_amdgpu(args...)   check_initialized(); esc(_zeros(args...; package=PKG_AMDGPU)); end
-macro ones_amdgpu(args...)    check_initialized(); esc(_ones(args...; package=PKG_AMDGPU)); end
-macro rand_amdgpu(args...)    check_initialized(); esc(_rand(args...; package=PKG_AMDGPU)); end
-macro falses_amdgpu(args...)  check_initialized(); esc(_falses(args...; package=PKG_AMDGPU)); end
-macro trues_amdgpu(args...)   check_initialized(); esc(_trues(args...; package=PKG_AMDGPU)); end
-macro fill_amdgpu(args...)    check_initialized(); esc(_fill(args...; package=PKG_AMDGPU)); end
-macro fill!_amdgpu(args...)   check_initialized(); esc(_fill!(args...; package=PKG_AMDGPU)); end
-macro zeros_threads(args...)  check_initialized(); esc(_zeros(args...; package=PKG_THREADS)); end
-macro ones_threads(args...)   check_initialized(); esc(_ones(args...; package=PKG_THREADS)); end
-macro rand_threads(args...)   check_initialized(); esc(_rand(args...; package=PKG_THREADS)); end
-macro falses_threads(args...) check_initialized(); esc(_falses(args...; package=PKG_THREADS)); end
-macro trues_threads(args...)  check_initialized(); esc(_trues(args...; package=PKG_THREADS)); end
-macro fill_threads(args...)   check_initialized(); esc(_fill(args...; package=PKG_THREADS)); end
-macro fill!_threads(args...)  check_initialized(); esc(_fill!(args...; package=PKG_THREADS)); end
+macro zeros_cuda(args...)     check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_CUDA)); end
+macro ones_cuda(args...)      check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_CUDA)); end
+macro rand_cuda(args...)      check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_CUDA)); end
+macro falses_cuda(args...)    check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_CUDA)); end
+macro trues_cuda(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_CUDA)); end
+macro fill_cuda(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_CUDA)); end
+macro fill!_cuda(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_CUDA)); end
+macro zeros_amdgpu(args...)   check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_AMDGPU)); end
+macro ones_amdgpu(args...)    check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_AMDGPU)); end
+macro rand_amdgpu(args...)    check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_AMDGPU)); end
+macro falses_amdgpu(args...)  check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_AMDGPU)); end
+macro trues_amdgpu(args...)   check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
+macro fill_amdgpu(args...)    check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
+macro fill!_amdgpu(args...)   check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
+macro zeros_threads(args...)  check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
+macro ones_threads(args...)   check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
+macro rand_threads(args...)   check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
+macro falses_threads(args...) check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_THREADS)); end
+macro trues_threads(args...)  check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_THREADS)); end
+macro fill_threads(args...)   check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_THREADS)); end
+macro fill!_threads(args...)  check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
@@ -262,8 +262,8 @@ end
 
 ## ALLOCATOR FUNCTIONS
 
-function _zeros(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(eltype, celldims, celltype)
+function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
@@ -272,8 +272,8 @@ function _zeros(args...; eltype=nothing, celldims=nothing, celltype=nothing, blo
     end
 end
 
-function _ones(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(eltype, celldims, celltype)
+function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
@@ -282,8 +282,8 @@ function _ones(args...; eltype=nothing, celldims=nothing, celltype=nothing, bloc
     end
 end
 
-function _rand(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(eltype, celldims, celltype)
+function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
@@ -292,8 +292,8 @@ function _rand(args...; eltype=nothing, celldims=nothing, celltype=nothing, bloc
     end
 end
 
-function _falses(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(Bool, celldims, nothing)
+function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
@@ -302,8 +302,8 @@ function _falses(args...; celldims=nothing, blocklength=nothing, package::Symbol
     end
 end
 
-function _trues(args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(Bool, celldims, nothing)
+function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
@@ -312,8 +312,8 @@ function _trues(args...; celldims=nothing, blocklength=nothing, package::Symbol=
     end
 end
 
-function _fill(args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package())
-    celltype    = determine_celltype(eltype, celldims, celltype)
+function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+    celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
@@ -322,7 +322,7 @@ function _fill(args...; eltype=nothing, celldims=nothing, celltype=nothing, bloc
     end
 end
 
-function _fill!(args...; package::Symbol=get_package())
+function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
     elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
@@ -330,7 +330,7 @@ function _fill!(args...; package::Symbol=get_package())
     end
 end
 
-function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, parametric=nothing)
+function _CellType(caller::Module, name; eltype=nothing, fieldnames=nothing, dims=nothing, parametric=nothing)
     if isnothing(fieldnames) @ArgumentError("@CellType: the keyword argument 'fieldnames' is mandatory.") end
     fieldnames = parse_kwargvalues(fieldnames)
     if isnothing(dims)
@@ -340,7 +340,7 @@ function _CellType(name; eltype=nothing, fieldnames=nothing, dims=nothing, param
     end
     if isnothing(parametric) parametric=false end
     if isnothing(eltype)
-        eltype = get_numbertype()
+        eltype = get_numbertype(caller)
         if (!parametric && eltype == NUMBERTYPE_NONE) @ArgumentError("@CellType: the keyword argument 'eltype' is mandatory when no default is set (and the keyword argument `parametric=true` not set).") end
     else
         if (parametric) @ArgumentError("@CellType: the keyword argument 'eltype' is invalid when `parametric=true` is set.") end
@@ -377,12 +377,12 @@ function parse_kwargvalues(arg)
     end
 end
 
-function determine_celltype(eltype, celldims, celltype)
+function determine_celltype(caller::Module, eltype, celldims, celltype)
     if !isnothing(celltype)
         if (!isnothing(celldims) || !isnothing(eltype)) @ArgumentError("the keyword argument 'celltype' is incompatible with the other keyword arguments.") end
     else
         if isnothing(eltype)
-            eltype = get_numbertype()
+            eltype = get_numbertype(caller)
             if (eltype == NUMBERTYPE_NONE) @ArgumentError("the keyword argument 'eltype' is mandatory in @zeros, @ones, @rand and @fill when no default is set.") end
         end
         if !isnothing(celldims) celltype = :(ParallelStencil.ParallelKernel.SArray{Tuple{$celldims...}, $eltype, length($celldims), prod($celldims)})
