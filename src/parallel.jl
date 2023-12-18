@@ -49,34 +49,34 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_DOC
-macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
+macro parallel(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
 
 
 const PARALLEL_INDICES_DOC = """
 $(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil")) Using splat syntax for the `indices` (e.g., `@parallel_indices (I...)`) enables to generate a tuple of parallel indices (`I` in this example) of length `ndims` selected with [`@init_parallel_stencil`](@ref). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`).
 """
 @doc PARALLEL_INDICES_DOC
-macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
+macro parallel_indices(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
 
 
 const PARALLEL_ASYNC_DOC = """
 $(replace(ParallelKernel.PARALLEL_ASYNC_DOC, "@init_parallel_kernel" => "@init_parallel_stencil"))
 """
 @doc PARALLEL_ASYNC_DOC
-macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...)); end
+macro parallel_async(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...)); end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)          check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)  check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)          check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_cuda(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)  check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_async_cuda(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)    check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
@@ -105,14 +105,14 @@ end
 
 ## GATEWAY FUNCTIONS
 
-parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(source, caller, args...; package=package, async=true)
+parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller)) = parallel(source, caller, args...; package=package, async=true)
 
-function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
         kwargs     = extract_kwargs(caller, kwargs_expr, (:inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
-        numbertype = get_numbertype()
-        ndims      = get_ndims()
+        numbertype = get_numbertype(caller)
+        ndims      = get_ndims(caller)
         if !haskey(kwargs, :metadata_module)
             get_name(kernelarg)
             metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
@@ -123,7 +123,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
-        memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
@@ -140,10 +140,10 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
 end
 
 
-function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
+function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     is_parallel_kernel = false
-    numbertype = get_numbertype()
-    ndims      = get_ndims()
+    numbertype = get_numbertype(caller)
+    ndims      = get_ndims(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs = extract_kwargs(caller, kwargs_expr, (:inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     indices_expr = posargs[1]
@@ -156,8 +156,8 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
         else
             metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
         end
-        inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds()
-        memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+        inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+        memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
         if memopt
             quote
                 $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
@@ -182,7 +182,7 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     return :(@parallel_indices $indices_expr $(kwargs...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; inbounds::Bool=get_inbounds(), memopt::Bool=get_memopt(), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; inbounds::Bool=get_inbounds(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
@@ -197,8 +197,8 @@ end
 
 function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr; kwargs::NamedTuple)
     is_parallel_kernel = true
-    inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds()
-    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt()
+    inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
     body = get_body(kernel)
     body = remove_return(body)
@@ -269,7 +269,7 @@ function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernel
     maxsize         = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
     nthreads        = :( ParallelStencil.compute_nthreads_memopt($maxsize, $loopdim, $stencilranges) )
     nblocks         = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    numbertype      = get_numbertype() # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
+    numbertype      = get_numbertype(caller) # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
     dim1 = :(($loopdim==3) ? 1 : ($loopdim==2) ? 1 : 2) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
     dim2 = :(($loopdim==3) ? 2 : ($loopdim==2) ? 3 : 3) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
     A = gensym("A")
