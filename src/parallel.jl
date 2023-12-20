@@ -2,13 +2,14 @@ import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, rem
 
 const PARALLEL_DOC = """
     @parallel kernel
-    @parallel inbounds=... memopt=... kernel
+    @parallel inbounds=... memopt=... ndims=... kernel
 
 Declare the `kernel` parallel and containing stencil computations be performed with one of the submodules `ParallelStencil.FiniteDifferences{1D|2D|3D}` (or with a compatible custom module or set of macros).
 
 # Optional keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
 - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
+- `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3. A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref).
 
 See also: [`@init_parallel_stencil`](@ref)
 
@@ -110,16 +111,15 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs     = extract_kwargs(caller, kwargs_expr, (:inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        kwargs     = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
         numbertype = get_numbertype(caller)
-        ndims      = get_ndims(caller)
         if !haskey(kwargs, :metadata_module)
             get_name(kernelarg)
             metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
         else
             metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
         end
-        parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, ndims, kernelarg, posargs...; kwargs)
+        parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
@@ -143,12 +143,11 @@ end
 function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     is_parallel_kernel = false
     numbertype = get_numbertype(caller)
-    ndims      = get_ndims(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     indices_expr = posargs[1]
     if is_splatarg(indices_expr)
-        parallel_indices_splatarg(caller, package, ndims, posargs..., kernelarg; kwargs...)
+        parallel_indices_splatarg(caller, package, kwargs_expr, posargs..., kernelarg; kwargs)
     else
         if !haskey(kwargs, :metadata_module)
             get_name(kernelarg)
@@ -173,16 +172,18 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integer, alias_indices::Expr, kernel::Expr; kwargs...)
+function parallel_indices_splatarg(caller::Module, package::Symbol, kwargs_expr, alias_indices::Expr, kernel::Expr; kwargs::NamedTuple)
     if !@capture(alias_indices, (I_...)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
+    ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
+    if (ndims < 1 || ndims > 3) @ArgumentError("@parallel_indices: argument 'ndims' is required for the syntax `@parallel_indices I...`` and is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     indices = get_indices_expr(ndims).args
     indices_expr = Expr(:tuple, indices...)
     kernel = macroexpand(caller, kernel)
     kernel = substitute(kernel, I, indices_expr)
-    return :(@parallel_indices $indices_expr $(kwargs...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
+    return :(@parallel_indices $indices_expr $(kwargs_expr...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; inbounds::Bool=get_inbounds(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
@@ -195,8 +196,10 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) inbounds=$inbounds memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, kernel::Expr; kwargs::NamedTuple)
+function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, numbertype::DataType, kernel::Expr; kwargs::NamedTuple)
     is_parallel_kernel = true
+    ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
+    if (ndims < 1 || ndims > 3) @ArgumentError("@parallel: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
