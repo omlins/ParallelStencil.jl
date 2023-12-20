@@ -7,7 +7,7 @@ Pkg.instantiate()
 using Diffusion
 @test diffusion2D(CPUBackend) <: Array
 @test diffusion3D(CPUBackend, Float32) <: Array
-B = zeroes(4, 4)
+B = zeros(4, 4)
 A = ones(4, 4)
 memcopy!(B, A)
 @test all(B .== A)
