@@ -870,25 +870,25 @@ import ParallelStencil.@gorgeousexpand
                 @reset_parallel_stencil()
             end;
         end;
-        @testset "4. parallel macros (numbertype ommited)" begin
+        @testset "4. parallel macros (numbertype and ndims ommited)" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3)
+            @init_parallel_stencil(package = $package)
             @require @is_initialized
             @testset "Data.Array{T} to Data.DeviceArray{T}" begin
                 @static if @isgpu($package)
-                    expansion = @prettystring(1, @parallel f(A::Data.Array{T}, B::Data.Array{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    expansion = @prettystring(1, @parallel ndims=3 f(A::Data.Array{T}, B::Data.Array{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
                 end
             end;
             @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
                 @static if @isgpu($package)
-                    expansion = @prettystring(1, @parallel f(A::Data.Cell{T}, B::Data.Cell{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    expansion = @prettystring(1, @parallel ndims=2 f(A::Data.Cell{T}, B::Data.Cell{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
                 end
             end;
             @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
                 @static if @isgpu($package)
-                    expansion = @prettystring(1, @parallel f(A::Data.CellArray{T}, B::Data.CellArray{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                    expansion = @prettystring(1, @parallel ndims=1 f(A::Data.CellArray{T}, B::Data.CellArray{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
             end;
