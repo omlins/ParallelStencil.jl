@@ -29,7 +29,7 @@ Initialize the package ParallelStencil, giving access to its main functionality.
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA, AMDGPU or Threads).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
-- `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels (1, 2 or 3).
+- `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (overwritable in each kernel definition).
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
 See also: [`Data`](@ref)
@@ -43,9 +43,8 @@ macro init_parallel_stencil(args...)
     if (length(posargs) == 3) package, numbertype_val, ndims_val = extract_posargs_init(__module__, posargs...)
     else                      package, numbertype_val, ndims_val = extract_kwargs_init(__module__, kwargs)
     end
-    inbounds_val, memopt_val = extract_kwargs_optional(__module__, kwargs)
+    inbounds_val, memopt_val = extract_kwargs_nopos(__module__, kwargs)
     if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
-    if (ndims == NDIMS_NONE) @ArgumentError("the ndims argument cannot be ommited.") end #TODO: this error message will disappear, once the ndims can be defined at runtime.
     check_already_initialized(__module__, package, numbertype_val, ndims_val, inbounds_val, memopt_val)
     esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, inbounds_val, memopt_val))
 end
@@ -114,13 +113,13 @@ end
 function extract_kwargs_init(caller::Module, kwargs::Dict)
     package, numbertype_val = ParallelKernel.extract_kwargs_init(caller, kwargs)
     if (:ndims in keys(kwargs)) ndims_val = eval_arg(caller, kwargs[:ndims]); check_ndims(ndims_val)
-    else                        ndims_val = NUMBERTYPE_NONE
+    else                        ndims_val = NDIMS_NONE
     end
     return package, numbertype_val, ndims_val
 end
 
-function extract_kwargs_optional(caller::Module, kwargs::Dict)
-    inbounds_val = ParallelKernel.extract_kwargs_optional(caller, kwargs)
+function extract_kwargs_nopos(caller::Module, kwargs::Dict)
+    inbounds_val = ParallelKernel.extract_kwargs_nopos(caller, kwargs)
     if (:memopt in keys(kwargs)) memopt_val = eval_arg(caller, kwargs[:memopt]); check_memopt(memopt_val)
     else                         memopt_val = false
     end
