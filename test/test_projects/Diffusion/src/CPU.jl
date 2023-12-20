@@ -21,7 +21,7 @@ module CPU
         using Diffusion
         using ParallelStencil
         @init_parallel_stencil(package=Threads)
-        # Diffusion.memcopy!(A::Data.Array, B::Data.Array) = (@info "using CPU backend"; memcopy!(A, B))
+        Diffusion.memcopy!(B::Data.Array, A::Data.Array) = (@info "using CPU backend"; @parallel memcopy!(B, A))
         include(joinpath(@__DIR__, "..", "src", "backends", "memcopyXD.jl"))
     end
 end
