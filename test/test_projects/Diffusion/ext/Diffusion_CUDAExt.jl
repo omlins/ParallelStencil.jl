@@ -24,7 +24,7 @@ module Diffusion_CUDAExt
         import CUDA
         using ParallelStencil
         @init_parallel_stencil(package=CUDA)
-        # Diffusion.memcopy!(A::Data.Array, B::Data.Array) = (@info "using CUDA backend"; memcopy!(A, B))
+        Diffusion.memcopy!(B::Data.Array, A::Data.Array) = (@info "using CUDA backend"; @parallel memcopy!(B, A))
         include(joinpath(@__DIR__, "..", "src", "backends", "memcopyXD.jl"))
     end
 end
