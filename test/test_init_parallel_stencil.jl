@@ -46,14 +46,14 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. initialization of ParallelStencil without numbertype, with memopt, with inbounds" begin
+        @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3, inbounds = true, memopt = true)
+            @init_parallel_stencil(package = $package, inbounds = true, memopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
-                @test @get_ndims() == 3
+                @test @get_ndims() == NDIMS_NONE
                 @test @get_memopt() == true
                 @test @get_inbounds() == true
             end;
