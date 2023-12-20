@@ -88,10 +88,10 @@ Hide the communication behind the computation within the code `block`.
 See also: [`@parallel`](@ref)
 """
 @doc HIDE_COMMUNICATION_DOC
-macro hide_communication(args...) check_initialized(); checkargs_hide_communication(args...); esc(hide_communication(__module__, args...)); end
+macro hide_communication(args...) check_initialized(__module__); checkargs_hide_communication(args...); esc(hide_communication(__module__, args...)); end
 
-macro get_priority_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_priority_stream(args...)); end
-macro get_stream(args...) check_initialized(); checkargs_get_stream(args...); esc(get_stream(args...)); end
+macro get_priority_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_priority_stream(__module__, args...)); end
+macro get_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_stream(__module__, args...)); end
 
 
 ## ARGUMENT CHECKS
@@ -109,7 +109,7 @@ end
 
 ## GATEWAY FUNCTIONS
 
-function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     posargs, kwargs_expr = split_args(args)
     kwargs, ~ = extract_kwargs(caller, kwargs_expr, (:computation_calls,), "@hide_communication", false; eval_args=(:computation_calls,))
     if     isgpu(package)           hide_communication_gpu(posargs...; kwargs...)
@@ -118,14 +118,14 @@ function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...;
     end
 end
 
-function get_priority_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
 
-function get_stream(args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package())
+function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    get_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")

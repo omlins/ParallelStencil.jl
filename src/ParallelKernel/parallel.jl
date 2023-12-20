@@ -32,7 +32,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_DOC
-macro parallel(args...) check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...)); end
+macro parallel(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...)); end
 
 
 ##
@@ -46,7 +46,7 @@ const PARALLEL_INDICES_DOC = """
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 """
 @doc PARALLEL_INDICES_DOC
-macro parallel_indices(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
+macro parallel_indices(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end
 
 
 ##
@@ -69,7 +69,7 @@ Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`]
 See also: [`@synchronize`](@ref), [`@parallel`](@ref)
 """
 @doc PARALLEL_ASYNC_DOC
-macro parallel_async(args...) check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...)); end
+macro parallel_async(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...)); end
 
 
 ##
@@ -81,23 +81,23 @@ Synchronize the GPU/CPU.
 See also: [`@parallel_async`](@ref)
 """
 @doc SYNCHRONIZE_DOC
-macro synchronize(args...) check_initialized(); esc(synchronize(args...)); end
+macro synchronize(args...) check_initialized(__module__); esc(synchronize(__module__, args...)); end
 
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)            check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)          check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...)         check_initialized(); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)  check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)    check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_async_threads(args...)   check_initialized(); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
-macro synchronize_cuda(args...)         check_initialized(); esc(synchronize(args...; package=PKG_CUDA)); end
-macro synchronize_amdgpu(args...)       check_initialized(); esc(synchronize(args...; package=PKG_AMDGPU)); end
-macro synchronize_threads(args...)      check_initialized(); esc(synchronize(args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)          check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_cuda(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)  check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
+macro parallel_async_cuda(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)    check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
+macro synchronize_cuda(args...)         check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_CUDA)); end
+macro synchronize_amdgpu(args...)       check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_AMDGPU)); end
+macro synchronize_threads(args...)      check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_THREADS)); end
 
 
 ## ARGUMENT CHECKS
@@ -122,9 +122,9 @@ end
 
 ## GATEWAY FUNCTIONS
 
-parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package()) = parallel(caller, args...; package=package, async=true)
+parallel_async(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller)) = parallel(caller, args...; package=package, async=true)
 
-function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(), async::Bool=false)
+function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args)
     kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:stream, :shmem, :launch, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:launch,))
     launch          = haskey(kwargs, :launch) ? kwargs.launch : true
@@ -141,15 +141,15 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     end
 end
 
-function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package())
-    numbertype = get_numbertype()
+function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
+    numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds,), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
-    inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds()
+    inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     parallel_kernel(caller, package, numbertype, inbounds, posargs..., kernelarg)
 end
 
-function synchronize(args::Union{Symbol,Expr}...; package::Symbol=get_package())
+function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    synchronize_cuda(args...)
     elseif (package == PKG_AMDGPU)  synchronize_amdgpu(args...)
     elseif (package == PKG_THREADS) synchronize_threads(args...)

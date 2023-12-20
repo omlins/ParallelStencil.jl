@@ -1,15 +1,15 @@
 #TODO: add ParallelStencil.ParallelKernel. in front of all kernel lang in macros! Later: generalize more for z?
 
 ##
-macro loop(args...) check_initialized(); checkargs_loop(args...); esc(loop(args...)); end
+macro loop(args...) check_initialized(__module__); checkargs_loop(args...); esc(loop(__module__, args...)); end
 
 
 ##
-macro memopt(args...) check_initialized(); checkargs_memopt(args...); esc(memopt(args[1], __module__, args[2:end]...)); end
+macro memopt(args...) check_initialized(__module__); checkargs_memopt(args...); esc(memopt(args[1], __module__, args[2:end]...)); end
 
 
 ##
-macro shortif(args...) check_initialized(); checktwoargs(args...); esc(shortif(args...)); end
+macro shortif(args...) check_initialized(__module__); checktwoargs(args...); esc(shortif(__module__, args...)); end
 
 
 ## ARGUMENT CHECKS
@@ -37,7 +37,7 @@ end
 
 ## FUNCTIONS FOR PERFORMANCE OPTIMSATIONS
 
-function loop(index::Symbol, loopdim::Integer, loopsize, body; package::Symbol=get_package())
+function loop(caller::Module, index::Symbol, loopdim::Integer, loopsize, body; package::Symbol=get_package(caller))
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     dimvar = (:x,:y,:z)[loopdim]
     loopoffset = gensym_world("loopoffset", @__MODULE__)
@@ -53,8 +53,8 @@ end
 
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
-# In order to be able to read the data into shared memory in only two statements, the number of threats must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package())
+# In order to be able to read the data into shared memory in only two statements, the number of threads must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package(caller))
     optvars        = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     indices        = Tuple(extract_tuple(indices))
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
@@ -465,7 +465,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
 end
 
 
-function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package())
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package(caller))
     loopdim            = isa(indices,Expr) ? length(indices.args) : 1
     loopsize           = LOOPSIZE
     optranges          = nothing
@@ -475,7 +475,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
 end
 
 
-function shortif(else_val, if_expr; package::Symbol=get_package())
+function shortif(caller::Module, else_val, if_expr; package::Symbol=get_package(caller))
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     @capture(if_expr, if condition_ body_ end) || @ArgumentError("@shortif: the second argument must be an if statement.")
     @capture(body, lhs_ = rhs_) || @ArgumentError("@shortif: the if statement body must contain a assignement.")
@@ -1047,7 +1047,7 @@ end
 Base.sort(keys::T; kwargs...) where T<:Base.AbstractSet = sort([keys...]; kwargs...)
 
 
-# macro unroll(args...) check_initialized(); checkargs_unroll(args...); esc(unroll(args...)); end
+# macro unroll(args...) check_initialized(__module__); checkargs_unroll(args...); esc(unroll(args...)); end
 
 # function checkargs_unroll(args...)
 #     if (length(args) != 1) @ArgumentError("wrong number of arguments.") end

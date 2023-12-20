@@ -4,5 +4,10 @@ using Test
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 Pkg.instantiate()
-using Diffusion3D_CUDA
-@test Diffusion3D_CUDA.diffusion3D()
+using Diffusion
+@test diffusion2D(CPUBackend) <: Array
+@test diffusion3D(CPUBackend, Float32) <: Array
+B = zeros(4, 4)
+A = ones(4, 4)
+memcopy!(B, A)
+@test all(B .== A)

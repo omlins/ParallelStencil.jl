@@ -429,13 +429,13 @@ end
             @init_parallel_kernel(package = $package)
             @require @is_initialized
             @testset "arguments @CellType" begin
-                @test_throws ArgumentError checkargs_CellType();                                                                       # Error: isempty(args)
-                @test_throws ArgumentError checkargs_CellType(:SymmetricTensor2D, :(xx, yy, zz));                                      # Error: length(posargs) != 1
-                @test_throws ArgumentError checkargs_CellType(:SymmetricTensor2D);                                                     # Error: length(kwargs_expr) < 1
+                @test_throws ArgumentError checkargs_CellType();                                                                                       # Error: isempty(args)
+                @test_throws ArgumentError checkargs_CellType(:SymmetricTensor2D, :(xx, yy, zz));                                                      # Error: length(posargs) != 1
+                @test_throws ArgumentError checkargs_CellType(:SymmetricTensor2D);                                                                     # Error: length(kwargs_expr) < 1
                 @test_throws ArgumentError checkargs_CellType(:SymmetricTensor2D, :(eltype=Float32), :(fieldnames=(xx, zz, xz)), :(dims=(2,3)), :(parametric=true), :(fifthkwarg="something"));  # Error: length(kwargs_expr) > 4
-                @test_throws ArgumentError _CellType(:SymmetricTensor2D, eltype=Float32, dims=:((2,3)))                                # Error: isnothing(fieldnames)
-                @test_throws ArgumentError _CellType(:SymmetricTensor2D, fieldnames=:((xx, zz, xz)), dims=:((2,3)))                    # Error: isnothing(eltype) && (!parametric && eltype == NUMBERTYPE_NONE)
-                @test_throws ArgumentError _CellType(:SymmetricTensor2D, fieldnames=:((xx, zz, xz)), eltype=Float32, parametric=true)  # Error: !isnothing(fieldnames) && parametric
+                @test_throws ArgumentError _CellType(@__MODULE__, :SymmetricTensor2D, eltype=Float32, dims=:((2,3)))                                # Error: isnothing(fieldnames)
+                @test_throws ArgumentError _CellType(@__MODULE__, :SymmetricTensor2D, fieldnames=:((xx, zz, xz)), dims=:((2,3)))                    # Error: isnothing(eltype) && (!parametric && eltype == NUMBERTYPE_NONE)
+                @test_throws ArgumentError _CellType(@__MODULE__, :SymmetricTensor2D, fieldnames=:((xx, zz, xz)), eltype=Float32, parametric=true)  # Error: !isnothing(fieldnames) && parametric
             end;
             @reset_parallel_kernel()
         end;

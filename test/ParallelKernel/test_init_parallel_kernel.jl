@@ -69,10 +69,10 @@ end
         end;
         @testset "3. Exceptions" begin
             @testset "already initialized" begin
-                set_initialized(true)
-                @require is_initialized()
-                @test_throws IncoherentCallError check_already_initialized()
-                set_initialized(false)
+                set_initialized(@__MODULE__, true)
+                @require is_initialized(@__MODULE__)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__)
+                set_initialized(@__MODULE__, false)
             end;
             @testset "arguments" begin
                 @test_throws ArgumentError extract_posargs_init($(@__MODULE__), 99, :Float64)
@@ -85,8 +85,8 @@ end
                 @test_throws ArgumentEvaluationError extract_kwargs_init($(@__MODULE__), Dict(:numbertype => :MyType))
             end;
             @testset "check_initialized" begin
-                @require !is_initialized()
-                @test_throws NotInitializedError check_initialized()
+                @require !is_initialized(@__MODULE__)
+                @test_throws NotInitializedError check_initialized(@__MODULE__)
             end;
             @reset_parallel_kernel()
         end;

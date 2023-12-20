@@ -4,5 +4,5 @@ using Test
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 Pkg.instantiate()
-using Diffusion3D_CUDA
-@test Diffusion3D_CUDA.diffusion3D()
+import AMDGPU
+using Diffusion3D_minimal

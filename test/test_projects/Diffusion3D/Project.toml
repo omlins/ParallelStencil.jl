@@ -1,0 +1,18 @@
+name = "Diffusion3D"
+uuid = "aac712e6-b0d5-474a-aefa-bdd351e14480"
+authors = ["Samuel Omlin <samuel.omlin@cscs.ch>"]
+version = "0.1.0"
+
+[deps]
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+
+[compat]
+ParallelStencil = ">= 0.4.0"
+
+[weakdeps]
+AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+
+[extensions]
+Diffusion3D_AMDGPUExt = "AMDGPU"
+Diffusion3D_CUDAExt = "CUDA"

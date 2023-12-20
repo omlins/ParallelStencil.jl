@@ -46,14 +46,14 @@ end
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. initialization of ParallelStencil without numbertype, with memopt, with inbounds" begin
+        @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, with inbounds" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, ndims = 3, inbounds = true, memopt = true)
+            @init_parallel_stencil(package = $package, inbounds = true, memopt = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
-                @test @get_ndims() == 3
+                @test @get_ndims() == NDIMS_NONE
                 @test @get_memopt() == true
                 @test @get_inbounds() == true
             end;
@@ -72,23 +72,23 @@ end
         end;
         @testset "3. Exceptions" begin
             @testset "already initialized" begin
-                set_initialized(true)
-                set_package(:CUDA)
-                set_numbertype(Float64)
-                set_ndims(3)
-                set_memopt(false)
-                set_inbounds(false)
-                @require is_initialized()
-                @test_throws IncoherentCallError check_already_initialized(:Threads, Float64, 3, false, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float32, 3, false, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 2, false, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 3, true, false)
-                @test_throws IncoherentCallError check_already_initialized(:CUDA, Float64, 3, false, true)
-                @test_throws IncoherentCallError check_already_initialized(:AMDGPU, Float16, 1, true, true)
-                set_initialized(false)
-                set_package(PKG_NONE)
-                set_numbertype(NUMBERTYPE_NONE)
-                set_ndims(NDIMS_NONE)
+                set_initialized(@__MODULE__, true)
+                set_package(@__MODULE__, :CUDA)
+                set_numbertype(@__MODULE__, Float64)
+                set_ndims(@__MODULE__, 3)
+                set_memopt(@__MODULE__, false)
+                set_inbounds(@__MODULE__, false)
+                @require is_initialized(@__MODULE__)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :Threads, Float64, 3, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float32, 3, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 2, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, true, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, false, true)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :AMDGPU, Float16, 1, true, true)
+                set_initialized(@__MODULE__, false)
+                set_package(@__MODULE__, PKG_NONE)
+                set_numbertype(@__MODULE__, NUMBERTYPE_NONE)
+                set_ndims(@__MODULE__, NDIMS_NONE)
             end;
             @testset "arguments" begin
                 @test_throws ArgumentError extract_posargs_init($(@__MODULE__), 99, :Float64, 3)
@@ -105,8 +105,8 @@ end
                 @test_throws ArgumentEvaluationError extract_kwargs_init($(@__MODULE__), Dict(:ndims => :myndims))
             end;
             @testset "check_initialized" begin
-                @require !is_initialized()
-                @test_throws NotInitializedError check_initialized()
+                @require !is_initialized(@__MODULE__)
+                @test_throws NotInitializedError check_initialized(@__MODULE__)
             end;
             @reset_parallel_stencil()
          end;

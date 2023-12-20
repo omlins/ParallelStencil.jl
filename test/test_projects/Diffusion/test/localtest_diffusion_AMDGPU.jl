@@ -4,5 +4,11 @@ using Test
 using Pkg
 Pkg.activate(joinpath(@__DIR__, ".."))
 Pkg.instantiate()
-using Diffusion3D_CUDA
-@test Diffusion3D_CUDA.diffusion3D()
+import AMDGPU
+using Diffusion
+@test diffusion2D(AMDGPUBackend) <: AMDGPU.ROCArray
+@test diffusion3D(AMDGPUBackend, Float32) <: AMDGPU.ROCArray
+B = AMDGPU.zeros(4, 4)
+A = AMDGPU.ones(4, 4)
+memcopy!(B, A)
+@test all(B .== A)
