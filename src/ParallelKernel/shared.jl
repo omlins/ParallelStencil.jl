@@ -65,7 +65,7 @@ const AD_ANNOTATION_DEFAULT        = Enzyme.Const
 const AD_SUPPORTED_ANNOTATIONS     = (Const=Enzyme.Const, Active=Enzyme.Active, Duplicated=Enzyme.Duplicated, DuplicatedNoNeed=Enzyme.DuplicatedNoNeed)
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
-const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following: $(join(SUPPORTED_NUMBERTYPES,", "))"
+const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following (and evaluatable at parse time): $(join(SUPPORTED_NUMBERTYPES,", "))"
 const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
