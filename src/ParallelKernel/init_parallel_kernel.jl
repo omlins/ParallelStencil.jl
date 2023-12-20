@@ -20,7 +20,7 @@ macro init_parallel_kernel(args...)
     if (length(posargs) == 2) package, numbertype_val = extract_posargs_init(__module__, posargs...)
     else                      package, numbertype_val = extract_kwargs_init(__module__, kwargs)
     end
-    inbounds_val = extract_kwargs_optional(__module__, kwargs)
+    inbounds_val = extract_kwargs_nopos(__module__, kwargs)
     if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
     esc(init_parallel_kernel(__module__, package, numbertype_val, inbounds_val))
 end
@@ -102,7 +102,7 @@ function extract_kwargs_init(caller::Module, kwargs::Dict)
     return package, numbertype_val
 end
 
-function extract_kwargs_optional(caller::Module, kwargs::Dict)
+function extract_kwargs_nopos(caller::Module, kwargs::Dict)
     if (:inbounds in keys(kwargs)) inbounds_val = eval_arg(caller, kwargs[:inbounds]); check_inbounds(inbounds_val)
     else                           inbounds_val = false
     end
