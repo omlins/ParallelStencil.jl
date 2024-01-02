@@ -262,7 +262,7 @@ end
 
 function split_kwargs(kwargs; separator=:(=), keyword_type=Symbol)
     if !all(is_kwarg.(kwargs; separator=separator, keyword_type=keyword_type)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
-    return Dict(x.args[1] => x.args[2] for x in kwargs)
+    return Dict{keyword_type,Any}(x.args[1] => x.args[2] for x in kwargs)
 end
 
 function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String)
