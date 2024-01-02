@@ -113,17 +113,22 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
         kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
+        is_parallel_kernel = true
         if typeof(ndims) <: Tuple
-            expand_ndims_tuple(ndims, true, kernelarg, kwargs, posargs...)
+            expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
         else
-            numbertype = get_numbertype(caller)
-            if !haskey(kwargs, :metadata_module)
-                get_name(kernelarg)
-                metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+            if in_signature(kernelarg, :ndims)
+                expand_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
             else
-                metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+                numbertype = get_numbertype(caller)
+                if !haskey(kwargs, :metadata_module)
+                    get_name(kernelarg)
+                    metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+                else
+                    metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+                end
+                parallel_kernel(metadata_module, metadata_function, caller, package, ndims, numbertype, kernelarg, posargs...; kwargs)
             end
-            parallel_kernel(metadata_module, metadata_function, caller, package, ndims, numbertype, kernelarg, posargs...; kwargs)
         end
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
@@ -155,7 +160,9 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     if typeof(ndims) <: Tuple
         expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
     else
-        if is_splatarg(indices_expr)
+        if in_signature(kernelarg, :ndims)
+            expand_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
+        elseif is_splatarg(indices_expr)
             parallel_indices_splatarg(caller, package, ndims, kwargs_expr, posargs..., kernelarg; kwargs)
         else
             if !haskey(kwargs, :metadata_module)
@@ -189,6 +196,14 @@ function expand_ndims_tuple(ndims::Tuple, is_parallel_kernel::Bool, kernel::Expr
     else                    ndims_methods_expr = (:(@parallel_indices $(posargs...) ndims=$i $(kwargs_expr...) $kernel) for i in ndims)
     end
     return quote $(ndims_methods_expr...) end
+end
+
+function expand_ndims(ndims::Integer, is_parallel_kernel::Bool, kernel::Expr, kwargs_expr, posargs...)
+    if (ndims < 1 || ndims > 3) @ArgumentError("$macroname: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
+    kernel = substitute_in_kernel(kernel, :ndims, ndims; signature_only=true)
+    if (is_parallel_kernel) return :(@parallel         $(posargs...) $(kwargs_expr...) $kernel)
+    else                    return :(@parallel_indices $(posargs...) $(kwargs_expr...) $kernel)
+    end
 end
 
 function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integer, kwargs_expr, alias_indices::Expr, kernel::Expr; kwargs::NamedTuple)
