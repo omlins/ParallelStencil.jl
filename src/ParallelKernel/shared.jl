@@ -130,6 +130,7 @@ get_body(kernel::Expr)                = return kernel.args[2]
 set_body!(kernel::Expr, body::Expr)   = ((kernel.args[2] = body); return kernel)
 get_name(kernel::Expr)                = return splitdef(kernel)[:name]
 
+
 function set_name(kernel::Expr, name::Symbol)
     kernel_elems = splitdef(kernel)
     kernel_elems[:name] = name
@@ -142,6 +143,29 @@ function push_to_signature!(kernel::Expr, arg::Expr)
     push!(kernel_elems[:args], arg)
     kernel = combinedef(kernel_elems)
     return kernel
+end
+
+function substitute_in_kernel(kernel::Expr, old, new; signature_only=false)
+    if signature_only
+        kernel_elems = splitdef(kernel)
+        body = kernel_elems[:body]        # save to restore later
+        kernel_elems[:body] = :(return)
+        kernel = combinedef(kernel_elems)
+    end
+    kernel = substitute(kernel, old, new)
+    if signature_only
+        kernel_elems = splitdef(kernel)
+        kernel_elems[:body] = body
+        kernel = combinedef(kernel_elems)
+    end
+    return kernel
+end
+
+function in_signature(kernel::Expr, x)
+    kernel_elems = splitdef(kernel)
+    kernel_elems[:body] = :()
+    signature = combinedef(kernel_elems)
+    return inexpr_walk(signature, x)
 end
 
 function remove_return(body::Expr)
