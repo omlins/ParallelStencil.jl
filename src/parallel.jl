@@ -9,7 +9,8 @@ Declare the `kernel` parallel and containing stencil computations be performed w
 # Optional keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
 - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
-- `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3. A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref).
+!!! note "Advanced optional keyword arguments"
+    - `ndims::Integer|Tuple`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (or a tuple containing any of the previous in order to generate a method for each of the given values - this can only work correctly if the macros used *and loaded* work for any of the chosen values of `ndims`!). A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref). The value of `ndims` can be interpolated into the kernel method signatures with `\$ndims` (e.g., `@parallel ndims=(1,3) function f(A::Data.Array{\$ndims}) ... end`). This enables dispatching on the number of dimensions in the kernel methods.
 
 See also: [`@init_parallel_stencil`](@ref)
 
@@ -53,8 +54,20 @@ See also: [`@init_parallel_kernel`](@ref)
 macro parallel(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
 
 
+##
 const PARALLEL_INDICES_DOC = """
-$(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil")) Using splat syntax for the `indices` (e.g., `@parallel_indices (I...)`) enables to generate a tuple of parallel indices (`I` in this example) of length `ndims` selected with [`@init_parallel_stencil`](@ref). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`).
+    @parallel_indices indices kernel
+    @parallel_indices indices inbounds=... memopt=... ndims=... kernel
+
+Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_stencil`](@ref).
+
+# Optional keyword arguments
+    - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
+    - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
+    !!! note "Advanced optional keyword arguments"
+        - `ndims::Integer|Tuple`: the number of indexing dimensions desired when using splat syntax for the `indices`: 1, 2 or 3 (a default `ndims` value can be set with the corresponding keyword argument of [`@init_parallel_stencil`](@ref)), or a tuple containing any of the previous in order to generate a method for each of the given `ndims` values (e.g., `@parallel_indices (I...) ndims=(2,3)`). Concretely, the splat syntax generates a tuple of parallel indices (`I` in this example) where the length is given by the `ndims` value (`2` for the first method and `3` for the second method in this example). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`). The value of `ndims` can be interpolated into the kernel method signatures with `\$ndims` (e.g., `@parallel ndims=(1,3) function f(A::Data.Array{\$ndims}) ... end`). This enables dispatching on the number of dimensions in the kernel methods.
+
+See also: [`@init_parallel_stencil`](@ref)
 """
 @doc PARALLEL_INDICES_DOC
 macro parallel_indices(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
