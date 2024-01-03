@@ -117,7 +117,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         if typeof(ndims) <: Tuple
             expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
         else
-            if in_signature(kernelarg, :ndims)
+            if in_signature(kernelarg, :($(Expr(:$, :ndims))))
                 expand_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
             else
                 numbertype = get_numbertype(caller)
@@ -160,7 +160,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     if typeof(ndims) <: Tuple
         expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
     else
-        if in_signature(kernelarg, :ndims)
+        if in_signature(kernelarg, :($(Expr(:$, :ndims))))
             expand_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
         elseif is_splatarg(indices_expr)
             parallel_indices_splatarg(caller, package, ndims, kwargs_expr, posargs..., kernelarg; kwargs)
@@ -200,7 +200,7 @@ end
 
 function expand_ndims(ndims::Integer, is_parallel_kernel::Bool, kernel::Expr, kwargs_expr, posargs...)
     if (ndims < 1 || ndims > 3) @ArgumentError("$macroname: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
-    kernel = substitute_in_kernel(kernel, :ndims, ndims; signature_only=true)
+    kernel = substitute_in_kernel(kernel, :($(Expr(:$, :ndims))), ndims; signature_only=true)
     if (is_parallel_kernel) return :(@parallel         $(posargs...) $(kwargs_expr...) $kernel)
     else                    return :(@parallel_indices $(posargs...) $(kwargs_expr...) $kernel)
     end
