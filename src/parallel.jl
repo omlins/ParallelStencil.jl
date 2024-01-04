@@ -124,14 +124,14 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
         is_parallel_kernel = true
         if typeof(ndims) <: Tuple
-            expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
+            expand_ndims_tuple(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
         else
-            if in_signature(kernelarg, :($(Expr(:$, :ndims))))
-                interpolate_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
+            if haskey(kwargs, :N)
+                substitute_N(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
             else
                 numbertype = get_numbertype(caller)
                 if !haskey(kwargs, :metadata_module)
@@ -167,14 +167,14 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     is_parallel_kernel = false
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     indices_expr = posargs[1]
     ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if typeof(ndims) <: Tuple
-        expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
+        expand_ndims_tuple(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
     else
-        if in_signature(kernelarg, :($(Expr(:$, :ndims))))
-            interpolate_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
+        if haskey(kwargs, :N)
+            substitute_N(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
         elseif is_splatarg(indices_expr)
             parallel_indices_splatarg(caller, package, ndims, kwargs_expr, posargs..., kernelarg; kwargs)
         else
@@ -202,18 +202,27 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function expand_ndims_tuple(ndims::Tuple, is_parallel_kernel::Bool, kernel::Expr, kwargs::NamedTuple, posargs...)
-    if !(typeof(ndims) <: NTuple{N,<:Integer} where N) @ArgumentError("$macroname: argument 'ndims' must be an integer or a tuple of integers (obtained: $ndims).") end
-    kwargs_expr = (:($key=$(getproperty(kwargs, key))) for key in keys(kwargs) if key != :ndims)
-    if (is_parallel_kernel) ndims_methods_expr = (:(@parallel         $(posargs...) ndims=$i $(kwargs_expr...) $kernel) for i in ndims)
-    else                    ndims_methods_expr = (:(@parallel_indices $(posargs...) ndims=$i $(kwargs_expr...) $kernel) for i in ndims)
+function expand_ndims_tuple(caller::Module, ndims::Tuple, is_parallel_kernel::Bool, kernel::Expr, kwargs::NamedTuple, posargs...)
+    macroname = (is_parallel_kernel) ? "@parallel" : "@parallel_indices"
+    if !(typeof(ndims) <: NTuple{N,<:Integer} where N) @KeywordArgumentError("$macroname: keyword argument 'ndims' must be an integer or a tuple of integers (obtained: $ndims).") end
+    if !haskey(kwargs, :N) @KeywordArgumentError("$macroname: keyword argument 'N' is mandatory when 'ndims' is a tuple ('N' must also be present as type parameter in the function signature enabling to dispatch on). ") end
+    N = eval_arg(caller, substitute(kwargs.N, :ndims, ndims))
+    if !(typeof(N) <: NTuple{length(ndims),<:Integer}) @KeywordArgumentError("$macroname: keyword argument 'N' must be a tuple of integers of the same length as 'ndims' when 'ndims' is a tuple (obtained: N=$N, ndims=$ndims).") end
+    kwargs_expr = (:($key=$(getproperty(kwargs, key))) for key in keys(kwargs) if key ∉ (:ndims, :N))
+    if (is_parallel_kernel) ndims_methods_expr = (:(@parallel         $(posargs...) ndims=$i N=$n $(kwargs_expr...) $kernel) for (i,n) in zip(ndims,N))
+    else                    ndims_methods_expr = (:(@parallel_indices $(posargs...) ndims=$i N=$n $(kwargs_expr...) $kernel) for (i,n) in zip(ndims,N))
     end
     return quote $(ndims_methods_expr...) end
 end
 
-function interpolate_ndims(ndims::Integer, is_parallel_kernel::Bool, kernel::Expr, kwargs_expr, posargs...)
-    if (ndims < 1 || ndims > 3) @ArgumentError("$macroname: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
-    kernel = substitute_in_kernel(kernel, :($(Expr(:$, :ndims))), ndims; signature_only=true)
+function substitute_N(caller::Module, ndims::Integer, is_parallel_kernel::Bool, kernel::Expr, kwargs::NamedTuple, posargs...)
+    macroname = (is_parallel_kernel) ? "@parallel" : "@parallel_indices"
+    if (ndims < 1 || ndims > 3) @KeywordArgumentError("$macroname: keyword argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
+    if !haskey(kwargs, :N) @ModuleInternalError("$macroname: substitute_N: function should never be called if keyword argument 'N' is not present.") end
+    N = eval_arg(caller, substitute(kwargs.N, :ndims, ndims))
+    if !(typeof(N) <: Integer) @KeywordArgumentError("$macroname: keyword argument 'N' must be an integer (or a tuple if 'ndims' is a tuple; obtained: $N).") end
+    kwargs_expr = (:($key=$(getproperty(kwargs, key))) for key in keys(kwargs) if key != :N)
+    kernel = substitute_in_kernel(kernel, :N, N; signature_only=true)
     if (is_parallel_kernel) return :(@parallel         $(posargs...) $(kwargs_expr...) $kernel)
     else                    return :(@parallel_indices $(posargs...) $(kwargs_expr...) $kernel)
     end
@@ -221,7 +230,7 @@ end
 
 function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integer, kwargs_expr, alias_indices::Expr, kernel::Expr; kwargs::NamedTuple)
     if !@capture(alias_indices, (I_...)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
-    if (ndims < 1 || ndims > 3) @ArgumentError("@parallel_indices: argument 'ndims' is required for the syntax `@parallel_indices I...`` and is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
+    if (ndims < 1 || ndims > 3) @KeywordArgumentError("@parallel_indices: keyword argument 'ndims' is required for the syntax `@parallel_indices I...` and is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     indices = get_indices_expr(ndims).args
     indices_expr = Expr(:tuple, indices...)
     kernel = macroexpand(caller, kernel)
@@ -232,7 +241,7 @@ end
 function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
-    if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @ArgumentError("@parallel_indices: argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
+    if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     body = get_body(kernel)
     body = remove_return(body)
     body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
@@ -244,7 +253,7 @@ end
 
 function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, ndims::Integer, numbertype::DataType, kernel::Expr; kwargs::NamedTuple)
     is_parallel_kernel = true
-    if (ndims < 1 || ndims > 3) @ArgumentError("@parallel: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
+    if (ndims < 1 || ndims > 3) @KeywordArgumentError("@parallel: keyword argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
