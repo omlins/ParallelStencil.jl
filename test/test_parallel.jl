@@ -76,6 +76,40 @@ import ParallelStencil.@gorgeousexpand
                 @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, (EnzymeCore.DuplicatedNoNeed)(V.x, V̄.x), (EnzymeCore.DuplicatedNoNeed)(V.y, V̄.y), (EnzymeCore.Const)(a))"
             end;
             @testset "@parallel <kernel>" begin
+                @testset "N substitution | ndims tuple expansion" begin
+                    @testset "N substitution (N=3)" begin
+                        expansion = @prettystring(1, @parallel N=3 f(A::Data.Array{N}, B::Data.Array{N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{3}, B::Data.Array{3},", expansion)
+                    end;
+                    @testset "N substitution (N=2)" begin
+                        expansion = @prettystring(1, @parallel N=2 f(A::Data.Array{N}, B::Data.Array{N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{2}, B::Data.Array{2},", expansion)
+                    end;
+                    @testset "N substitution (N=1)" begin
+                        expansion = @prettystring(1, @parallel N=1 f(A::Data.Array{N}, B::Data.Array{N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{1}, B::Data.Array{1},", expansion)
+                    end;
+                    @testset "N substitution (N=ndims)" begin
+                        expansion = @prettystring(1, @parallel N=ndims f(A::Data.Array{N}, B::Data.Array{N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{3}, B::Data.Array{3},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=ndims+2)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=ndims+2 f(A::Data.Array{N}, B::Data.Array{N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{4}, B::Data.Array{4},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,2,3), N=ndims)" begin
+                        expansion = @prettystring(2, @parallel ndims=(1,2,3) N=ndims f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                        @test occursin("@parallel ndims = 2 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,3), N=ndims.+1)" begin
+                        expansion = @prettystring(2, @parallel ndims=(1,3) N=ndims.+1 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 4}, B::Data.Array{T, 4},", expansion)
+                        @test !occursin("@parallel ndims = 2", expansion)
+                    end;
+                end;
                 @testset "inbounds" begin
                     expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                     @test occursin("Base.@inbounds begin", expansion)
@@ -892,33 +926,75 @@ import ParallelStencil.@gorgeousexpand
                     @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
             end;
-            @testset "N substitution (N=3)" begin
-                expansion = @prettystring(1, @parallel ndims=3 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
-            end;
-            @testset "N substitution (N=2)" begin
-                expansion = @prettystring(1, @parallel ndims=2 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
-            end;
-            @testset "N substitution (N=1)" begin
-                expansion = @prettystring(1, @parallel ndims=1 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
-            end;
-            @testset "N substitution (ndims=2, N=ndims)" begin
-                expansion = @prettystring(1, @parallel ndims=2 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
-            end;
-            @testset "ndims tuple expansion (ndims=(1,2,3), N=ndims)" begin
-                expansion = @prettystring(2, @parallel ndims=(1,2,3) f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
-                @test occursin("@parallel ndims = 2 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
-                @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
-            end;
-            @testset "ndims tuple expansion (ndims=(1,3), N=ndims.+1)" begin
-                expansion = @prettystring(2, @parallel ndims=(1,3) f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
-                @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
-                @test !occursin("@parallel ndims = 2", expansion)
+            @testset "N substitution | ndims tuple expansion" begin
+                @testset "@parallel" begin
+                    @testset "N substitution (ndims=2, N=3)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=3 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=2)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=2 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=1)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=1 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=ndims)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=ndims f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=ndims+2)" begin
+                        expansion = @prettystring(1, @parallel ndims=2 N=ndims+2 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("f(A::Data.Array{T, 4}, B::Data.Array{T, 4},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,2,3), N=ndims)" begin
+                        expansion = @prettystring(2, @parallel ndims=(1,2,3) N=ndims f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                        @test occursin("@parallel ndims = 2 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,3), N=ndims.+1)" begin
+                        expansion = @prettystring(2, @parallel ndims=(1,3) N=ndims.+1 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 4}, B::Data.Array{T, 4},", expansion)
+                        @test !occursin("@parallel ndims = 2", expansion)
+                    end;
+                end;
+                @testset "@parallel_indices" begin
+                    @testset "N substitution (ndims=2, N=3)" begin
+                        expansion = @prettystring(1, @parallel_indices I... ndims=2 N=3 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=2)" begin
+                        expansion = @prettystring(1, @parallel_indices I... ndims=2 N=2 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=1)" begin
+                        expansion = @prettystring(1, @parallel_indices I... ndims=2 N=1 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=ndims)" begin
+                        expansion = @prettystring(1, @parallel_indices I... ndims=2 N=ndims f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                    end;
+                    @testset "N substitution (ndims=2, N=ndims+2)" begin
+                        expansion = @prettystring(1, @parallel_indices I... ndims=2 N=ndims+2 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("f(A::Data.Array{T, 4}, B::Data.Array{T, 4},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,2,3), N=ndims)" begin
+                        expansion = @prettystring(2, @parallel_indices I... ndims=(1,2,3) N=ndims f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("@parallel_indices I... ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                        @test occursin("@parallel_indices I... ndims = 2 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel_indices I... ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                    end;
+                    @testset "ndims tuple expansion (ndims=(1,3), N=ndims.+1)" begin
+                        expansion = @prettystring(2, @parallel_indices I... ndims=(1,3) N=ndims.+1 f(A::Data.Array{T,N}, B::Data.Array{T,N}, c::Integer) where T <: PSNumber = (A[I...] = B[I...]^c; return))
+                        @test occursin("@parallel_indices I... ndims = 1 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                        @test occursin("@parallel_indices I... ndims = 3 function f(A::Data.Array{T, 4}, B::Data.Array{T, 4},", expansion)
+                        @test !occursin("@parallel_indices I... ndims = 2", expansion)
+                    end;
+                end;
             end;
             @reset_parallel_stencil()
         end;
