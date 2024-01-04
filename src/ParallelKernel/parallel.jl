@@ -40,10 +40,12 @@ const PARALLEL_INDICES_DOC = """
     @parallel_indices indices kernel
     @parallel_indices indices inbounds=... kernel
 
+Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+
 # Keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_kernel`](@ref).
 
-Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_INDICES_DOC
 macro parallel_indices(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...)); end

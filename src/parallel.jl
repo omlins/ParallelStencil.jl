@@ -9,7 +9,8 @@ Declare the `kernel` parallel and containing stencil computations be performed w
 # Optional keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
 - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
-- `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3. A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref).
+!!! note "Advanced optional keyword arguments"
+    - `ndims::Integer|Tuple`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (or a tuple containing any of the previous in order to generate a method for each of the given values - this can only work correctly if the macros used *and loaded* work for any of the chosen values of `ndims`!). A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref). The value of `ndims` can be interpolated into the kernel method signatures with `\$ndims` (e.g., `@parallel ndims=(1,3) function f(A::Data.Array{\$ndims}) ... end`). This enables dispatching on the number of dimensions in the kernel methods.
 
 See also: [`@init_parallel_stencil`](@ref)
 
@@ -53,8 +54,20 @@ See also: [`@init_parallel_kernel`](@ref)
 macro parallel(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
 
 
+##
 const PARALLEL_INDICES_DOC = """
-$(replace(ParallelKernel.PARALLEL_INDICES_DOC, "@init_parallel_kernel" => "@init_parallel_stencil")) Using splat syntax for the `indices` (e.g., `@parallel_indices (I...)`) enables to generate a tuple of parallel indices (`I` in this example) of length `ndims` selected with [`@init_parallel_stencil`](@ref). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`).
+    @parallel_indices indices kernel
+    @parallel_indices indices inbounds=... memopt=... ndims=... kernel
+
+Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_stencil`](@ref).
+
+# Optional keyword arguments
+    - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
+    - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. If `memopt=true` is set, then it must also be set in the corresponding kernel call(s).
+    !!! note "Advanced optional keyword arguments"
+        - `ndims::Integer|Tuple`: the number of indexing dimensions desired when using splat syntax for the `indices`: 1, 2 or 3 (a default `ndims` value can be set with the corresponding keyword argument of [`@init_parallel_stencil`](@ref)), or a tuple containing any of the previous in order to generate a method for each of the given `ndims` values (e.g., `@parallel_indices (I...) ndims=(2,3)`). Concretely, the splat syntax generates a tuple of parallel indices (`I` in this example) where the length is given by the `ndims` value (`2` for the first method and `3` for the second method in this example). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`). The value of `ndims` can be interpolated into the kernel method signatures with `\$ndims` (e.g., `@parallel ndims=(1,3) function f(A::Data.Array{\$ndims}) ... end`). This enables dispatching on the number of dimensions in the kernel methods.
+
+See also: [`@init_parallel_stencil`](@ref)
 """
 @doc PARALLEL_INDICES_DOC
 macro parallel_indices(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...)); end
@@ -111,15 +124,25 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs     = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
-        numbertype = get_numbertype(caller)
-        if !haskey(kwargs, :metadata_module)
-            get_name(kernelarg)
-            metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
+        is_parallel_kernel = true
+        if typeof(ndims) <: Tuple
+            expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
         else
-            metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+            if in_signature(kernelarg, :($(Expr(:$, :ndims))))
+                interpolate_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
+            else
+                numbertype = get_numbertype(caller)
+                if !haskey(kwargs, :metadata_module)
+                    get_name(kernelarg)
+                    metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+                else
+                    metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
+                end
+                parallel_kernel(metadata_module, metadata_function, caller, package, ndims, numbertype, kernelarg, posargs...; kwargs)
+            end
         end
-        parallel_kernel(metadata_module, metadata_function, caller, package, numbertype, kernelarg, posargs...; kwargs)
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
@@ -146,25 +169,32 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     indices_expr = posargs[1]
-    if is_splatarg(indices_expr)
-        parallel_indices_splatarg(caller, package, kwargs_expr, posargs..., kernelarg; kwargs)
+    ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
+    if typeof(ndims) <: Tuple
+        expand_ndims_tuple(ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
     else
-        if !haskey(kwargs, :metadata_module)
-            get_name(kernelarg)
-            metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+        if in_signature(kernelarg, :($(Expr(:$, :ndims))))
+            interpolate_ndims(ndims, is_parallel_kernel, kernelarg, kwargs_expr, posargs...)
+        elseif is_splatarg(indices_expr)
+            parallel_indices_splatarg(caller, package, ndims, kwargs_expr, posargs..., kernelarg; kwargs)
         else
-            metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
-        end
-        inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
-        memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-        if memopt
-            quote
-                $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
-                $metadata_function
+            if !haskey(kwargs, :metadata_module)
+                get_name(kernelarg)
+                metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
+            else
+                metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
             end
-        else
-            kwargs_expr = :(inbounds=$inbounds)
-            ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr, kernelarg; package=package)
+            inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+            memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
+            if memopt
+                quote
+                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    $metadata_function
+                end
+            else
+                kwargs_expr = :(inbounds=$inbounds)
+                ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr, kernelarg; package=package)
+            end
         end
     end
 end
@@ -172,9 +202,25 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_indices_splatarg(caller::Module, package::Symbol, kwargs_expr, alias_indices::Expr, kernel::Expr; kwargs::NamedTuple)
+function expand_ndims_tuple(ndims::Tuple, is_parallel_kernel::Bool, kernel::Expr, kwargs::NamedTuple, posargs...)
+    if !(typeof(ndims) <: NTuple{N,<:Integer} where N) @ArgumentError("$macroname: argument 'ndims' must be an integer or a tuple of integers (obtained: $ndims).") end
+    kwargs_expr = (:($key=$(getproperty(kwargs, key))) for key in keys(kwargs) if key != :ndims)
+    if (is_parallel_kernel) ndims_methods_expr = (:(@parallel         $(posargs...) ndims=$i $(kwargs_expr...) $kernel) for i in ndims)
+    else                    ndims_methods_expr = (:(@parallel_indices $(posargs...) ndims=$i $(kwargs_expr...) $kernel) for i in ndims)
+    end
+    return quote $(ndims_methods_expr...) end
+end
+
+function interpolate_ndims(ndims::Integer, is_parallel_kernel::Bool, kernel::Expr, kwargs_expr, posargs...)
+    if (ndims < 1 || ndims > 3) @ArgumentError("$macroname: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
+    kernel = substitute_in_kernel(kernel, :($(Expr(:$, :ndims))), ndims; signature_only=true)
+    if (is_parallel_kernel) return :(@parallel         $(posargs...) $(kwargs_expr...) $kernel)
+    else                    return :(@parallel_indices $(posargs...) $(kwargs_expr...) $kernel)
+    end
+end
+
+function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integer, kwargs_expr, alias_indices::Expr, kernel::Expr; kwargs::NamedTuple)
     if !@capture(alias_indices, (I_...)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
-    ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if (ndims < 1 || ndims > 3) @ArgumentError("@parallel_indices: argument 'ndims' is required for the syntax `@parallel_indices I...`` and is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     indices = get_indices_expr(ndims).args
     indices_expr = Expr(:tuple, indices...)
@@ -193,12 +239,11 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     body = add_return(body)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
-    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) inbounds=$inbounds memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
+    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) ndims=$ndims inbounds=$inbounds memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, numbertype::DataType, kernel::Expr; kwargs::NamedTuple)
+function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, ndims::Integer, numbertype::DataType, kernel::Expr; kwargs::NamedTuple)
     is_parallel_kernel = true
-    ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if (ndims < 1 || ndims > 3) @ArgumentError("@parallel: argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)

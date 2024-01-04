@@ -892,6 +892,30 @@ import ParallelStencil.@gorgeousexpand
                     @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
                 end
             end;
+            @testset "ndims interpolation (ndims=3)" begin
+                expansion = @prettystring(1, @parallel ndims=3 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                @test occursin("f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+            end;
+            @testset "ndims interpolation (ndims=2)" begin
+                expansion = @prettystring(1, @parallel ndims=2 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                @test occursin("f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+            end;
+            @testset "ndims interpolation (ndims=1)" begin
+                expansion = @prettystring(1, @parallel ndims=1 f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                @test occursin("f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+            end;
+            @testset "ndims tuple expansion (ndims=(1,2,3))" begin
+                expansion = @prettystring(2, @parallel ndims=(1,2,3) f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                @test occursin("@parallel ndims = 2 function f(A::Data.Array{T, 2}, B::Data.Array{T, 2},", expansion)
+                @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+            end;
+            @testset "ndims tuple expansion (ndims=(1,3))" begin
+                expansion = @prettystring(2, @parallel ndims=(1,3) f(A::Data.Array{T,$(Expr(:$, :ndims))}, B::Data.Array{T,$(Expr(:$, :ndims))}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                @test occursin("@parallel ndims = 1 function f(A::Data.Array{T, 1}, B::Data.Array{T, 1},", expansion)
+                @test occursin("@parallel ndims = 3 function f(A::Data.Array{T, 3}, B::Data.Array{T, 3},", expansion)
+                @test !occursin("@parallel ndims = 2", expansion)
+            end;
             @reset_parallel_stencil()
         end;
         @testset "5. Exceptions" begin
