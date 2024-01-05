@@ -145,14 +145,25 @@ function push_to_signature!(kernel::Expr, arg::Expr)
     return kernel
 end
 
-function substitute_in_kernel(kernel::Expr, old, new; signature_only=false)
+function substitute_in_kernel(kernel::Expr, old, new; signature_only::Bool=false, typeparams_only::Bool=false)
     if signature_only
         kernel_elems = splitdef(kernel)
         body = kernel_elems[:body]        # save to restore later
         kernel_elems[:body] = :(return)
         kernel = combinedef(kernel_elems)
     end
-    kernel = substitute(kernel, old, new)
+    if typeparams_only
+        kernel = postwalk(kernel) do ex
+            if @capture(ex, type_{typeparams__})
+                replace!(typeparams, old => new)
+                return :($type{$(typeparams...)})
+            else
+                return ex
+            end
+        end
+    else
+        kernel = substitute(kernel, old, new)
+    end
     if signature_only
         kernel_elems = splitdef(kernel)
         kernel_elems[:body] = body
