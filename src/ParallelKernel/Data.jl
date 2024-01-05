@@ -9,6 +9,11 @@ The module Data is created in the module where `@init_parallel_kernel` is called
 The type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (selected with argument `numbertype` of [`@init_parallel_kernel`](@ref)).
 
 --------------------------------------------------------------------------------
+    Data.Index
+
+The type of indices used in parallel kernels.
+
+--------------------------------------------------------------------------------
     Data.Array{ndims}
 
 Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.Array` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads, CUDA.CuArray or CUDA.CuDeviceArray for CUDA and AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required).
@@ -27,6 +32,11 @@ Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S,
     Data.NumberTuple{N_tuple} | Data.NamedNumberTuple{N_tuple, names} | Data.NumberCollection{N_tuple}
 
 Expands to: `NTuple{N_tuple, Data.Number}` | `NamedTuple{names, NTuple{N_tuple, Data.Number}}` | `Union{Data.NumberTuple{N_tuple}, Data.NamedNumberTuple{N_tuple}}`
+
+--------------------------------------------------------------------------------
+    Data.IndexTuple{N_tuple} | Data.NamedIndexTuple{N_tuple, names} | Data.IndexCollection{N_tuple}
+
+Expands to: `NTuple{N_tuple, Data.Index}` | `NamedTuple{names, NTuple{N_tuple, Data.Index}}` | `Union{Data.IndexTuple{N_tuple}, Data.NamedIndexTuple{N_tuple}}`
 
 --------------------------------------------------------------------------------
     Data.ArrayTuple{N_tuple, N} | Data.NamedArrayTuple{N_tuple, N, names} | Data.ArrayCollection{N_tuple, N}
@@ -67,6 +77,11 @@ const DATA_DOC_NUMBERTYPE_NONE = """
 The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
 
 --------------------------------------------------------------------------------
+    Data.Index
+
+The type of indices used in parallel kernels.
+
+--------------------------------------------------------------------------------
     Data.Array{numbertype, ndims}
 
 The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads, CUDA.CuArray or CUDA.CuDeviceArray for CUDA and AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required).
@@ -85,6 +100,11 @@ Expands to `Union{StaticArrays.SArray{S, numbertype}, StaticArrays.FieldArray{S,
     Data.NumberTuple{N_tuple, numbertype} | Data.NamedNumberTuple{N_tuple, numbertype, names} | Data.NumberCollection{N_tuple, numbertype}
 
 Expands to: `NTuple{N_tuple, numbertype}` | `NamedTuple{names, NTuple{N_tuple, numbertype}}` | `Union{Data.NumberTuple{N_tuple, numbertype}, Data.NamedNumberTuple{N_tuple, numbertype}}`
+
+--------------------------------------------------------------------------------
+    Data.IndexTuple{N_tuple} | Data.NamedIndexTuple{N_tuple, names} | Data.IndexCollection{N_tuple}
+
+Expands to: `NTuple{N_tuple, Data.Index}` | `NamedTuple{names, NTuple{N_tuple, Data.Index}}` | `Union{Data.IndexTuple{N_tuple}, Data.NamedIndexTuple{N_tuple}}`
 
 --------------------------------------------------------------------------------
     Data.ArrayTuple{N_tuple, numbertype, N} | Data.NamedArrayTuple{N_tuple, numbertype, N, names} | Data.ArrayCollection{N_tuple, numbertype, N}
@@ -114,15 +134,16 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
         Data.DeviceCellArray{numbertype, ndims}
 
     The datatype `Data.DeviceCellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads, CuDeviceCellArray for CUDA and ROCDeviceCellArray for AMDGPU).
-
+        
     !!! warning
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
 """
 
-function Data_cuda(numbertype::DataType)
+function Data_cuda(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                         = $indextype
             const Array{T, N}                   = CUDA.CuArray{T, N}
             const DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -133,6 +154,7 @@ function Data_cuda(numbertype::DataType)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = CUDA.CuArray{$numbertype, N}
             const DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
@@ -150,10 +172,11 @@ function Data_cuda(numbertype::DataType)
     end
 end
 
-function Data_amdgpu(numbertype::DataType)
+function Data_amdgpu(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                         = $indextype
             const Array{T, N}                   = AMDGPU.ROCArray{T, N}
             const DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -164,6 +187,7 @@ function Data_amdgpu(numbertype::DataType)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
             const DeviceArray{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
@@ -181,10 +205,11 @@ function Data_amdgpu(numbertype::DataType)
     end
 end
 
-function Data_threads(numbertype::DataType)
+function Data_threads(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                          = $indextype
             const Array{T, N}                    = Base.Array{T, N}
             const DeviceArray{T, N}              = Base.Array{T, N}
             const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
@@ -195,6 +220,7 @@ function Data_threads(numbertype::DataType)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = Base.Array{$numbertype, N}
             const DeviceArray{N}                 = Base.Array{$numbertype, N}
@@ -212,9 +238,10 @@ function Data_threads(numbertype::DataType)
     end
 end
 
-function Data_shared(numbertype::DataType)
+function Data_shared(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         quote
+            const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
             const NumberTuple{N_tuple, T}                                  = NTuple{N_tuple, T}
             const ArrayTuple{N_tuple, T, N}                                = NTuple{N_tuple, Array{T, N}}
             const DeviceArrayTuple{N_tuple, T, N}                          = NTuple{N_tuple, DeviceArray{T, N}}
@@ -223,6 +250,7 @@ function Data_shared(numbertype::DataType)
             const CellArrayTuple{N_tuple, T_elem, N, B}                    = NTuple{N_tuple, CellArray{T_elem, N, B}}
             const DeviceCellArrayTuple{N_tuple, T_elem, N, B}              = NTuple{N_tuple, DeviceCellArray{T_elem, N, B}}
 
+            const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
             const NamedNumberTuple{N_tuple, T, names}                      = NamedTuple{names, <:NumberTuple{N_tuple, T}}
             const NamedArrayTuple{N_tuple, T, N, names}                    = NamedTuple{names, <:ArrayTuple{N_tuple, T, N}}
             const NamedDeviceArrayTuple{N_tuple, T, N, names}              = NamedTuple{names, <:DeviceArrayTuple{N_tuple, T, N}}
@@ -231,6 +259,7 @@ function Data_shared(numbertype::DataType)
             const NamedCellArrayTuple{N_tuple, T_elem, N, B, names}        = NamedTuple{names, <:CellArrayTuple{N_tuple, T_elem, N, B}}
             const NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B, names}  = NamedTuple{names, <:DeviceCellArrayTuple{N_tuple, T_elem, N, B}}
 
+            const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
             const NumberCollection{N_tuple, T}                             = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
             const ArrayCollection{N_tuple, T, N}                           = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
             const DeviceArrayCollection{N_tuple, T, N}                     = Union{DeviceArrayTuple{N_tuple, T, N}, NamedDeviceArrayTuple{N_tuple, T, N}}
@@ -239,6 +268,7 @@ function Data_shared(numbertype::DataType)
             const CellArrayCollection{N_tuple, T_elem, N, B}               = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}
             const DeviceCellArrayCollection{N_tuple, T_elem, N, B}         = Union{DeviceCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B}}
 
+            NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
             NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
             NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
             NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
@@ -246,6 +276,7 @@ function Data_shared(numbertype::DataType)
         end
     else
         quote
+            const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
             const NumberTuple{N_tuple}                                     = NTuple{N_tuple, Number}
             const ArrayTuple{N_tuple, N}                                   = NTuple{N_tuple, Array{N}}
             const DeviceArrayTuple{N_tuple, N}                             = NTuple{N_tuple, DeviceArray{N}}
@@ -261,6 +292,7 @@ function Data_shared(numbertype::DataType)
             const TCellArrayTuple{N_tuple, T_elem, N, B}                   = NTuple{N_tuple, TCellArray{T_elem, N, B}}
             const DeviceTCellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, DeviceTCellArray{T_elem, N, B}}
 
+            const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
             const NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, <:NumberTuple{N_tuple}}
             const NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
             const NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:DeviceArrayTuple{N_tuple, N}}
@@ -276,6 +308,7 @@ function Data_shared(numbertype::DataType)
             const NamedTCellArrayTuple{N_tuple, T_elem, N, B, names}       = NamedTuple{names, <:TCellArrayTuple{N_tuple, T_elem, N, B}}
             const NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, <:DeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
 
+            const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
             const NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
             const ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
             const DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
@@ -291,6 +324,7 @@ function Data_shared(numbertype::DataType)
             const TCellArrayCollection{N_tuple, T_elem, N, B}              = Union{TCellArrayTuple{N_tuple, T_elem, N, B}, NamedTCellArrayTuple{N_tuple, T_elem, N, B}}
             const DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
 
+            NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
             NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
             NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
             NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
