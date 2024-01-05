@@ -9,7 +9,7 @@ Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` sel
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
 # Keyword arguments
-- `eltype::DataType`: the type of the elements (numbers).
+- `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
@@ -37,7 +37,7 @@ Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` sele
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
 # Keyword arguments
-- `eltype::DataType`: the type of the elements (numbers).
+- `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
@@ -64,7 +64,7 @@ Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` sele
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
 # Keyword arguments
-- `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
+- `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
@@ -138,7 +138,7 @@ Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numb
     The element type `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
 
 # Keyword arguments
-- `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
+- `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
@@ -164,7 +164,7 @@ Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compat
 
 # Arguments
 - `A::Array|CellArray|TArray|TCellArray`: the array to be filled with `x`.
-- `x::Number|Enum|Collection{Number|Enum, celldims}`: the content to fill `A` with. If `A` is an CellArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
+- `x::Number|Data.Index|Enum|Collection{Number|Data.Index|Enum, celldims}`: the content to fill `A` with. If `A` is an CellArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
 
 See also: [`@fill`](@ref)
 """
@@ -185,7 +185,7 @@ Create a cell type, which can then be passed to `@zeros`, `@ones`, `@rand`, `@fa
 - `name`: the name of the cell type.
 
 # Keyword arguments
-- `eltype::DataType`: the type of the elements, which can be numbers, booleans or enums.
+- `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `fieldnames::String|NTuple{N,String}`: the names of the fields of the cell. Note that cell values can always be addressed with array indices, even when field names are defined.
 - `dims::Integer|NTuple{N,Integer}=length(fieldnames)`: the dimensions of the cell. A cell can contain a single value or an N-dimensional array of the specified dimensions. A valid dims argument must fullfill `prod(dims)==length(fieldnames)`. If `dims` is omitted, then it will be automatically set as `dims=length(fieldnames)`, defining the cell to contain a 1-D array of appropriate length.
 !!! note "Advanced"
@@ -400,57 +400,57 @@ end
 
 ## RUNTIME ALLOCATOR FUNCTIONS 
 
- zeros_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); Base.zeros(T, args...))                # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))  # ...
-  rand_cpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = (check_datatype(T, Bool, Enum); Base.rand(T, args...))     # ...
-falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.falses(args...)                                       # ...
- trues_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.trues(args...)                                        # ...  #Note: an alternative would be: fill_cpu(T, true, args...)
+ zeros_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cpu(T); Base.zeros(T, args...))                # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_cpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cpu(T); fill_cpu(T, blocklength, 1, args...))  # ...
+  rand_cpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = (check_datatype_cpu(T, Bool, Enum); Base.rand(T, args...))     # ...
+falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.falses(args...)                                           # ...
+ trues_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = Base.trues(args...)                                            # ...  #Note: an alternative would be: fill_cpu(T, true, args...)
 
- zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 0, args...))
-  ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cpu(T, blocklength, 1, args...))
-  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
+ zeros_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cpu(T); fill_cpu(T, blocklength, 0, args...))
+  ones_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cpu(T); fill_cpu(T, blocklength, 1, args...))
+  rand_cpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_cpu(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B}(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/blocklen)), dims))
   rand_cpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cpu(T, blocklength, dims)
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
 
- zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); CUDA.ones(T, args...))   # ...
-  rand_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))   # ...
+ zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cuda(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cuda(T); CUDA.ones(T, args...))   # ...
+  rand_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))        # ...
 falses_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.zeros(Bool, args...)                         # ...
  trues_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.ones(Bool, args...)                          # ...
-  fill_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(fill_cpu(T, blocklength, args...))   # ...
+  fill_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(fill_cpu(T, blocklength, args...))        # ...
 
- zeros_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 0, args...))
-  ones_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_cuda(T, blocklength, 1, args...))
-  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+ zeros_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cuda(T); fill_cuda(T, blocklength, 0, args...))
+  ones_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cuda(T); fill_cuda(T, blocklength, 1, args...))
+  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_cuda(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
   rand_cuda(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cuda(T, blocklength, dims)
 falses_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, false, args...)
  trues_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, true, args...)
 
- zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype(T); AMDGPU.ones(T, args...))   # ...
-  rand_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(rand_cpu(T, blocklength, args...))   # ...
-falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.falses(args...)                         # ...
- trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.trues(args...)                          # ...
-  fill_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(fill_cpu(T, blocklength, args...))   # ...
+ zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_amdgpu(T); AMDGPU.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
+  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_amdgpu(T); AMDGPU.ones(T, args...))   # ...
+  rand_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(rand_cpu(T, blocklength, args...))           # ...
+falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.falses(args...)                                # ...
+ trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.trues(args...)                                 # ...
+  fill_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(fill_cpu(T, blocklength, args...))           # ...
 
- zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 0, args...))
-  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype(T); fill_amdgpu(T, blocklength, 1, args...))
-  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.ROCArray(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen)))), dims))   # TODO: use AMDGPU.rand! instead of AMDGPU.rand once it supports Enums: rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
+ zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_amdgpu(T); fill_amdgpu(T, blocklength, 0, args...))
+  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_amdgpu(T); fill_amdgpu(T, blocklength, 1, args...))
+  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_amdgpu(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.ROCArray(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen)))), dims))   # TODO: use AMDGPU.rand! instead of AMDGPU.rand once it supports Enums: rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_amdgpu(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
   rand_amdgpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_amdgpu(T, blocklength, dims)
 falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, false, args...)
  trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, true, args...)
 
 function fill_cpu(::Type{T}, blocklength, x, args...) where {T <: Union{Number, Enum}} # (blocklength is ignored if neither celldims nor celltype is set)
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool, Enum)
+    check_datatype_cpu(T, Bool, Enum)
     cell = convert(T, x)
     return Base.fill(cell, args...)
 end
 
 function fill_cpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool, Enum)
+    check_datatype_cpu(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -460,7 +460,7 @@ end
 
 function fill_cuda(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool, Enum)
+    check_datatype_cuda(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -470,7 +470,7 @@ end
 
 function fill_amdgpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype(T, Bool, Enum)
+    check_datatype_amdgpu(T, Bool, Enum)
     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
@@ -502,6 +502,10 @@ function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, Unio
         check_numbertype(eltype(T))
     end
 end
+
+check_datatype_cpu(args...)    = check_datatype(args..., INT_THREADS)
+check_datatype_cuda(args...)   = check_datatype(args..., INT_CUDA)
+check_datatype_amdgpu(args...) = check_datatype(args..., INT_AMDGPU)
 
 import Base.length
 length(x::Enum) = 1
