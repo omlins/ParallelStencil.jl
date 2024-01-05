@@ -224,7 +224,8 @@ function substitute_N(caller::Module, ndims::Integer, is_parallel_kernel::Bool, 
     N = eval_arg(caller, substitute(kwargs.N, :ndims, ndims))
     if !(typeof(N) <: Integer) @KeywordArgumentError("$macroname: keyword argument 'N' must be an integer (or a tuple if 'ndims' is a tuple; obtained: $N).") end
     kwargs_expr = (:($key=$(getproperty(kwargs, key))) for key in keys(kwargs) if key != :N)
-    kernel = substitute_in_kernel(kernel, :N, N; signature_only=true)
+    if inexpr_walk(splitdef(kernel)[:whereparams], :N) @IncoherentArgumentError("$macroname: 'N' must not appear in the where clause of the kernel signature when the keyword argument 'N' is used.") end
+    kernel = substitute_in_kernel(kernel, :N, N; signature_only=true, typeparams_only=true)
     if (is_parallel_kernel) return :(@parallel         $(posargs...) $(kwargs_expr...) $kernel)
     else                    return :(@parallel_indices $(posargs...) $(kwargs_expr...) $kernel)
     end
