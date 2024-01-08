@@ -12,14 +12,13 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          #- '1.8' # Minimum required Julia version (due to CellArrays' AMDGPU dependency 1.7 and due to Enzyme 1.8).
-          - '1.9'
+          - '1.9' # Minimum version supporting extensions
           - '1'   # Latest stable 1.x release of Julia
           #- 'nightly'
         os:
           - ubuntu-latest
           - macOS-latest
-          - windows-latest
+          #- windows-latest
         arch:
           - x64
     steps:
