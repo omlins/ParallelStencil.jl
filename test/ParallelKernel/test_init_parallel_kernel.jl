@@ -29,6 +29,7 @@ end
             @testset "Data" begin
                 @test @isdefined(Data)
                 @test length(@symbols($(@__MODULE__), Data)) > 1
+                @test Symbol("Index") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Number") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
@@ -57,6 +58,7 @@ end
             @testset "Data" begin
                 @test @isdefined(Data)
                 @test length(@symbols($(@__MODULE__), Data)) > 1
+                @test Symbol("Index") in @symbols($(@__MODULE__), Data)
                 @test !(Symbol("Number") in @symbols($(@__MODULE__), Data))
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
