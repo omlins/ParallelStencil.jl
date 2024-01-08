@@ -27,16 +27,21 @@ end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:())
     if package == PKG_CUDA
-        data_module     = Data_cuda(numbertype)
-        pkg_import_cmd  = :(import ParallelStencil.ParallelKernel.CUDA)
+        indextype          = INT_CUDA
+        data_module        = Data_cuda(numbertype, indextype)
+        data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :(import ParallelStencil.ParallelKernel.CUDA)
     elseif package == PKG_AMDGPU
-        data_module     = Data_amdgpu(numbertype)
-        pkg_import_cmd  = :(import ParallelStencil.ParallelKernel.AMDGPU)
+        indextype          = INT_AMDGPU
+        data_module        = Data_amdgpu(numbertype, indextype)
+        data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :(import ParallelStencil.ParallelKernel.AMDGPU)
     elseif package == PKG_THREADS
-        data_module     = Data_threads(numbertype)
-        pkg_import_cmd  = :()
+        indextype          = INT_THREADS
+        data_module        = Data_threads(numbertype, indextype)
+        data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :()
     end
-    data_module_shared = Data_shared(numbertype)
     ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme)
     if (package == PKG_THREADS) ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme; Enzyme.API.runtimeActivity!(true)) end # NOTE: Enzyme requires this currently to work correctly with threads.
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
