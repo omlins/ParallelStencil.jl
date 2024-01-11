@@ -17,16 +17,8 @@ To see a description of a function type `?<functionname>`.
 """
 module AD
 export autodiff_deferred!, autodiff_deferred_thunk!
-import Enzyme
 
-function autodiff_deferred!(args...)
-    Enzyme.autodiff_deferred(args...)
-    return
-end
-
-function autodiff_deferred_thunk!(args...)
-    Enzyme.autodiff_deferred_thunk(args...)
-    return
-end
+function autodiff_deferred! end
+function autodiff_deferred_thunk! end
 
 end # Module AD

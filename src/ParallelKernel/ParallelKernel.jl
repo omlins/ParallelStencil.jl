@@ -41,7 +41,7 @@ To see a description of a macro or module type `?<macroname>` (including the `@`
 module ParallelKernel
 
 ## Alphabetical include of submodules.
-include("AD.jl");
+include(joinpath("EnzymeExt", "AD.jl"));
 include("Data.jl");
 include("Exceptions.jl");
 using .Exceptions
