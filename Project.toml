@@ -7,10 +7,15 @@ version = "0.11.0"
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
-Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
 MacroTools = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+
+[weakdeps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+
+[extensions]
+ParallelStencil_EnzymeExt = "Enzyme"
 
 [compat]
 AMDGPU = "0.6, 0.7, 0.8"
@@ -26,4 +31,4 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "TOML"]
+test = ["Test", "TOML", "AMDGPU", "CUDA", "CellArrays", "Enzyme", "StaticArrays"]
