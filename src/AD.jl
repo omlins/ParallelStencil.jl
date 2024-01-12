@@ -49,7 +49,6 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 To see a description of a function type `?<functionname>`.
 """
 module AD
+import ..ParallelKernel.AD: init_AD, autodiff_deferred!, autodiff_deferred_thunk!
 export autodiff_deferred!, autodiff_deferred_thunk!
-import ..ParallelKernel.AD: autodiff_deferred!, autodiff_deferred_thunk!
-
 end # Module AD
