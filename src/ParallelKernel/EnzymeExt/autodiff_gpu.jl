@@ -4,8 +4,7 @@ import Enzyme
 
 function ParallelStencil.ParallelKernel.AD.init_AD(package::Symbol)
     if package == PKG_THREADS
-        @info "Setting `Enzyme.API.runtimeActivity!(true)` (currently required for Enzyme to work correctly with threads)."
-        Enzyme.API.runtimeActivity!(true)
+        Enzyme.API.runtimeActivity!(true) # NOTE: this is currently required for Enzyme to work correctly with threads
     end
 end
 
