@@ -16,9 +16,14 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 To see a description of a function type `?<functionname>`.
 """
 module AD
-export autodiff_deferred!, autodiff_deferred_thunk!
+using ..Exceptions
 
-function autodiff_deferred! end
-function autodiff_deferred_thunk! end
+const ERRMSG_EXTENSION_LOAD_ERROR = "AD: the Enzyme extension was not loaded. Make sure to import Enzyme before ParallelStencil."
+
+init_AD(args...)                  = return                                            # NOTE: a call will be triggered from @init_parallel_kernel, but it will do nothing if the extension is not loaded. Methods are to be defined in the AD extension modules.
+autodiff_deferred!(args...)       = @ExtensionLoadError(ERRMSG_EXTENSION_LOAD_ERROR)
+autodiff_deferred_thunk!(args...) = @ExtensionLoadError(ERRMSG_EXTENSION_LOAD_ERROR)
+
+export autodiff_deferred!, autodiff_deferred_thunk!
 
 end # Module AD
