@@ -42,8 +42,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         data_module_shared = Data_shared(numbertype, indextype)
         pkg_import_cmd     = :()
     end
-    ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme)
-    if (package == PKG_THREADS) ad_import_cmd = :(import ParallelStencil.ParallelKernel.Enzyme; Enzyme.API.runtimeActivity!(true)) end # NOTE: Enzyme requires this currently to work correctly with threads.
+    ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(Symbol("$PKG_THREADS")))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
         if (datadoc_call==:())
             if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
@@ -59,7 +58,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
     @eval(caller, $pkg_import_cmd)
-    @eval(caller, $ad_import_cmd)
+    @eval(caller, $ad_init_cmd)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
