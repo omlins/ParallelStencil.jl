@@ -40,11 +40,13 @@ To see a description of a macro or module type `?<macroname>` (including the `@`
 """
 module ParallelKernel
 
+## Include off exception module
+include("Exceptions.jl");
+using .Exceptions
+
 ## Alphabetical include of submodules.
 include(joinpath("EnzymeExt", "AD.jl"));
 include("Data.jl");
-include("Exceptions.jl");
-using .Exceptions
 
 ## Include of constant parameters, types and syntax sugar shared in ParallelKernel module only
 include("shared.jl")
