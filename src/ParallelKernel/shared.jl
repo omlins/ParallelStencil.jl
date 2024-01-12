@@ -20,7 +20,6 @@ elseif ENABLE_AMDGPU
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
-import Enzyme
 using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
@@ -60,9 +59,9 @@ const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Fl
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
 const AD_MODE_DEFAULT              = :(Enzyme.Reverse)
-const AD_DUPLICATE_DEFAULT         = Enzyme.DuplicatedNoNeed
-const AD_ANNOTATION_DEFAULT        = Enzyme.Const
-const AD_SUPPORTED_ANNOTATIONS     = (Const=Enzyme.Const, Active=Enzyme.Active, Duplicated=Enzyme.Duplicated, DuplicatedNoNeed=Enzyme.DuplicatedNoNeed)
+const AD_DUPLICATE_DEFAULT         = :(Enzyme.DuplicatedNoNeed)
+const AD_ANNOTATION_DEFAULT        = :(Enzyme.Const)
+const AD_SUPPORTED_ANNOTATIONS     = (Const=:(Enzyme.Const), Active=:(Enzyme.Active), Duplicated=:(Enzyme.Duplicated), DuplicatedNoNeed=:(Enzyme.DuplicatedNoNeed))
 const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following (and evaluatable at parse time): $(join(SUPPORTED_NUMBERTYPES,", "))"
