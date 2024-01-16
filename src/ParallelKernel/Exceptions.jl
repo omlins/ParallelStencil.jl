@@ -1,12 +1,12 @@
 module Exceptions
-export @ModuleInternalError, @MethodPluginError, @IncoherentCallError, @NotInitializedError, @ExtensionLoadError, @IncoherentArgumentError, @KeywordArgumentError, @ArgumentEvaluationError, @ArgumentError
-export ModuleInternalError, MethodPluginError, IncoherentCallError, NotInitializedError, ExtensionLoadError, IncoherentArgumentError, KeywordArgumentError, ArgumentEvaluationError
+export @ModuleInternalError, @MethodPluginError, @IncoherentCallError, @NotInitializedError, @NotLoadedError, @IncoherentArgumentError, @KeywordArgumentError, @ArgumentEvaluationError, @ArgumentError
+export ModuleInternalError, MethodPluginError, IncoherentCallError, NotInitializedError, NotLoadedError, IncoherentArgumentError, KeywordArgumentError, ArgumentEvaluationError
 
 macro ModuleInternalError(msg) esc(:(throw(ModuleInternalError($msg)))) end
 macro MethodPluginError(msg) esc(:(throw(MethodPluginError($msg)))) end
 macro IncoherentCallError(msg) esc(:(throw(IncoherentCallError($msg)))) end
 macro NotInitializedError(msg) esc(:(throw(NotInitializedError($msg)))) end
-macro ExtensionLoadError(msg)  esc(:(throw(ExtensionLoadError($msg)))) end
+macro NotLoadedError(msg)  esc(:(throw(NotLoadedError($msg)))) end
 macro IncoherentArgumentError(msg) esc(:(throw(IncoherentArgumentError($msg)))) end
 macro KeywordArgumentError(msg) esc(:(throw(KeywordArgumentError($msg)))) end
 macro ArgumentEvaluationError(msg) esc(:(throw(ArgumentEvaluationError($msg)))) end
@@ -32,10 +32,10 @@ struct NotInitializedError <: Exception
 end
 Base.showerror(io::IO, e::NotInitializedError) = print(io, "NotInitializedError: ", e.msg)
 
-struct ExtensionLoadError <: Exception
+struct NotLoadedError <: Exception
     msg::String
 end
-Base.showerror(io::IO, e::ExtensionLoadError) = print(io, "ExtensionLoadError: ", e.msg)
+Base.showerror(io::IO, e::NotLoadedError) = print(io, "NotLoadedError: ", e.msg)
 
 struct IncoherentArgumentError <: Exception
     msg::String
