@@ -40,7 +40,7 @@ To see a description of a macro or module type `?<macroname>` (including the `@`
 """
 module ParallelKernel
 
-## Include off exception module
+## Include of exception module
 include("Exceptions.jl");
 using .Exceptions
 
