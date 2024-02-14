@@ -143,30 +143,34 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            CellArrays.@define_CuCellArray
+            export CuCellArray
             const Index                         = $indextype
             const Array{T, N}                   = CUDA.CuArray{T, N}
             const DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = CellArrays.CuCellArray{<:Cell{T_elem},N,B,T_elem}
+            const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            CellArrays.@define_CuCellArray
+            export CuCellArray
             const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = CUDA.CuArray{$numbertype, N}
             const DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = CellArrays.CuCellArray{<:Cell,N,B,$numbertype}
+            const CellArray{N, B}                = CuCellArray{<:Cell,N,B,$numbertype}
             const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
             const TArray{T, N}                   = CUDA.CuArray{T, N}
             const DeviceTArray{T, N}             = CUDA.CuDeviceArray{T, N}
             const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = CellArrays.CuCellArray{<:TCell{T_elem},N,B,T_elem}
+            const TCellArray{T_elem, N, B}       = CuCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         end)
     end
@@ -176,30 +180,34 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            CellArrays.@define_ROCCellArray
+            export ROCCellArray
             const Index                         = $indextype
             const Array{T, N}                   = AMDGPU.ROCArray{T, N}
             const DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = CellArrays.ROCCellArray{<:Cell{T_elem},N,B,T_elem}
+            const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            CellArrays.@define_ROCCellArray
+            export ROCCellArray
             const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
             const DeviceArray{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = CellArrays.ROCCellArray{<:Cell,N,B,$numbertype}
+            const CellArray{N, B}                = ROCCellArray{<:Cell,N,B,$numbertype}
             const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
             const TArray{T, N}                   = AMDGPU.ROCArray{T, N}
             const DeviceTArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = CellArrays.ROCCellArray{<:TCell{T_elem},N,B,T_elem}
+            const TCellArray{T_elem, N, B}       = ROCCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
         end)
     end
