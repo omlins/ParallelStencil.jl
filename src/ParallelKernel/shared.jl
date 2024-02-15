@@ -7,21 +7,25 @@ const PKG_CUDA            = :CUDA
 const PKG_AMDGPU          = :AMDGPU
 const PKG_THREADS         = :Threads
 const PKG_NONE            = :PKG_NONE
+using CellArrays, StaticArrays, MacroTools
+import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
 @static if ENABLE_CUDA && ENABLE_AMDGPU
     using CUDA
     using AMDGPU
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
+    @define_CuCellArray
+    @define_ROCCellArray
 elseif ENABLE_CUDA 
     using CUDA
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
+    @define_CuCellArray
 elseif ENABLE_AMDGPU
     using AMDGPU
     const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_AMDGPU]
+    @define_ROCCellArray
 else
     const SUPPORTED_PACKAGES = [PKG_THREADS]
 end
-using CellArrays, StaticArrays, MacroTools
-import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
 ## CONSTANTS AND TYPES (and the macros wrapping them)
