@@ -8,13 +8,14 @@ using ParallelStencil.FiniteDifferences3D
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import ParallelStencil.CUDA
+    import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import ParallelStencil.AMDGPU
+    import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+Base.retry_load_extensions() # Needed to load the extensions after the packages have been filtered.
 
 import ParallelStencil.@gorgeousexpand
 
