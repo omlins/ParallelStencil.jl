@@ -30,17 +30,14 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         indextype          = INT_CUDA
         data_module        = Data_cuda(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
-        pkg_import_cmd     = :(import ParallelStencil.ParallelKernel.CUDA)
     elseif package == PKG_AMDGPU
         indextype          = INT_AMDGPU
         data_module        = Data_amdgpu(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
-        pkg_import_cmd     = :(import ParallelStencil.ParallelKernel.AMDGPU)
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
         data_module        = Data_threads(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
-        pkg_import_cmd     = :()
     end
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(ParallelStencil.ParallelKernel.PKG_THREADS))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
@@ -57,7 +54,6 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     else
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
-    @eval(caller, $pkg_import_cmd)
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
@@ -68,7 +64,7 @@ end
 
 
 macro is_initialized() is_initialized(__module__) end
-macro get_package() get_package(__module__) end
+macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
 macro get_inbounds() get_inbounds(__module__) end
 let
