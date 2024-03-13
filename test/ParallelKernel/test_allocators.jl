@@ -8,15 +8,16 @@ import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.CUDA
+    import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
     @define_CuCellArray
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.AMDGPU
+    import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
     @define_ROCCellArray
 end
+Base.retry_load_extensions() # Needed to load the extensions after the packages have been filtered.
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
 
 @static for package in TEST_PACKAGES  eval(:(
