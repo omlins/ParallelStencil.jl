@@ -142,7 +142,7 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
 function Data_cuda(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_CuCellArray
             export CuCellArray
             const Index                         = $indextype
@@ -155,7 +155,7 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_CuCellArray
             export CuCellArray
             const Index                          = $indextype
@@ -179,7 +179,7 @@ end
 function Data_amdgpu(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_ROCCellArray
             export ROCCellArray
             const Index                         = $indextype
@@ -192,7 +192,7 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
         end)
     else
         :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_ROCCellArray
             export ROCCellArray
             const Index                          = $indextype
