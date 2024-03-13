@@ -1,41 +1,20 @@
-# Enable CUDA/AMDGPU if the CUDA/AMDGPU package is installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU package installed if the installation procedure allows it).
-const CUDA_IS_INSTALLED   = (Base.find_package("CUDA")!==nothing)
-const AMDGPU_IS_INSTALLED = (Base.find_package("AMDGPU")!==nothing)
-const ENABLE_CUDA         = true # NOTE: Can be set to CUDA_IS_INSTALLED, or to true or false independent of it.
-const ENABLE_AMDGPU       = true # NOTE: Can be set to AMDGPU_IS_INSTALLED, or to true or false independent of it.
-const PKG_CUDA            = :CUDA
-const PKG_AMDGPU          = :AMDGPU
-const PKG_THREADS         = :Threads
-const PKG_NONE            = :PKG_NONE
 using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
-@static if ENABLE_CUDA && ENABLE_AMDGPU
-    using CUDA
-    using AMDGPU
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
-    @define_CuCellArray
-    @define_ROCCellArray
-elseif ENABLE_CUDA 
-    using CUDA
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_CUDA]
-    @define_CuCellArray
-elseif ENABLE_AMDGPU
-    using AMDGPU
-    const SUPPORTED_PACKAGES = [PKG_THREADS, PKG_AMDGPU]
-    @define_ROCCellArray
-else
-    const SUPPORTED_PACKAGES = [PKG_THREADS]
-end
 
 
 ## CONSTANTS AND TYPES (and the macros wrapping them)
-#NOTE: constants needs to be defined before including the submodules to have them accessible there.
+# NOTE: constants needs to be defined before including the submodules to have them accessible there.
 
 const GENSYM_SEPARATOR = ", "
 gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator)) #NOTE: this function needs to be defind before constants using it.
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
+const PKG_CUDA                     = :CUDA
+const PKG_AMDGPU                   = :AMDGPU
+const PKG_THREADS                  = :Threads
+const PKG_NONE                     = :PKG_NONE
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
@@ -87,43 +66,10 @@ macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
 
-## FUNCTIONS TO GET CREATE AND MANAGE CUDA STREAMS, AMDGPU QUEUES AND "ROCSTREAMS"
 
-@static if ENABLE_CUDA
-    let
-        global get_priority_custream, get_custream
-        priority_custreams = Array{CuStream}(undef, 0)
-        custreams          = Array{CuStream}(undef, 0)
+## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
 
-        function get_priority_custream(id::Integer)
-            while (id > length(priority_custreams)) push!(priority_custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[end])) end # CUDA.priority_range()[end] is max priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return priority_custreams[id]
-        end
-
-        function get_custream(id::Integer)
-            while (id > length(custreams)) push!(custreams, CuStream(; flags=CUDA.STREAM_NON_BLOCKING, priority=CUDA.priority_range()[1])) end # CUDA.priority_range()[1] is min priority. # NOTE: priority_range cannot be called outside the function as only at runtime sure that CUDA is functional.
-            return custreams[id]
-        end
-    end
-end
-
-@static if ENABLE_AMDGPU
-    let
-        global get_priority_rocstream, get_rocstream
-        priority_rocstreams = Array{AMDGPU.HIPStream}(undef, 0)
-        rocstreams          = Array{AMDGPU.HIPStream}(undef, 0)
-
-        function get_priority_rocstream(id::Integer)
-            while (id > length(priority_rocstreams)) push!(priority_rocstreams, AMDGPU.HIPStream(:high)) end
-            return priority_rocstreams[id]
-        end
-
-        function get_rocstream(id::Integer)
-            while (id > length(rocstreams)) push!(rocstreams, AMDGPU.HIPStream(:low)) end
-            return rocstreams[id]
-        end
-    end
-end
+is_loaded(arg) = false 
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
