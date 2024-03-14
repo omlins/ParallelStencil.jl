@@ -30,14 +30,17 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         indextype          = INT_CUDA
         data_module        = Data_cuda(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :(import CUDA)
     elseif package == PKG_AMDGPU
         indextype          = INT_AMDGPU
         data_module        = Data_amdgpu(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :(import AMDGPU)
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
         data_module        = Data_threads(numbertype, indextype)
         data_module_shared = Data_shared(numbertype, indextype)
+        pkg_import_cmd     = :()
     end
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(ParallelStencil.ParallelKernel.PKG_THREADS))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
@@ -46,6 +49,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
             end
         end
+        @eval(caller, $pkg_import_cmd)
         @eval(caller, $data_module)
         @eval(caller.Data, $data_module_shared)
         @eval(caller, $datadoc_call)
