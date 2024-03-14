@@ -42,7 +42,7 @@ https://github.com/omlins/ParallelStencil.jl
 - [`Data`](@ref)
 
 !! note "Activation of GPU support"
-    The support for GPU (CUDA or AMDGPU) is activated by importing the corresponding module (CUDA or AMDGPU) before importing ParallelStencil (the corresponding extension will be loaded).
+    The support for GPU (CUDA or AMDGPU) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl or AMDGPU.jl). Note that it is not required to import explicitly the corresponding module (CUDA or AMDGPU); this is automatically done by [`@init_parallel_stencil`](@ref).
 
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
