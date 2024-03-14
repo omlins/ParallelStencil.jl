@@ -17,3 +17,8 @@ function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(arg, args...
     Enzyme.autodiff_deferred_thunk(arg, args...)
     return
 end
+
+
+## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
+
+ParallelStencil.ParallelKernel.is_loaded(::Val{:ParallelStencil_EnzymeExt}) = true

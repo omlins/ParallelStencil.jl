@@ -7,13 +7,14 @@ import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.CUDA
+    import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.AMDGPU
+    import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin

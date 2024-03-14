@@ -413,34 +413,6 @@ falses_cpu(::Type{T}, blocklength, args...) where {T<:Bool}                     
 falses_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, false, args...)
  trues_cpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cpu(T, blocklength, true, args...)
 
- zeros_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cuda(T); CUDA.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_cuda(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_cuda(T); CUDA.ones(T, args...))   # ...
-  rand_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(rand_cpu(T, blocklength, args...))        # ...
-falses_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.zeros(Bool, args...)                         # ...
- trues_cuda(::Type{T}, blocklength, args...) where {T<:Bool}                        = CUDA.ones(Bool, args...)                          # ...
-  fill_cuda(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = CuArray(fill_cpu(T, blocklength, args...))        # ...
-
- zeros_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cuda(T); fill_cuda(T, blocklength, 0, args...))
-  ones_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_cuda(T); fill_cuda(T, blocklength, 1, args...))
-  rand_cuda(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_cuda(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, CUDA.CuArray{eltype(T),3}}(CUDA.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
-  rand_cuda(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_cuda(T, blocklength, dims)
-falses_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, false, args...)
- trues_cuda(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_cuda(T, blocklength, true, args...)
-
- zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_amdgpu(T); AMDGPU.zeros(T, args...))  # (blocklength is ignored if neither celldims nor celltype is set)
-  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Number}                      = (check_datatype_amdgpu(T); AMDGPU.ones(T, args...))   # ...
-  rand_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(rand_cpu(T, blocklength, args...))           # ...
-falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.falses(args...)                                # ...
- trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Bool}                        = AMDGPU.trues(args...)                                 # ...
-  fill_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}          = ROCArray(fill_cpu(T, blocklength, args...))           # ...
-
- zeros_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_amdgpu(T); fill_amdgpu(T, blocklength, 0, args...))
-  ones_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = (check_datatype_amdgpu(T); fill_amdgpu(T, blocklength, 1, args...))
-  rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_amdgpu(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.ROCArray(Base.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen)))), dims))   # TODO: use AMDGPU.rand! instead of AMDGPU.rand once it supports Enums: rand_amdgpu(::Type{T}, ::Val{B},    dims)    where {T<:Union{SArray,FieldArray}, B} = (check_datatype_amdgpu(T, Bool, Enum); blocklen = (B == 0) ? prod(dims) : B; CellArray{T,length(dims),B, AMDGPU.ROCArray{eltype(T),3}}(AMDGPU.rand(eltype(T), blocklen, prod(size(T)), ceil(Int,prod(dims)/(blocklen))), dims))
-  rand_amdgpu(::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}}    = rand_amdgpu(T, blocklength, dims)
-falses_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, false, args...)
- trues_amdgpu(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_amdgpu(T, blocklength, true, args...)
-
 function fill_cpu(::Type{T}, blocklength, x, args...) where {T <: Union{Number, Enum}} # (blocklength is ignored if neither celldims nor celltype is set)
     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
     check_datatype_cpu(T, Bool, Enum)
@@ -458,29 +430,7 @@ function fill_cpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,Fiel
     return CellArrays.fill!(CPUCellArray{T,B}(undef, args...), cell)
 end
 
-function fill_cuda(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
-    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype_cuda(T, Bool, Enum)
-    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
-    elseif (length(x) == length(T)) cell = convert(T, x)
-    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
-    end
-    return CellArrays.fill!(CuCellArray{T,B}(undef, args...), cell)
-end
-
-function fill_amdgpu(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
-    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-    check_datatype_amdgpu(T, Bool, Enum)
-    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
-    elseif (length(x) == length(T)) cell = convert(T, x)
-    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
-    end
-    return CellArrays.fill!(ROCCellArray{T,B}(undef, args...), cell)
-end
-
 fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
-fill_cuda!(A, x) = CUDA.fill!(A, construct_cell(A, x))
-fill_amdgpu!(A, x) = AMDGPU.fill!(A, construct_cell(A, x))
 
 #TODO: eliminate nearly duplicate code starting from if T_cell I think...
 function construct_cell(A, x)
@@ -504,8 +454,6 @@ function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, Unio
 end
 
 check_datatype_cpu(args...)    = check_datatype(args..., INT_THREADS)
-check_datatype_cuda(args...)   = check_datatype(args..., INT_CUDA)
-check_datatype_amdgpu(args...) = check_datatype(args..., INT_AMDGPU)
 
 import Base.length
 length(x::Enum) = 1

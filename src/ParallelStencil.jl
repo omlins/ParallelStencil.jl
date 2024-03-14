@@ -41,6 +41,9 @@ https://github.com/omlins/ParallelStencil.jl
 # Modules generated in caller
 - [`Data`](@ref)
 
+!! note "Activation of GPU support"
+    The support for GPU (CUDA or AMDGPU) is activated by importing the corresponding module (CUDA or AMDGPU) before importing ParallelStencil (the corresponding extension will be loaded).
+
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
 module ParallelStencil

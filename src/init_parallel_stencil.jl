@@ -65,7 +65,7 @@ end
 
 
 macro is_initialized() is_initialized(__module__) end
-macro get_package() get_package(__module__) end
+macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
 macro get_ndims() get_ndims(__module__) end
 macro get_inbounds() get_inbounds(__module__) end

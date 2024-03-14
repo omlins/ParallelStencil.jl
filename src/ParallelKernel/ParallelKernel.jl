@@ -48,6 +48,10 @@ using .Exceptions
 include(joinpath("EnzymeExt", "AD.jl"));
 include("Data.jl");
 
+## Alphabetical include of defaults for extensions
+include(joinpath("AMDGPUExt", "defaults.jl"))
+include(joinpath("CUDAExt", "defaults.jl"))
+
 ## Include of constant parameters, types and syntax sugar shared in ParallelKernel module only
 include("shared.jl")
 

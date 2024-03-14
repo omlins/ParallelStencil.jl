@@ -9,13 +9,15 @@ import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_in
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.CUDA
+    import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import ParallelStencil.ParallelKernel.AMDGPU
+    import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 import Enzyme

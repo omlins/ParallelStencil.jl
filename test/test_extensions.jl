@@ -2,11 +2,11 @@ using Test
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
-    import ParallelStencil.CUDA
+    import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
 end
 @static if PKG_AMDGPU in TEST_PACKAGES
-    import ParallelStencil.AMDGPU
+    import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 exename = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -18,7 +18,7 @@ const TEST_PROJECTS = ["Diffusion3D_minimal"] # ["Diffusion3D_minimal", "Diffusi
             test_script = joinpath(@__DIR__, "test_projects", project, "test", "localtest_diffusion_$(nameof($package)).jl")
             was_success = true
             try
-                run(`$exename -O3 --startup-file=no --check-bounds=no $test_script`)
+                run(`$exename -O3 --startup-file=no $test_script`)
             catch ex
                 was_success = false
             end

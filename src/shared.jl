@@ -1,13 +1,3 @@
-# Enable CUDA/AMDGPU if the required packages are installed or in any case (enables to use the package for CPU-only without requiring the CUDA/AMDGPU packages functional - or even not at all if the installation procedure allows it). NOTE: it cannot be precompiled for GPU on a node without GPU.
-import .ParallelKernel: ENABLE_CUDA, ENABLE_AMDGPU  # ENABLE_CUDA and ENABLE_AMDGPU must also always be accessible from the unit tests
-@static if ENABLE_CUDA && ENABLE_AMDGPU
-    using CUDA
-    using AMDGPU
-elseif ENABLE_CUDA 
-    using CUDA
-elseif ENABLE_AMDGPU
-    using AMDGPU
-end
 import MacroTools: @capture, postwalk, splitdef, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, insert_device_types, is_kernel, is_call, gensym_world, isgpu, @isgpu, substitute, substitute_in_kernel, in_signature, inexpr_walk, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing
 import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS
