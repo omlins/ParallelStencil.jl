@@ -17,7 +17,7 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
     @define_ROCCellArray
 end
-Base.retry_load_extensions() # Needed to load the extensions after the packages have been filtered.
+Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
 
 @static for package in TEST_PACKAGES  eval(:(

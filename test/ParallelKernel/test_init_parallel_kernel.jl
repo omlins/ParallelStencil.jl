@@ -14,7 +14,7 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
-Base.retry_load_extensions() # Needed to load the extensions after the packages have been filtered.
+Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
