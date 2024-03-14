@@ -10,6 +10,8 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
+const CUDA_IS_INSTALLED            = (Base.find_package("CUDA")!==nothing)
+const AMDGPU_IS_INSTALLED          = (Base.find_package("AMDGPU")!==nothing)
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_THREADS                  = :Threads
