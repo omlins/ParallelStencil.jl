@@ -10,8 +10,6 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
-const CUDA_IS_INSTALLED            = (Base.find_package("CUDA")!==nothing)
-const AMDGPU_IS_INSTALLED          = (Base.find_package("AMDGPU")!==nothing)
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_THREADS                  = :Threads
@@ -68,10 +66,10 @@ macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
 
-
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
 
 is_loaded(arg) = false 
+is_installed(package::String) = (Base.find_package(package)!==nothing)
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS: SIGNATURES, BODY AND RETURN STATEMENT
