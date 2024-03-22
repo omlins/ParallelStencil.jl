@@ -139,9 +139,9 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
 """
 
-function Data_cuda(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_CuCellArray
             export CuCellArray
@@ -152,9 +152,10 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_CuCellArray
             export CuCellArray
@@ -172,13 +173,15 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const TCellArray{T_elem, N, B}       = CuCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     end
+    return prewalk(rmlines, flatten(Data_module))
 end
 
-function Data_amdgpu(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_ROCCellArray
             export ROCCellArray
@@ -189,9 +192,10 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             CellArrays.@define_ROCCellArray
             export ROCCellArray
@@ -209,13 +213,15 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const TCellArray{T_elem, N, B}       = ROCCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     end
+    return prewalk(rmlines, flatten(Data_module))
 end
 
-function Data_threads(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+function Data_threads(modulename::Symbol, numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                          = $indextype
             const Array{T, N}                    = Base.Array{T, N}
@@ -224,9 +230,10 @@ function Data_threads(numbertype::DataType, indextype::DataType)
             const DeviceCell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:DeviceCell{T_elem},N,B,T_elem}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                          = $indextype
             const Number                         = $numbertype
@@ -242,11 +249,13 @@ function Data_threads(numbertype::DataType, indextype::DataType)
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const TCellArray{T_elem, N, B}       = CellArrays.CPUCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CPUCellArray{<:DeviceTCell{T_elem},N,B,T_elem}
+            $(create_shared_exprs(numbertype, indextype))
         end)
     end
+    return prewalk(rmlines, flatten(Data_module))
 end
 
-function Data_shared(numbertype::DataType, indextype::DataType)
+function create_shared_exprs(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         quote
             const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
@@ -276,11 +285,12 @@ function Data_shared(numbertype::DataType, indextype::DataType)
             const CellArrayCollection{N_tuple, T_elem, N, B}               = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}
             const DeviceCellArrayCollection{N_tuple, T_elem, N, B}         = Union{DeviceCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B}}
 
-            NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
-            NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
-            NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
-            NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
-            NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
+            # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
+            # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
+            # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
+            # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
+            # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
+            # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
         end
     else
         quote
@@ -332,15 +342,16 @@ function Data_shared(numbertype::DataType, indextype::DataType)
             const TCellArrayCollection{N_tuple, T_elem, N, B}              = Union{TCellArrayTuple{N_tuple, T_elem, N, B}, NamedTCellArrayTuple{N_tuple, T_elem, N, B}}
             const DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
 
+            # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
             NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
-            NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
-            NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
-            NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
-            NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
-            NamedTNumberTuple{}(T, t::NamedTuple)                    = Base.map(T, t)
-            NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
-            NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
-            NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
+            # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
+            # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
+            # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
+            # NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
+            # NamedTNumberTuple{}(T, t::NamedTuple)                    = Base.map(T, t)
+            # NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
+            # NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
+            # NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
         end
     end
 end
