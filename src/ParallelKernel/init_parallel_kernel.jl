@@ -26,24 +26,25 @@ macro init_parallel_kernel(args...)
 end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:())
+    @show caller
+    modulename = Symbol("$(caller).Data")
+    @show modulename
     if package == PKG_CUDA
         if (!is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided with an extension of ParallelStencil and CUDA.jl needs therefore to be installed independently.") end
         indextype          = INT_CUDA
-        data_module        = Data_cuda(numbertype, indextype)
-        data_module_shared = Data_shared(numbertype, indextype)
+        data_module        = Data_cuda(modulename, numbertype, indextype)
         pkg_import_cmd     = :(import CUDA)
     elseif package == PKG_AMDGPU
         if (!is_installed("AMDGPU")) @NotInstalledError("AMDGPU was selected as package for parallelization, but AMDGPU.jl is not installed. AMDGPU functionality is provided with an extension of ParallelStencil and AMDGPU.jl needs therefore to be installed independently.") end
         indextype          = INT_AMDGPU
-        data_module        = Data_amdgpu(numbertype, indextype)
-        data_module_shared = Data_shared(numbertype, indextype)
+        data_module        = Data_amdgpu(modulename, numbertype, indextype)
         pkg_import_cmd     = :(import AMDGPU)
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
-        data_module        = Data_threads(numbertype, indextype)
-        data_module_shared = Data_shared(numbertype, indextype)
+        data_module        = Data_threads(modulename, numbertype, indextype)
         pkg_import_cmd     = :()
     end
+    @show data_module
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(ParallelStencil.ParallelKernel.PKG_THREADS))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
         if (datadoc_call==:())
@@ -52,20 +53,21 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             end
         end
         @eval(caller, $pkg_import_cmd)
-        @eval(caller, $data_module)
-        @eval(caller.Data, $data_module_shared)
-        @eval(caller, $datadoc_call)
+        # @eval(caller, $data_module)
+        # @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
         if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
+        data_module = NOEXPR
     else
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
+        data_module = NOEXPR
     end
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
     set_initialized(caller, true)
-    return nothing
+    return data_module
 end
 
 
