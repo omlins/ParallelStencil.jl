@@ -1,5 +1,5 @@
 using CellArrays, StaticArrays, MacroTools
-import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock # NOTE: inexpr_walk used instead of MacroTools.inexpr
+import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock, flatten, rmlines, prewalk # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
 
 ## CONSTANTS AND TYPES (and the macros wrapping them)
