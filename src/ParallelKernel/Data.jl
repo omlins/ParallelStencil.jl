@@ -143,8 +143,10 @@ function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            CellArrays.@define_CuCellArray
-            export CuCellArray
+            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_CuCellArray
+            # export CuCellArray
             const Index                         = $indextype
             const Array{T, N}                   = CUDA.CuArray{T, N}
             const DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
@@ -157,8 +159,10 @@ function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType
     else
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            CellArrays.@define_CuCellArray
-            export CuCellArray
+            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_CuCellArray
+            # export CuCellArray
             const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = CUDA.CuArray{$numbertype, N}
@@ -183,8 +187,10 @@ function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataTy
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            CellArrays.@define_ROCCellArray
-            export ROCCellArray
+            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_ROCCellArray
+            # export ROCCellArray
             const Index                         = $indextype
             const Array{T, N}                   = AMDGPU.ROCArray{T, N}
             const DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
@@ -197,8 +203,10 @@ function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataTy
     else
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            CellArrays.@define_ROCCellArray
-            export ROCCellArray
+            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_ROCCellArray
+            # export ROCCellArray
             const Index                          = $indextype
             const Number                         = $numbertype
             const Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
@@ -343,7 +351,7 @@ function create_shared_exprs(numbertype::DataType, indextype::DataType)
             const DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
 
             # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
-            NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
+            # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
             # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
             # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
             # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
