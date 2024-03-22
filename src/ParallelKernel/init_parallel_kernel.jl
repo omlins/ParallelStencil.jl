@@ -26,9 +26,7 @@ macro init_parallel_kernel(args...)
 end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:())
-    @show caller
-    modulename = Symbol("$(caller).Data")
-    @show modulename
+    modulename = :Data
     if package == PKG_CUDA
         if (!is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided with an extension of ParallelStencil and CUDA.jl needs therefore to be installed independently.") end
         indextype          = INT_CUDA
@@ -53,21 +51,19 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             end
         end
         @eval(caller, $pkg_import_cmd)
-        # @eval(caller, $data_module)
-        # @eval(caller, $datadoc_call)
+        @eval(caller, $data_module)
+        @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
         if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
-        data_module = NOEXPR
     else
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
-        data_module = NOEXPR
     end
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
     set_initialized(caller, true)
-    return data_module
+    return nothing
 end
 
 
