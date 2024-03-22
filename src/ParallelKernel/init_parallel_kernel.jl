@@ -42,7 +42,6 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         data_module        = Data_threads(modulename, numbertype, indextype)
         pkg_import_cmd     = :()
     end
-    @show data_module
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(ParallelStencil.ParallelKernel.PKG_THREADS))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
         if (datadoc_call==:())
