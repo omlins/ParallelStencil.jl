@@ -13,10 +13,12 @@ gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_THREADS                  = :Threads
+const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
@@ -51,10 +53,11 @@ const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following 
 const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
-const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
-                                   PKG_CUDA    => 0,
-                                   PKG_AMDGPU  => 0,
-                                   PKG_THREADS => 1)
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
+                                   PKG_CUDA      => 0,
+                                   PKG_AMDGPU    => 0,
+                                   PKG_THREADS   => 1,
+                                   PKG_POLYESTER => 1)
 
 struct Dim3
     x::INT_THREADS
