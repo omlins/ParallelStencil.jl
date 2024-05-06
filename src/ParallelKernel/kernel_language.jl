@@ -87,6 +87,47 @@ macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module
 
 
 ##
+const FORALL_DOC = """
+    @∀ x ∈ X statement
+    @∀ x in X statement
+    @∀ x = X statement
+
+Expand the `statement` for all `x` in `X`.
+
+# Arguments
+- `x`: the name of the variable the `statement` is to be expanded with.
+- `X`: the set of names or range of values `x` is to be expanded over.
+- `statement`: the statement to be expanded for all `x` in `X`.
+
+# Examples
+    @∀ i ∈ (x,z) @all(C.i) = @all(A.i) + @all(B.i)                     # Equivalent to: @all(C.x) = @all(A.x) + @all(B.x)
+                                                                       #                @all(C.z) = @all(A.z) + @all(B.z)
+
+    @∀ i ∈ (y,z) C.i[ix,iy,iz] = A.i[ix,iy,iz] + B.i[ix,iy,iz]         # Equivalent to: C.y[ix,iy,iz] = A.y[ix,iy,iz] + B.y[ix,iy,iz]
+                                                                       #                C.z[ix,iy,iz] = A.z[ix,iy,iz] + B.z[ix,iy,iz]
+
+    @∀ (ij,i,j) ∈ ((xy,x,y), (xz,x,z), (yz,y,z)) @all(C.ij) = @all(A.i) + @all(B.j)  # Equivalent to: @all(C.xy) = @all(A.x) + @all(B.y)
+                                                                                     #                @all(C.xz) = @all(A.x) + @all(B.z)
+                                                                                     #                @all(C.yz) = @all(A.y) + @all(B.z)
+
+    @∀ i ∈ 1:N @all(C[i]) = @all(A[i]) + @all(B[i])                    # Equivalent to: @all(C[1]) = @all(A[1]) + @all(B[1])
+                                                                       #                @all(C[2]) = @all(A[2]) + @all(B[2])
+                                                                       #                ...
+                                                                       #                @all(C[N]) = @all(A[N]) + @all(B[N])
+
+    @∀ i ∈ 1:N C[i][ix,iy,iz] = A[i][ix,iy,iz] + B[i][ix,iy,iz]        # Equivalent to: C[1][ix,iy,iz] = A[1][ix,iy,iz] + B[1][ix,iy,iz]
+                                                                       #                C[2][ix,iy,iz] = A[2][ix,iy,iz] + B[2][ix,iy,iz]
+                                                                       #                ...
+                                                                       #                C[N][ix,iy,iz] = A[N][ix,iy,iz] + B[N][ix,iy,iz]
+
+!!! note "Performance note"
+    Besides enabling a concise notation for certain sets of equations, the `@∀` macro is also designed to replace for loops over a smaller range of values in compute kernels, leading often to better performance.
+"""
+@doc FORALL_DOC
+macro ∀(args...) check_initialized(__module__); checkforallargs(args...); esc(∀(__module__, args...)); end
+
+
+##
 macro return_value(args...) check_initialized(__module__); checksinglearg(args...); esc(return_value(args...)); end
 
 
@@ -106,6 +147,11 @@ end
 
 function checkargs_sharedMem(args...)
     if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
+end
+
+function checkforallargs(args...)
+    if !(length(args) == 2) @ArgumentError("wrong number of arguments.") end
+    if !((args[1].head == :call && args[1].args[1] in [:∈, :in]) || args[1].head == :(=)) @ArgumentError("the first argument must be of the form `x ∈ X, `x in X` or `x = X`.") end
 end
 
 
@@ -189,7 +235,31 @@ function pk_println(caller::Module, args...; package::Symbol=get_package(caller)
 end
 
 
-## FUNCTION FOR DIVERSE TASKS
+## FUNCTIONS FOR MATH SYNTAX
+
+function ∀(caller::Module, member_expr::Expr, statement::Union{Expr, Symbol})
+    if !(@capture(member_expr, x_ ∈ X_) || @capture(member_expr, x_ in X_) || @capture(member_expr, x_ = X_)) @ArgumentError("the first argument must be of the form `x ∈ X, `x in X` or `x = X`.") end
+    if @capture(X, a_:b_)
+        niters    = (a == 1) ? b : :($b-$a+1)
+        statement = (a == 1) ? statement : substitute(statement, x, :($x+$a-1))
+        return quote
+            ntuple(Val($niters)) do $x
+                @inline
+                $statement
+            end
+        end
+    else
+        X = !(isa(X, Expr) && X.head == :tuple) ? Tuple(eval_arg(caller, X)) : X #NOTE: if X is not a literally written set, then we evaluate it in the caller (e.g., I= (:x1, :y1, :z1); J= (:x2, :y2, :z2); @∀ (i,j) ∈ zip(I,J) V2.i = V.j)
+        X = !isa(X, Tuple) ? Tuple(extract_tuple(X; nested=true)) : X
+        x = Tuple(extract_tuple(x; nested=true))
+        return quote
+            $((substitute(statement, NamedTuple{x}(!isa(x_val, Tuple) ? Tuple(extract_tuple(x_val; nested=true)) : x_val); inQuoteNode=true) for x_val in X)...)
+        end
+    end
+end
+
+
+## FUNCTIONS FOR DIVERSE TASKS
 
 function return_value(value)
     return :(return $value)
