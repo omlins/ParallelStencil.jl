@@ -110,13 +110,15 @@ Expand the `statement` for all `x` in `X`.
                                                                                      #                @all(C.xz) = @all(A.x) + @all(B.z)
                                                                                      #                @all(C.yz) = @all(A.y) + @all(B.z)
 
-    @∀ i ∈ 1:N @all(C[i]) = @all(A[i]) + @all(B[i])                    # Equivalent to: for i in 1:N
-                                                                       #                  @all(C[i]) = @all(A[i]) + @all(B[i])
-                                                                       #                end
+    @∀ i ∈ 1:N @all(C[i]) = @all(A[i]) + @all(B[i])                    # Equivalent to: @all(C[1]) = @all(A[1]) + @all(B[1])
+                                                                       #                @all(C[2]) = @all(A[2]) + @all(B[2])
+                                                                       #                ...
+                                                                       #                @all(C[N]) = @all(A[N]) + @all(B[N])
 
-    @∀ i ∈ 1:N C[i][ix,iy,iz] = A[i][ix,iy,iz] + B[i][ix,iy,iz]        # Equivalent to: for i in 1:N
-                                                                       #                  C[i][ix,iy,iz] = A[i][ix,iy,iz] + B[i][ix,iy,iz]
-                                                                       #                end
+    @∀ i ∈ 1:N C[i][ix,iy,iz] = A[i][ix,iy,iz] + B[i][ix,iy,iz]        # Equivalent to: C[1][ix,iy,iz] = A[1][ix,iy,iz] + B[1][ix,iy,iz]
+                                                                       #                C[2][ix,iy,iz] = A[2][ix,iy,iz] + B[2][ix,iy,iz]
+                                                                       #                ...
+                                                                       #                C[N][ix,iy,iz] = A[N][ix,iy,iz] + B[N][ix,iy,iz]
 
 !!! note "Performance note"
     Besides enabling a concise notation for certain sets of equations, the `@∀` macro is also designed to replace for loops over a smaller range of values in compute kernels, leading often to better performance.
