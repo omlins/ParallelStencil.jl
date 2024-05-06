@@ -97,7 +97,7 @@ Expand the `statement` for all `x` in `X`.
 # Arguments
 - `x`: the name of the variable the `statement` is to be expanded with.
 - `X`: the set of names or range of values `x` is to be expanded over.
-- `statement`: the statement to be expanded for all `x` in `X`.
+- `statement`: the statement to be expanded.
 
 # Examples
     @∀ i ∈ (x,z) @all(C.i) = @all(A.i) + @all(B.i)                     # Equivalent to: @all(C.x) = @all(A.x) + @all(B.x)
@@ -121,7 +121,10 @@ Expand the `statement` for all `x` in `X`.
                                                                        #                C[N][ix,iy,iz] = A[N][ix,iy,iz] + B[N][ix,iy,iz]
 
 !!! note "Performance note"
-    Besides enabling a concise notation for certain sets of equations, the `@∀` macro is also designed to replace for loops over a smaller range of values in compute kernels, leading often to better performance.
+    Besides enabling a concise notation for certain sets of equations, the `@∀` macro is also designed to replace for loops over a small range of values in compute kernels, leading often to better performance.
+
+!!! note "Symbol ∀"
+    The symbol `∀` can be obtained, e.g., in the Julia REPL or VSCode, by typing `\forall` and pressing `TAB`.
 """
 @doc FORALL_DOC
 macro ∀(args...) check_initialized(__module__); checkforallargs(args...); esc(∀(__module__, args...)); end
