@@ -112,9 +112,9 @@ end
 function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     posargs, kwargs_expr = split_args(args)
     kwargs, ~ = extract_kwargs(caller, kwargs_expr, (:computation_calls,), "@hide_communication", false; eval_args=(:computation_calls,))
-    if     isgpu(package)           hide_communication_gpu(posargs...; kwargs...)
-    elseif (package == PKG_THREADS) hide_communication_threads(posargs...; kwargs...)
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    if     isgpu(package) hide_communication_gpu(posargs...; kwargs...)
+    elseif iscpu(package) hide_communication_cpu(posargs...; kwargs...)
+    else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
@@ -161,7 +161,7 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
     end
 end
 
-function hide_communication_threads(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr; computation_calls::Integer=1)
+function hide_communication_cpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr; computation_calls::Integer=1)
     return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
 end
 
@@ -191,7 +191,7 @@ function hide_communication_gpu(boundary_width::Union{Integer,Symbol,Expr}, bloc
     end
 end
 
-function hide_communication_threads(boundary_width::Union{Integer,Symbol,Expr}, block::Expr; computation_calls::Integer=1)
+function hide_communication_cpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr; computation_calls::Integer=1)
     return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
 end
 
