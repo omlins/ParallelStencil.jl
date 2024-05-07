@@ -3,7 +3,7 @@ import ParallelStencil: PKG_THREADS, PKG_POLYESTER
 import Enzyme
 
 function ParallelStencil.ParallelKernel.AD.init_AD(package::Symbol)
-    if package in [PKG_THREADS, PKG_POLYESTER]
+    if iscpu(package)
         Enzyme.API.runtimeActivity!(true) # NOTE: this is currently required for Enzyme to work correctly with threads
     end
 end
