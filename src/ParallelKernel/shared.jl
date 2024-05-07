@@ -431,6 +431,7 @@ end
 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
+iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
 
 
