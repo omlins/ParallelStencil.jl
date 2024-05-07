@@ -3,7 +3,7 @@ const ZEROS_DOC = """
     @zeros(args...)
     @zeros(args..., <keyword arguments>)
 
-Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads, CUDA.zeros for CUDA and AMDGPU.zeros for AMDGPU).
+Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA and AMDGPU.zeros for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -31,7 +31,7 @@ const ONES_DOC = """
     @ones(args...)
     @ones(args..., <keyword arguments>)
 
-Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads, CUDA.ones for CUDA and AMDGPU.ones for AMDGPU).
+Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA and AMDGPU.ones for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -226,27 +226,34 @@ end
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro zeros_cuda(args...)     check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_CUDA)); end
-macro ones_cuda(args...)      check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_CUDA)); end
-macro rand_cuda(args...)      check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_CUDA)); end
-macro falses_cuda(args...)    check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_CUDA)); end
-macro trues_cuda(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_CUDA)); end
-macro fill_cuda(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_CUDA)); end
-macro fill!_cuda(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_CUDA)); end
-macro zeros_amdgpu(args...)   check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_AMDGPU)); end
-macro ones_amdgpu(args...)    check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_AMDGPU)); end
-macro rand_amdgpu(args...)    check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_AMDGPU)); end
-macro falses_amdgpu(args...)  check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_AMDGPU)); end
-macro trues_amdgpu(args...)   check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
-macro fill_amdgpu(args...)    check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
-macro fill!_amdgpu(args...)   check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
-macro zeros_threads(args...)  check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
-macro ones_threads(args...)   check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
-macro rand_threads(args...)   check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
-macro falses_threads(args...) check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_THREADS)); end
-macro trues_threads(args...)  check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_THREADS)); end
-macro fill_threads(args...)   check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_THREADS)); end
-macro fill!_threads(args...)  check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_THREADS)); end
+macro zeros_cuda(args...)       check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_CUDA)); end
+macro ones_cuda(args...)        check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_CUDA)); end
+macro rand_cuda(args...)        check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_CUDA)); end
+macro falses_cuda(args...)      check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_CUDA)); end
+macro trues_cuda(args...)       check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_CUDA)); end
+macro fill_cuda(args...)        check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_CUDA)); end
+macro fill!_cuda(args...)       check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_CUDA)); end
+macro zeros_amdgpu(args...)     check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_AMDGPU)); end
+macro ones_amdgpu(args...)      check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_AMDGPU)); end
+macro rand_amdgpu(args...)      check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_AMDGPU)); end
+macro falses_amdgpu(args...)    check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_AMDGPU)); end
+macro trues_amdgpu(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
+macro fill_amdgpu(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
+macro fill!_amdgpu(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
+macro zeros_threads(args...)    check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
+macro ones_threads(args...)     check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
+macro rand_threads(args...)     check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
+macro falses_threads(args...)   check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_THREADS)); end
+macro trues_threads(args...)    check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_THREADS)); end
+macro fill_threads(args...)     check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_THREADS)); end
+macro fill!_threads(args...)    check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_THREADS)); end
+macro zeros_polyester(args...)  check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_POLYESTER)); end
+macro ones_polyester(args...)   check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_POLYESTER)); end
+macro rand_polyester(args...)   check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_POLYESTER)); end
+macro falses_polyester(args...) check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_POLYESTER)); end
+macro trues_polyester(args...)  check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_POLYESTER)); end
+macro fill_polyester(args...)   check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_POLYESTER)); end
+macro fill!_polyester(args...)  check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_POLYESTER)); end
 
 
 ## ARGUMENT CHECKS
