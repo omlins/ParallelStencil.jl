@@ -2,6 +2,9 @@
 # The parallelization happens only over the blocks. Synchronization within a block is therefore not needed (as it contains only one thread).
 # "Shared" memory (which will belong to the only thread in the block) will be allocated directly in the loop (i.e., for each parallel index) as local variable.
 
+
+## MACROS
+
 ##
 const GRIDDIM_DOC = """
     @gridDim()
@@ -84,6 +87,12 @@ Call a macro analogue to `Base.@println`, compatible with the package for parall
 """
 @doc PKPRINTLN_DOC
 macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module__, args...)); end
+
+
+## INTERNAL MACROS
+
+##
+macro threads(args...) check_initialized(__module__); esc(threads(__module__, args...)); end
 
 
 ##
@@ -189,7 +198,15 @@ function pk_println(caller::Module, args...; package::Symbol=get_package(caller)
 end
 
 
-## FUNCTION FOR DIVERSE TASKS
+## FUNCTION FOR INTERNAL MACROS
+
+function threads(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_THREADS)   return :(Base.Threads.@threads($(args...)))
+    elseif (package == PKG_POLYESTER) return :(Polyester.@batch($(args...)))
+    elseif isgpu(package)             return nothing
+    else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
 
 function return_value(value)
     return :(return $value)
