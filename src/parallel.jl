@@ -44,7 +44,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads and Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -84,15 +84,18 @@ macro parallel_async(args...) check_initialized(__module__); checkargs_parallel(
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)          check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)  check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)    check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
-macro parallel_async_threads(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)              check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)           check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_polyester(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_POLYESTER)); end
+macro parallel_indices_cuda(args...)      check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...)   check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_polyester(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_POLYESTER)); end
+macro parallel_async_cuda(args...)        check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
+macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_POLYESTER)); end
 
 
 ## ARGUMENT CHECKS
@@ -279,9 +282,10 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if isgpu(package) kernel = insert_device_types(kernel) end
     if !memopt
         kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-        if     (package == PKG_CUDA)    int_type = INT_CUDA
-        elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
-        elseif (package == PKG_THREADS) int_type = INT_THREADS
+        if     (package == PKG_CUDA)      int_type = INT_CUDA
+        elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+        elseif (package == PKG_THREADS)   int_type = INT_THREADS
+        elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
         end
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
         kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
@@ -291,7 +295,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
             body = add_threadids(indices, ranges, body)
             body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
             body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
-        elseif (package == PKG_THREADS)
+        elseif iscpu(package)
             body = add_loop(indices, ranges, body)
             body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         else
