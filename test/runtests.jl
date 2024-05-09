@@ -6,7 +6,7 @@ import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 @static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
 @static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
 
-excludedfiles = [ "test_excluded.jl"];
+excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
 function runtests()
     exename   = joinpath(Sys.BINDIR, Base.julia_exename())
@@ -27,7 +27,7 @@ function runtests()
 
     for f in testfiles
         println("")
-        if f ∈ excludedfiles
+        if basename(f) ∈ excludedfiles
             println("Test Skip:")
             println("$f")
             continue
