@@ -382,6 +382,7 @@ longnameof(f)                                                      = "$(parentmo
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro symbols(eval_mod, mod)           symbols(eval_mod, mod) end
 macro isgpu(package)                   isgpu(package) end
+macro iscpu(package)                   iscpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -409,6 +410,8 @@ function remove_linenumbernodes!(expr::Expr)
     end
     return expr
 end
+
+remove_linenumbernodes!(x::Nothing) = x
 
 function simplify_varnames!(expr::Expr)
     args = expr.args
