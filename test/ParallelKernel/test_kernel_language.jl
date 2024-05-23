@@ -172,6 +172,24 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test B == A
                 end
             end;
+            @testset "@∀" begin
+                expansion = @prettystring(1, @∀ i ∈ (x,z) @all(C.i) = @all(A.i) + @all(B.i))
+                @test occursin("@all(C.x) = @all(A.x) + @all(B.x)", expansion)
+                @test occursin("@all(C.z) = @all(A.z) + @all(B.z)", expansion)
+                expansion = @prettystring(1, @∀ i ∈ (y,z) C.i[ix,iy,iz] = A.i[ix,iy,iz] + B.i[ix,iy,iz])
+                @test occursin("C.y[ix, iy, iz] = A.y[ix, iy, iz] + B.y[ix, iy, iz]", expansion)
+                @test occursin("C.z[ix, iy, iz] = A.z[ix, iy, iz] + B.z[ix, iy, iz]", expansion)
+                expansion = @prettystring(1, @∀ (ij,i,j) ∈ ((xy,x,y), (xz,x,z), (yz,y,z)) @all(C.ij) = @all(A.i) + @all(B.j))
+                @test occursin("@all(C.xy) = @all(A.x) + @all(B.y)", expansion)
+                @test occursin("@all(C.xz) = @all(A.x) + @all(B.z)", expansion)
+                @test occursin("@all(C.yz) = @all(A.y) + @all(B.z)", expansion)
+                expansion = @prettystring(1, @∀ i ∈ 1:N-1 @all(C[i]) = @all(A[i]) + @all(B[i]))
+                @test occursin("ntuple(Val(N - 1)) do i", expansion)
+                @test occursin("@all(C[i]) = @all(A[i]) + @all(B[i])", expansion)
+                expansion = @prettystring(1, @∀ i ∈ 2:N-1 C[i][ix,iy,iz] = A[i][ix,iy,iz] + B[i][ix,iy,iz])
+                @test occursin("ntuple(Val(((N - 1) - 2) + 1)) do i", expansion)
+                @test occursin("(C[(i + 2) - 1])[ix, iy, iz] = (A[(i + 2) - 1])[ix, iy, iz] + (B[(i + 2) - 1])[ix, iy, iz]", expansion)
+            end;
             @reset_parallel_kernel()
         end;
         @testset "2. Exceptions" begin

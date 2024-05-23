@@ -305,15 +305,29 @@ end
 
 ## FUNCTIONS FOR COMMON MANIPULATIONS ON EXPRESSIONS
 
-function substitute(expr::Expr, old, new)
+function substitute(expr::Expr, old, new; inQuoteNode=false)
     return postwalk(expr) do x
         if x == old
             return new
+        elseif inQuoteNode && isa(x, QuoteNode) && x.value == old
+            return QuoteNode(new)
         else
             return x;
         end
     end
 end
+
+function substitute(expr::Expr, rules::NamedTuple; inQuoteNode=false)
+    return postwalk(expr) do x
+        if isa(x, Symbol) && haskey(rules, x)
+            return rules[x]
+        elseif inQuoteNode && isa(x, QuoteNode) && isa(x.value, Symbol) && haskey(rules, x.value)
+            return QuoteNode(rules[x.value])
+        else
+            return x
+        end
+    end
+end    
 
 substitute(expr, old, new) = (old == expr) ? new : expr
 
