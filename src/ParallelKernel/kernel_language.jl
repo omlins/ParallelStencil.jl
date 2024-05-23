@@ -198,12 +198,36 @@ function pk_println(caller::Module, args...; package::Symbol=get_package(caller)
 end
 
 
+## FUNCTIONS FOR MATH SYNTAX
+
+function ∀(caller::Module, member_expr::Expr, statement::Union{Expr, Symbol})
+    if !(@capture(member_expr, x_ ∈ X_) || @capture(member_expr, x_ in X_) || @capture(member_expr, x_ = X_)) @ArgumentError("the first argument must be of the form `x ∈ X, `x in X` or `x = X`.") end
+    if @capture(X, a_:b_)
+        niters    = (a == 1) ? b : :($b-$a+1)
+        statement = (a == 1) ? statement : substitute(statement, x, :($x+$a-1))
+        return quote
+            ntuple(Val($niters)) do $x
+                @inline
+                $statement
+            end
+        end
+    else
+        X = !(isa(X, Expr) && X.head == :tuple) ? Tuple(eval_arg(caller, X)) : X #NOTE: if X is not a literally written set, then we evaluate it in the caller (e.g., I= (:x1, :y1, :z1); J= (:x2, :y2, :z2); @∀ (i,j) ∈ zip(I,J) V2.i = V.j)
+        X = !isa(X, Tuple) ? Tuple(extract_tuple(X; nested=true)) : X
+        x = Tuple(extract_tuple(x; nested=true))
+        return quote
+            $((substitute(statement, NamedTuple{x}(!isa(x_val, Tuple) ? Tuple(extract_tuple(x_val; nested=true)) : x_val); inQuoteNode=true) for x_val in X)...)
+        end
+    end
+end
+
+
 ## FUNCTION FOR INTERNAL MACROS
 
 function threads(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_THREADS)   return :(Base.Threads.@threads($(args...)))
     elseif (package == PKG_POLYESTER) return :(Polyester.@batch($(args...)))
-    elseif isgpu(package)             return nothing
+    elseif isgpu(package)             return :(begin end)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
