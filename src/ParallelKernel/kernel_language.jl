@@ -222,7 +222,7 @@ function ∀(caller::Module, member_expr::Expr, statement::Union{Expr, Symbol})
 end
 
 
-## FUNCTION FOR INTERNAL MACROS
+## FUNCTIONS FOR DIVERSE TASKS
 
 function threads(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_THREADS)   return :(Base.Threads.@threads($(args...)))
