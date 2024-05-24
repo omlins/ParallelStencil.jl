@@ -4,7 +4,7 @@
 Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA, AMDGPU or Threads).
+- `package::Module`: the package used for parallelization (CUDA or AMDGPU for GPU, or Threads or Polyester for CPU).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel.
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
@@ -28,21 +28,27 @@ end
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:())
     modulename = :Data
     if package == PKG_CUDA
-        if (!is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided with an extension of ParallelStencil and CUDA.jl needs therefore to be installed independently.") end
+        if (!is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided as an extension of ParallelStencil and CUDA.jl needs therefore to be installed independently.") end
         indextype          = INT_CUDA
         data_module        = Data_cuda(modulename, numbertype, indextype)
         pkg_import_cmd     = :(import CUDA)
     elseif package == PKG_AMDGPU
-        if (!is_installed("AMDGPU")) @NotInstalledError("AMDGPU was selected as package for parallelization, but AMDGPU.jl is not installed. AMDGPU functionality is provided with an extension of ParallelStencil and AMDGPU.jl needs therefore to be installed independently.") end
+        if (!is_installed("AMDGPU")) @NotInstalledError("AMDGPU was selected as package for parallelization, but AMDGPU.jl is not installed. AMDGPU functionality is provided as an extension of ParallelStencil and AMDGPU.jl needs therefore to be installed independently.") end
         indextype          = INT_AMDGPU
         data_module        = Data_amdgpu(modulename, numbertype, indextype)
         pkg_import_cmd     = :(import AMDGPU)
+    elseif package == PKG_POLYESTER
+        if (!is_installed("Polyester")) @NotInstalledError("Polyester was selected as package for parallelization, but Polyester.jl is not installed. Multi-threading using Polyester is provided as an extension of ParallelStencil and Polyester.jl needs therefore to be installed independently.") end
+        indextype          = INT_POLYESTER
+        data_module        = Data_cpu(modulename, numbertype, indextype)
+        pkg_import_cmd     = :(import Polyester)
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
-        data_module        = Data_threads(modulename, numbertype, indextype)
+        data_module        = Data_cpu(modulename, numbertype, indextype)
         pkg_import_cmd     = :()
     end
-    ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD(ParallelStencil.ParallelKernel.PKG_THREADS))
+    # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be
+    ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD($package))
     if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
         if (datadoc_call==:())
             if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 

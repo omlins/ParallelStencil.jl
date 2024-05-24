@@ -1,5 +1,5 @@
 using Test
-import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_POLYESTER
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -9,6 +9,9 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 exename = joinpath(Sys.BINDIR, Base.julia_exename())
 
 @static for package in TEST_PACKAGES  eval(:(
@@ -17,7 +20,7 @@ exename = joinpath(Sys.BINDIR, Base.julia_exename())
             test_script = joinpath(@__DIR__, "test_projects", "Diffusion3D_$(nameof($package))", "test", "localtest_diffusion.jl")
             was_success = true
             try
-                run(`$exename -O3 --startup-file=no --check-bounds=no $test_script`)
+                run(`$exename --startup-file=no $test_script`)
             catch ex
                 was_success = false
             end

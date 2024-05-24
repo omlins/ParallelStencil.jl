@@ -2,6 +2,9 @@
 # The parallelization happens only over the blocks. Synchronization within a block is therefore not needed (as it contains only one thread).
 # "Shared" memory (which will belong to the only thread in the block) will be allocated directly in the loop (i.e., for each parallel index) as local variable.
 
+
+## MACROS
+
 ##
 const GRIDDIM_DOC = """
     @gridDim()
@@ -70,7 +73,7 @@ macro sharedMem(args...) check_initialized(__module__); checkargs_sharedMem(args
 const PKSHOW_DOC = """
     @pk_show(...)
 
-Call a macro analogue to `Base.@show`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@show for Threads and CUDA.@cushow for CUDA).
+Call a macro analogue to `Base.@show`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@show for Threads or Polyester and CUDA.@cushow for CUDA).
 """
 @doc PKSHOW_DOC
 macro pk_show(args...) check_initialized(__module__); esc(pk_show(__module__, args...)); end
@@ -80,10 +83,16 @@ macro pk_show(args...) check_initialized(__module__); esc(pk_show(__module__, ar
 const PKPRINTLN_DOC = """
     @pk_println(...)
 
-Call a macro analogue to `Base.@println`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@println for Threads and CUDA.@cuprintln for CUDA).
+Call a macro analogue to `Base.@println`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@println for Threads or Polyester and CUDA.@cuprintln for CUDA).
 """
 @doc PKPRINTLN_DOC
 macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module__, args...)); end
+
+
+## INTERNAL MACROS
+
+##
+macro threads(args...) check_initialized(__module__); esc(threads(__module__, args...)); end
 
 
 ##
@@ -163,7 +172,7 @@ end
 function gridDim(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -171,7 +180,7 @@ end
 function blockIdx(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation relies on the fact that ranges are always of type UnitRange. If this changes, then this function needs to be adapted.
     if     (package == PKG_CUDA)    return :(CUDA.blockIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupIdx($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -179,7 +188,7 @@ end
 function blockDim(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks.
     if     (package == PKG_CUDA)    return :(CUDA.blockDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupDim($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -187,7 +196,7 @@ end
 function threadIdx(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks.
     if     (package == PKG_CUDA)    return :(CUDA.threadIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workitemIdx($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -198,7 +207,7 @@ end
 function sync_threads(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks. Synchronization within a block is therefore not needed (as it contains only one thread).
     if     (package == PKG_CUDA)    return :(CUDA.sync_threads($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.sync_workgroup($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -209,7 +218,7 @@ end
 function sharedMem(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.@cuDynamicSharedMem($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -224,7 +233,7 @@ macro sharedMem_amdgpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sh
 function pk_show(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.@cushow($(args...)))
     elseif (package == PKG_AMDGPU)  @KeywordArgumentError("this functionality is not yet supported in AMDGPU.jl.")
-    elseif (package == PKG_THREADS) return :(Base.@show($(args...)))
+    elseif iscpu(package)           return :(Base.@show($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -232,7 +241,7 @@ end
 function pk_println(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.@cuprintln($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.@rocprintln($(args...)))
-    elseif (package == PKG_THREADS) return :(Base.println($(args...)))
+    elseif iscpu(package)           return :(Base.println($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -270,6 +279,14 @@ end
 
 function return_nothing()
     return :(return)
+end
+
+function threads(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_THREADS)   return :(Base.Threads.@threads($(args...)))
+    elseif (package == PKG_POLYESTER) return :(Polyester.@batch($(args...)))
+    elseif isgpu(package)             return :(begin end)
+    else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 

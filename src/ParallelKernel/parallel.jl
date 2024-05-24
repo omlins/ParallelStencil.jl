@@ -24,7 +24,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads or Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -66,7 +66,7 @@ const PARALLEL_ASYNC_DOC = """
 Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`](@ref) for more information); deactivates however automatic synchronization at the end of the call. Use [`@synchronize`](@ref) for synchronizing.
 
 !!! note "Performance note"
-    @parallel_async falls currently back to running synchronously if the package Threads was selected with [`@init_parallel_kernel`](@ref).
+    @parallel_async falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
 
 See also: [`@synchronize`](@ref), [`@parallel`](@ref)
 """
@@ -88,18 +88,22 @@ macro synchronize(args...) check_initialized(__module__); esc(synchronize(__modu
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro parallel_cuda(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
-macro parallel_amdgpu(args...)          check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_threads(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
-macro parallel_indices_cuda(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
-macro parallel_indices_amdgpu(args...)  check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_indices_threads(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
-macro parallel_async_cuda(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
-macro parallel_async_amdgpu(args...)    check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
-macro parallel_async_threads(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
-macro synchronize_cuda(args...)         check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_CUDA)); end
-macro synchronize_amdgpu(args...)       check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_AMDGPU)); end
-macro synchronize_threads(args...)      check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_THREADS)); end
+macro parallel_cuda(args...)              check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
+macro parallel_amdgpu(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_threads(args...)           check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
+macro parallel_polyester(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_POLYESTER)); end
+macro parallel_indices_cuda(args...)      check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
+macro parallel_indices_amdgpu(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_threads(args...)   check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
+macro parallel_indices_polyester(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_POLYESTER)); end
+macro parallel_async_cuda(args...)        check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
+macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
+macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_POLYESTER)); end
+macro synchronize_cuda(args...)           check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_CUDA)); end
+macro synchronize_amdgpu(args...)         check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_AMDGPU)); end
+macro synchronize_threads(args...)        check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_THREADS)); end
+macro synchronize_polyester(args...)      check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_POLYESTER)); end
 
 
 ## ARGUMENT CHECKS
@@ -136,9 +140,9 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     if is_ad_highlevel
         parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
     else
-        if     isgpu(package)           parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
-        elseif (package == PKG_THREADS) parallel_call_threads(posargs..., kernelarg, async; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
-        else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        if     isgpu(package) parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
+        elseif iscpu(package) parallel_call_cpu(posargs..., kernelarg, async, package; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
+        else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
     end
 end
@@ -152,9 +156,10 @@ function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::
 end
 
 function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    synchronize_cuda(args...)
-    elseif (package == PKG_AMDGPU)  synchronize_amdgpu(args...)
-    elseif (package == PKG_THREADS) synchronize_threads(args...)
+    if     (package == PKG_CUDA)      synchronize_cuda(args...)
+    elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
+    elseif (package == PKG_THREADS)   synchronize_threads(args...)
+    elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -177,9 +182,10 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     end
     if isgpu(package) kernel = insert_device_types(kernel) end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-    if     (package == PKG_CUDA)    int_type = INT_CUDA
-    elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
-    elseif (package == PKG_THREADS) int_type = INT_THREADS
+    if     (package == PKG_CUDA)      int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+    elseif (package == PKG_THREADS)   int_type = INT_THREADS
+    elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
     end
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
@@ -189,7 +195,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
         body = add_threadids(indices, ranges, body)        
         body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
-    elseif (package == PKG_THREADS)
+    elseif iscpu(package)
         body = add_loop(indices, ranges, body)
         body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
     else
@@ -280,12 +286,15 @@ function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::
 end
 
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_cpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::Bool, package::Symbol; launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
+    if     (package == PKG_THREADS)   int_type = INT_THREADS
+    elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
+    end
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$INT_THREADS},UnitRange{$INT_THREADS},UnitRange{$INT_THREADS}}, $ranges)))
-    push!(kernelcall.args, :($INT_THREADS(length($ranges[1]))))
-    push!(kernelcall.args, :($INT_THREADS(length($ranges[2]))))
-    push!(kernelcall.args, :($INT_THREADS(length($ranges[3]))))
+    push!(kernelcall.args, :($int_type(length($ranges[1]))))
+    push!(kernelcall.args, :($int_type(length($ranges[2]))))
+    push!(kernelcall.args, :($int_type(length($ranges[3]))))
     if launch
         if async
             return kernelcall # NOTE: This cannot be used currently as there is no obvious solution how to sync in this case.
@@ -297,19 +306,19 @@ function parallel_call_threads(ranges::Union{Symbol,Expr}, kernelcall::Expr, asy
     end
 end
 
-function parallel_call_threads(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
-    parallel_call_threads(ranges, kernelcall, async; launch=launch)
+function parallel_call_cpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool, package::Symbol; launch::Bool=true, configcall::Expr=kernelcall)
+    parallel_call_cpu(ranges, kernelcall, async, package; launch=launch)
 end
 
-function parallel_call_threads(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_cpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, async::Bool, package::Symbol; launch::Bool=true, configcall::Expr=kernelcall)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_threads(ranges, kernelcall, async; launch=launch)
+    parallel_call_cpu(ranges, kernelcall, async, package; launch=launch)
 end
 
-function parallel_call_threads(kernelcall::Expr, async::Bool; launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_cpu(kernelcall::Expr, async::Bool, package::Symbol; launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
-    parallel_call_threads(ranges, kernelcall, async; launch=launch)
+    parallel_call_cpu(ranges, kernelcall, async, package; launch=launch)
 end
 
 
@@ -318,6 +327,7 @@ end
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...)))
 synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...)))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
+synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
 
 ## MACROS AND FUNCTIONS TO MODIFY THE TYPE OF LITERALS
@@ -441,7 +451,7 @@ function add_loop(indices::Array, ranges::Array, block::Expr)
         quote
             $iz_ps_assignment
             $iy_ps_assignment
-            Base.Threads.@threads for $ix in $range_x
+            ParallelStencil.ParallelKernel.@threads for $ix in $range_x
                 $ix_ps_assignment
                 $block
             end
@@ -454,7 +464,7 @@ function add_loop(indices::Array, ranges::Array, block::Expr)
         iz_ps_assignment = :($iz_ps = $range_z[1])
         quote
             $iz_ps_assignment
-            Base.Threads.@threads for $iy in $range_y
+            ParallelStencil.ParallelKernel.@threads for $iy in $range_y
                 $iy_ps_assignment
                 for $ix in $range_x
                     $ix_ps_assignment
@@ -469,7 +479,7 @@ function add_loop(indices::Array, ranges::Array, block::Expr)
         iy_ps_assignment = (iy_ps!=iy) ? :($iy_ps = $iy) : :(begin end)  # ...
         iz_ps_assignment = (iz_ps!=iz) ? :($iz_ps = $iz) : :(begin end)  # ...
         quote
-            Base.Threads.@threads for $iz in $range_z
+            ParallelStencil.ParallelKernel.@threads for $iz in $range_z
                 $iz_ps_assignment
                 for $iy in $range_y
                     $iy_ps_assignment

@@ -1,8 +1,8 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS
-import ParallelStencil.ParallelKernel: @require, @prettystring
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -19,10 +19,10 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. kernel language macros" begin
+            @require !@is_initialized()
+            @init_parallel_kernel($package, Float64)
+            @require @is_initialized()
             @testset "mapping to package" begin
-                @require !@is_initialized()
-                @init_parallel_kernel($package, Float64)
-                @require @is_initialized()
                 if $package == $PKG_CUDA
                     @test @prettystring(1, @gridDim()) == "CUDA.gridDim()"
                     @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
@@ -41,7 +41,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     # @test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_println()) == "AMDGPU.@rocprintln"
-                elseif $package == $PKG_THREADS
+                elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
                     @test @prettystring(1, @blockDim()) == "ParallelStencil.ParallelKernel.@blockDim_cpu"
@@ -52,8 +52,15 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     # @test @prettystring(1, @pk_println()) == "Base.println()"
                 end;
             end;
+            @testset "mapping to package (internal macros)" begin
+                if $package == $PKG_THREADS
+                    @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Base.Threads.@threads"
+                elseif $package == $PKG_POLYESTER
+                    @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Polyester.@batch"
+                end;
+            end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @zeros(4)
                     @parallel_indices (ix) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 1, 1)
@@ -70,7 +77,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (2D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @zeros(4, 5)
                     @parallel_indices (ix,iy) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 1)
@@ -87,7 +94,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (3D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 6)
@@ -104,18 +111,18 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "sync_threads" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     @test @prettystring(ParallelStencil.ParallelKernel.@sync_threads_cpu()) == "begin\nend"
                 end;
             end;
             @testset "shared memory (allocation)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     @test typeof(@sharedMem(Float32,(2,3))) == typeof(ParallelStencil.ParallelKernel.MArray{Tuple{2,3},   Float32, length((2,3)),   prod((2,3))}(undef))
                     @test typeof(@sharedMem(Bool,(2,3,4)))  == typeof(ParallelStencil.ParallelKernel.MArray{Tuple{2,3,4}, Bool,    length((2,3,4)), prod((2,3,4))}(undef))
                 end;
             end;
             @testset "@sharedMem (1D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @rand(4)
                     B  = @zeros(4)
                     @parallel_indices (ix) function memcopy!(B, A)
@@ -131,7 +138,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@sharedMem (2D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @rand(4,5)
                     B  = @zeros(4,5)
                     @parallel_indices (ix,iy) function memcopy!(B, A)
@@ -148,7 +155,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@sharedMem (3D)" begin
-                @static if $package == $PKG_THREADS
+                @static if @iscpu($package)
                     A  = @rand(4,5,6)
                     B  = @zeros(4,5,6)
                     @parallel_indices (ix,iy,iz) function memcopy!(B, A)

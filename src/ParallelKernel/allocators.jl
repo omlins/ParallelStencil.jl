@@ -3,7 +3,7 @@ const ZEROS_DOC = """
     @zeros(args...)
     @zeros(args..., <keyword arguments>)
 
-Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads, CUDA.zeros for CUDA and AMDGPU.zeros for AMDGPU).
+Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA and AMDGPU.zeros for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -31,7 +31,7 @@ const ONES_DOC = """
     @ones(args...)
     @ones(args..., <keyword arguments>)
 
-Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads, CUDA.ones for CUDA and AMDGPU.ones for AMDGPU).
+Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA and AMDGPU.ones for AMDGPU).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -226,27 +226,34 @@ end
 
 ## MACROS FORCING PACKAGE, IGNORING INITIALIZATION
 
-macro zeros_cuda(args...)     check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_CUDA)); end
-macro ones_cuda(args...)      check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_CUDA)); end
-macro rand_cuda(args...)      check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_CUDA)); end
-macro falses_cuda(args...)    check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_CUDA)); end
-macro trues_cuda(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_CUDA)); end
-macro fill_cuda(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_CUDA)); end
-macro fill!_cuda(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_CUDA)); end
-macro zeros_amdgpu(args...)   check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_AMDGPU)); end
-macro ones_amdgpu(args...)    check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_AMDGPU)); end
-macro rand_amdgpu(args...)    check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_AMDGPU)); end
-macro falses_amdgpu(args...)  check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_AMDGPU)); end
-macro trues_amdgpu(args...)   check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
-macro fill_amdgpu(args...)    check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
-macro fill!_amdgpu(args...)   check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
-macro zeros_threads(args...)  check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
-macro ones_threads(args...)   check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
-macro rand_threads(args...)   check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
-macro falses_threads(args...) check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_THREADS)); end
-macro trues_threads(args...)  check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_THREADS)); end
-macro fill_threads(args...)   check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_THREADS)); end
-macro fill!_threads(args...)  check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_THREADS)); end
+macro zeros_cuda(args...)       check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_CUDA)); end
+macro ones_cuda(args...)        check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_CUDA)); end
+macro rand_cuda(args...)        check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_CUDA)); end
+macro falses_cuda(args...)      check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_CUDA)); end
+macro trues_cuda(args...)       check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_CUDA)); end
+macro fill_cuda(args...)        check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_CUDA)); end
+macro fill!_cuda(args...)       check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_CUDA)); end
+macro zeros_amdgpu(args...)     check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_AMDGPU)); end
+macro ones_amdgpu(args...)      check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_AMDGPU)); end
+macro rand_amdgpu(args...)      check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_AMDGPU)); end
+macro falses_amdgpu(args...)    check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_AMDGPU)); end
+macro trues_amdgpu(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
+macro fill_amdgpu(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
+macro fill!_amdgpu(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
+macro zeros_threads(args...)    check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
+macro ones_threads(args...)     check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
+macro rand_threads(args...)     check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
+macro falses_threads(args...)   check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_THREADS)); end
+macro trues_threads(args...)    check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_THREADS)); end
+macro fill_threads(args...)     check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_THREADS)); end
+macro fill!_threads(args...)    check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_THREADS)); end
+macro zeros_polyester(args...)  check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_POLYESTER)); end
+macro ones_polyester(args...)   check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_POLYESTER)); end
+macro rand_polyester(args...)   check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_POLYESTER)); end
+macro falses_polyester(args...) check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_POLYESTER)); end
+macro trues_polyester(args...)  check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_POLYESTER)); end
+macro fill_polyester(args...)   check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_POLYESTER)); end
+macro fill!_polyester(args...)  check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_POLYESTER)); end
 
 
 ## ARGUMENT CHECKS
@@ -267,7 +274,7 @@ function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, cellt
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -277,7 +284,7 @@ function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -287,7 +294,7 @@ function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -297,7 +304,7 @@ function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing,
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -307,7 +314,7 @@ function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, 
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -317,7 +324,7 @@ function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -325,7 +332,7 @@ end
 function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
-    elseif (package == PKG_THREADS) return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -453,7 +460,7 @@ function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, Unio
     end
 end
 
-check_datatype_cpu(args...)    = check_datatype(args..., INT_THREADS)
+check_datatype_cpu(args...)    = check_datatype(args..., INT_THREADS) # NOTE: if it differs at some point from INT_POLYESTER, then it should be handled differently. For simplicity sake it is kept that way for now.
 
 import Base.length
 length(x::Enum) = 1

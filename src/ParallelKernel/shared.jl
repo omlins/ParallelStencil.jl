@@ -13,10 +13,12 @@ gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_THREADS                  = :Threads
+const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_CUDA, PKG_AMDGPU]
+const SUPPORTED_PACKAGES           =  [PKG_THREADS, PKG_CUDA, PKG_AMDGPU] # [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
@@ -51,10 +53,11 @@ const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following 
 const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
-const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE    => 0,
-                                   PKG_CUDA    => 0,
-                                   PKG_AMDGPU  => 0,
-                                   PKG_THREADS => 1)
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
+                                   PKG_CUDA      => 0,
+                                   PKG_AMDGPU    => 0,
+                                   PKG_THREADS   => 1,
+                                   PKG_POLYESTER => 1)
 
 struct Dim3
     x::INT_THREADS
@@ -393,6 +396,7 @@ longnameof(f)                                                      = "$(parentmo
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro symbols(eval_mod, mod)           symbols(eval_mod, mod) end
 macro isgpu(package)                   isgpu(package) end
+macro iscpu(package)                   iscpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -421,6 +425,8 @@ function remove_linenumbernodes!(expr::Expr)
     return expr
 end
 
+remove_linenumbernodes!(x::Nothing) = x
+
 function simplify_varnames!(expr::Expr)
     args = expr.args
     for i=1:length(args)
@@ -442,6 +448,7 @@ end
 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
+iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
 
 
