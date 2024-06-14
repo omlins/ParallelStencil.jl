@@ -60,7 +60,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
-                @static if @iscpu($package)
+                @static if $package == $PKG_THREADS
                     A  = @zeros(4)
                     @parallel_indices (ix) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 1, 1)
@@ -77,7 +77,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (2D)" begin
-                @static if @iscpu($package)
+                @static if $package == $PKG_THREADS
                     A  = @zeros(4, 5)
                     @parallel_indices (ix,iy) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 1)
@@ -94,7 +94,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (3D)" begin
-                @static if @iscpu($package)
+                @static if $package == $PKG_THREADS
                     A  = @zeros(4, 5, 6)
                     @parallel_indices (ix,iy,iz) function test_macros!(A)
                         @test @gridDim() == Dim3(2, 3, 6)

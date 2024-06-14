@@ -99,8 +99,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 end;
                 @testset "@hide_communication boundary_width block" begin
                     A  = @zeros(6, 7, 8)
-                    @parallel_indices (iy,iz) bc_xl(A) = (A[  1,iy,iz]=A[end-1,iy,iz]; return)
-                    @parallel_indices (iy,iz) bc_xr(A) = (A[end,iy,iz]=A[    2,iy,iz]; return)
+                    @parallel_indices (iy,iz) bc_xl(A) = (A[        1,iy,iz]=A[size(A,1)-1,iy,iz]; return) # NOTE: using size(A,1) instead of `end` due to a limitation of Polyester
+                    @parallel_indices (iy,iz) bc_xr(A) = (A[size(A,1),iy,iz]=A[          2,iy,iz]; return) # ...
                     @hide_communication (2,2,3) begin
                         @parallel add_indices!(A);
                         @parallel (1:size(A,2), 1:size(A,3)) bc_xl(A);

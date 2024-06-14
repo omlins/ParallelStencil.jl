@@ -173,13 +173,6 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body = get_body(kernel)
     body = remove_return(body)
     use_aliases = !all(indices .== INDICES[1:length(indices)])
-    if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
-        indices_aliases = indices
-        indices = [INDICES[1:length(indices)]...]
-        for i=1:length(indices_aliases)
-            body = substitute(body, indices_aliases[i], indices[i])
-        end
-    end
     if isgpu(package) kernel = insert_device_types(kernel) end
     kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
     if     (package == PKG_CUDA)      int_type = INT_CUDA
@@ -201,7 +194,9 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     else
         @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
-    if use_aliases
+    if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
+        indices_aliases = indices
+        indices = [INDICES[1:length(indices)]...]
         body = macroexpand(caller, body)
         for i=1:length(indices_aliases)
             body = substitute(body, indices_aliases[i], indices[i])
