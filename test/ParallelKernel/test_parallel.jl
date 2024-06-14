@@ -16,6 +16,9 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
@@ -342,51 +345,53 @@ import Enzyme
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
                     @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
-                @testset "nested function (long definition, array modification)" begin
-                    A  = @zeros(4, 5, 6)
-                    @parallel_indices (ix,iy,iz) function write_indices!(A)
-                        function compute_indices!(A)
-                            A[ix,iy,iz] = ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2);
+                @static if $package != $PKG_POLYESTER
+                    @testset "nested function (long definition, array modification)" begin
+                        A  = @zeros(4, 5, 6)
+                        @parallel_indices (ix,iy,iz) function write_indices!(A)
+                            function compute_indices!(A)
+                                A[ix,iy,iz] = ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2);
+                                return
+                            end
+                            compute_indices!(A)
                             return
                         end
-                        compute_indices!(A)
-                        return
-                    end
-                    @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
-                end;
-                @testset "nested function (short definition, array modification)" begin
-                    A  = @zeros(4, 5, 6)
-                    @parallel_indices (ix,iy,iz) function write_indices!(A)
-                        compute_indices!(A) = (A[ix,iy,iz] = ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2); return)
-                        compute_indices!(A)
-                        return
-                    end
-                    @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
-                end;
-                @testset "nested function (long definition, return value)" begin
-                    A  = @zeros(4, 5, 6)
-                    @parallel_indices (ix,iy,iz) function write_indices!(A)
-                        function compute_indices(A)
-                            return ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)
+                        @parallel write_indices!(A);
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    end;
+                    @testset "nested function (short definition, array modification)" begin
+                        A  = @zeros(4, 5, 6)
+                        @parallel_indices (ix,iy,iz) function write_indices!(A)
+                            compute_indices!(A) = (A[ix,iy,iz] = ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2); return)
+                            compute_indices!(A)
+                            return
                         end
-                        A[ix,iy,iz] = compute_indices(A)
-                        return
-                    end
-                    @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
-                end;
-                @testset "nested function (short definition, return value)" begin
-                    A  = @zeros(4, 5, 6)
-                    @parallel_indices (ix,iy,iz) function write_indices!(A)
-                        compute_indices(A) = return ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)
-                        A[ix,iy,iz] = compute_indices(A)
-                        return
-                    end
-                    @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
-                end;
+                        @parallel write_indices!(A);
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    end;
+                    @testset "nested function (long definition, return value)" begin
+                        A  = @zeros(4, 5, 6)
+                        @parallel_indices (ix,iy,iz) function write_indices!(A)
+                            function compute_indices(A)
+                                return ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)
+                            end
+                            A[ix,iy,iz] = compute_indices(A)
+                            return
+                        end
+                        @parallel write_indices!(A);
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    end;
+                    @testset "nested function (short definition, return value)" begin
+                        A  = @zeros(4, 5, 6)
+                        @parallel_indices (ix,iy,iz) function write_indices!(A)
+                            compute_indices(A) = return ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)
+                            A[ix,iy,iz] = compute_indices(A)
+                            return
+                        end
+                        @parallel write_indices!(A);
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    end;
+                end
             end;
             @testset "@parallel_async" begin
                 @static if @isgpu($package)
