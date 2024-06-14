@@ -21,10 +21,10 @@ ParallelStencil_CUDAExt = "CUDA"
 ParallelStencil_EnzymeExt = "Enzyme"
 
 [compat]
-AMDGPU = "0.6, 0.7, 0.8"
+AMDGPU = "0.6, 0.7, 0.8, 0.9"
 CUDA = "3.12, 4, 5"
 CellArrays = "0.2.1"
-Enzyme = "0.11"
+Enzyme = "0.11, 0.12"
 MacroTools = "0.5"
 Polyester = "0.7"
 StaticArrays = "1"
