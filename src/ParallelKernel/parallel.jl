@@ -269,8 +269,9 @@ function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,E
 end
 
 function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    nthreads_x_max = determine_nthreads_x_max(package)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
-    nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize) )
+    nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize; nthreads_x_max=$nthreads_x_max) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
@@ -522,9 +523,9 @@ function compute_ranges(maxsize)
     return (1:maxsize[1], 1:maxsize[2], 1:maxsize[3])
 end
 
-function compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX, flatdim=0) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
+function compute_nthreads(maxsize; nthreads_x_max=NTHREADS_X_MAX, nthreads_max=NTHREADS_MAX, flatdim=0) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
     maxsize = promote_maxsize(maxsize)
-    nthreads_x = min(32,                                             (flatdim==1) ? 1 : maxsize[1])
+    nthreads_x = min(nthreads_x_max,                                 (flatdim==1) ? 1 : maxsize[1])
     nthreads_y = min(ceil(Int,nthreads_max/nthreads_x),              (flatdim==2) ? 1 : maxsize[2])
     nthreads_z = min(ceil(Int,nthreads_max/(nthreads_x*nthreads_y)), (flatdim==3) ? 1 : maxsize[3])
     return (nthreads_x, nthreads_y , nthreads_z)
@@ -535,6 +536,8 @@ function compute_nblocks(maxsize, nthreads)
     if !(isa(nthreads, Union{AbstractArray,Tuple}) && length(nthreads)==3) @ArgumentError("nthreads must be an Array or Tuple of size 3 (obtained: $nthreads; its type is: $(typeof(nthreads))).") end
     return ceil.(Int, maxsize./nthreads)
 end
+
+determine_nthreads_x_max(package::Symbol) = (package == PKG_AMDGPU) ? NTHREADS_X_MAX_AMDGPU : NTHREADS_X_MAX
 
 
 ## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
