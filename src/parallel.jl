@@ -162,7 +162,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
             parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
-            ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package)
+            ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
         end
     end
 end
@@ -321,6 +321,9 @@ end
 
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
+    package             = get_package(caller)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(package)
     configcall_kwarg_expr = :(configcall=$configcall)
     metadata_call   = create_metadata_call(configcall)
     metadata_module = metadata_call
@@ -331,7 +334,7 @@ function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernel
     loopsize        = :($(metadata_module).loopsize)
     loopsizes       = :(($loopdim==3) ? (1, 1, $loopsize) : ($loopdim==2) ? (1, $loopsize, 1) : ($loopsize, 1, 1))
     maxsize         = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
-    nthreads        = :( ParallelStencil.compute_nthreads_memopt($maxsize, $loopdim, $stencilranges) )
+    nthreads        = :( ParallelStencil.compute_nthreads_memopt($nthreads_x_max, $nthreads_max_memopt, $maxsize, $loopdim, $stencilranges) )
     nblocks         = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     numbertype      = get_numbertype(caller) # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
     dim1 = :(($loopdim==3) ? 1 : ($loopdim==2) ? 1 : 2) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
@@ -344,11 +347,14 @@ function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernel
 end
 
 function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
-    metadata_call      = create_metadata_call(configcall)
-    metadata_module    = metadata_call
-    loopdim            = :($(metadata_module).loopdim)
-    is_parallel_kernel = :($(metadata_module).is_parallel_kernel)
-    ranges             = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($loopdim, $(configcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)))
+    package             = get_package(caller)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(package)
+    metadata_call       = create_metadata_call(configcall)
+    metadata_module     = metadata_call
+    loopdim             = :($(metadata_module).loopdim)
+    is_parallel_kernel  = :($(metadata_module).is_parallel_kernel)
+    ranges              = :( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($nthreads_x_max, $nthreads_max_memopt, $loopdim, $(configcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)))
     parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall)
 end
 
@@ -362,15 +368,16 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
+determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : NTHREADS_MAX_MEMOPT_CUDA
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
-compute_loopsize() = LOOPSIZE
+compute_loopsize()                             = LOOPSIZE
 
 
 ## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
 
-function compute_nthreads_memopt(maxsize, loopdim, stencilranges) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
+function compute_nthreads_memopt(nthreads_x_max, nthreads_max_memopt, maxsize, loopdim, stencilranges) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
     maxsize = promote_maxsize(maxsize)
-    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=loopdim)
+    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_x_max=nthreads_x_max, nthreads_max=nthreads_max_memopt, flatdim=loopdim)
     for stencilranges_A in values(stencilranges)
         haloextensions = ((length(stencilranges_A[1])-1)*(loopdim!=1), (length(stencilranges_A[2])-1)*(loopdim!=2), (length(stencilranges_A[3])-1)*(loopdim!=3))
         if (2*prod(nthreads) < prod(nthreads .+ haloextensions)) @ArgumentError("@parallel <kernelcall>: the automatic determination of nthreads is not possible for this case. Please specify `nthreads` and `nblocks`.")  end # NOTE: this is a simple heuristic to compute compare the number of threads to the total number of cells including halo.
@@ -380,10 +387,10 @@ function compute_nthreads_memopt(maxsize, loopdim, stencilranges) # This is a he
     return nthreads
 end
 
-function get_ranges_memopt(loopdim, args...)
+function get_ranges_memopt(nthreads_x_max, nthreads_max_memopt, loopdim, args...)
     ranges   = ParallelKernel.get_ranges(args...)
     maxsize  = length.(ranges)
-    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_max=NTHREADS_MAX_LOOPOPT, flatdim=loopdim)
+    nthreads = ParallelKernel.compute_nthreads(maxsize; nthreads_x_max=nthreads_x_max, nthreads_max=nthreads_max_memopt, flatdim=loopdim)
     # TODO: the following code reduces performance from ~482 GB/s to ~478 GB/s
     rests    = maxsize .% nthreads
     ranges_adjustment = ( (rests[1] != 0) ? (nthreads[1] - rests[1]) : 0,
