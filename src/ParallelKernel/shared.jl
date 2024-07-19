@@ -70,7 +70,7 @@ end
 macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
-function kernel_int_type(package)
+function kernel_int_type(package::Symbol)
     if     (package == PKG_CUDA)      int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
