@@ -70,6 +70,15 @@ end
 macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 
+function kernel_int_type(package)
+    if     (package == PKG_CUDA)      int_type = INT_CUDA
+    elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+    elseif (package == PKG_THREADS)   int_type = INT_THREADS
+    elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
+    end
+    return int_type
+end
+
 
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
 
