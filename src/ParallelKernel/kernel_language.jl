@@ -283,9 +283,7 @@ end
 
 function threads(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_THREADS)   return :(Base.Threads.@threads($(args...)))
-    elseif (package == PKG_POLYESTER) 
-        args = macroexpand.((caller,), args)
-        return :(Polyester.@batch($(args...)))
+    elseif (package == PKG_POLYESTER) return :(Polyester.@batch($(args...)))
     elseif isgpu(package)             return :(begin end)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end

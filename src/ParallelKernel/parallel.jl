@@ -173,27 +173,6 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body = get_body(kernel)
     body = remove_return(body)
     use_aliases = !all(indices .== INDICES[1:length(indices)])
-    if isgpu(package) kernel = insert_device_types(kernel) end
-    kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-    if     (package == PKG_CUDA)      int_type = INT_CUDA
-    elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
-    elseif (package == PKG_THREADS)   int_type = INT_THREADS
-    elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
-    end
-    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
-    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
-    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
-    ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-    if isgpu(package)
-        body = add_threadids(indices, ranges, body)        
-        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
-        body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
-    elseif iscpu(package)
-        body = add_loop(indices, ranges, body)
-        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
-    else
-        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
         indices = [INDICES[1:length(indices)]...]
@@ -202,6 +181,9 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
+    if isgpu(package) kernel = insert_device_types(kernel) end
+    kernel = adjust_signatures(kernel, package)
+    body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
     set_body!(kernel, body)
@@ -367,6 +349,34 @@ function literaltypes(type1::DataType, type2::DataType, expr::Expr)
         @ModuleInternalError("incoherent type arguments: one must be a subtype of Integer and the other a subtype of AbstractFloat.")
     end
     return literaltypes(type2, literaltypes(type1,expr))
+end
+
+
+## FUNCTIONS TO HANDLE SIGNATURES AND INDICES
+
+function adjust_signatures(kernel::Expr, package::Symbol)
+    int_type = kernel_int_type(package)
+    kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
+    kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
+    return kernel
+end
+
+function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)
+    int_type = kernel_int_type(package)
+    ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
+    if isgpu(package)
+        body = add_threadids(indices, ranges, body)        
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
+        body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
+    elseif iscpu(package)
+        body = add_loop(indices, ranges, body)
+        body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
+    else
+        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+    return body
 end
 
 
