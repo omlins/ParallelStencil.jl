@@ -281,26 +281,8 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     end
     if isgpu(package) kernel = insert_device_types(kernel) end
     if !memopt
-        kernel = push_to_signature!(kernel, :($RANGES_VARNAME::$RANGES_TYPE))
-        if     (package == PKG_CUDA)      int_type = INT_CUDA
-        elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
-        elseif (package == PKG_THREADS)   int_type = INT_THREADS
-        elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
-        end
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[1])::$int_type))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
-        kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
-        ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-        if isgpu(package)
-            body = add_threadids(indices, ranges, body)
-            body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
-            body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
-        elseif iscpu(package)
-            body = add_loop(indices, ranges, body)
-            body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
-        else
-            @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-        end
+        kernel = adjust_signatures(kernel, package)
+        body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end
     body = add_return(body)
