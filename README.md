@@ -529,7 +529,7 @@ Please open an issue to discuss your idea for a contribution beforehand. Further
 ## Contributors
 The principal contributors to this project have been so far (ordered by the significance of the relative contributions):
 - Dr. Samuel Omlin ([@omlins](https://github.com/omlins)), Swiss National Supercomputing Centre (CSCS), ETH Zurich
-- Dr. Ludovic Räss ([@luraess](https://github.com/luraess)), Laboratory of Hydraulics, Hydrology, Glaciology - ETH Zurich
+- Dr. Ludovic Räss ([@luraess](https://github.com/luraess)), Swiss Geocomputing Centre, University of Lausanne
 
 
 ## References
