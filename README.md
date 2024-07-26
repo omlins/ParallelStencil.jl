@@ -28,6 +28,7 @@ Beyond traditional high-performance computing, ParallelStencil supports automati
 * [Dependencies](#dependencies)
 * [Installation](#installation)
 * [Questions, comments and discussions](#questions-comments-and-discussions)
+* [Your contributions](#your-contributions)
 * [References](#references)
 
 ## Parallelization and optimization with one macro call
@@ -519,6 +520,10 @@ julia>]
 ## Questions, comments and discussions
 To discuss technical issues, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#distributed` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
 To discuss numerical/domain-science issues, please post on Julia Discourse in the [Numerics topic] or the [Modelling & Simulations topic] or whichever other topic fits best your issue.
+
+## Your contributions
+This project welcomes your contribution! Have you developed an application with ParallelStencil that could be featured as a mini-app? Please contribute it to share it with the world! Would you like to use other methods than finite differences with math-close notation in ParallelStencil kernels? Then check out the tiny `ParallelStencil.FiniteDifferences1D` submodule as an example for enabling math-close notation for a method and contribute your own submodule! Are you missing a great feature in the core of ParallelStencil? Maybe you can contribute yourself! 
+Please open an issue to discuss your idea for a contribution beforehand. Furthermore, note that pull request should always address a significant issue in its completeness. Moreover, pull requests should blend nicely into the existing project; common sense is the primary guide in this regard (community guideline documents, e.g. [ColPrac](https://github.com/SciML/ColPrac), can be consulted in addition for inspiration). We are looking forward to your contribution!
 
 ## References
 \[1\] [Omlin, S., Räss, L., Kwasniewski, G., Malvoisin, B., & Podladchikov, Y. Y. (2020). Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia. JuliaCon Conference, virtual.][JuliaCon20a]
