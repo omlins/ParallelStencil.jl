@@ -302,8 +302,8 @@ end
 
 ## @SYNCHRONIZE FUNCTIONS
 
-synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...)))
-synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...)))
+synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...); blocking=true))
+synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...); blocking=true))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
