@@ -25,7 +25,7 @@ macro init_parallel_kernel(args...)
     esc(init_parallel_kernel(__module__, package, numbertype_val, inbounds_val))
 end
 
-function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:(), parent_module::string=ParallelKernel)
+function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool; datadoc_call=:(), parent_module::String=ParallelKernel)
     modulename = :Data
     if package == PKG_CUDA
         if (isinteractive() && !is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided as an extension of $parent_module and CUDA.jl needs therefore to be installed independently (type `add CUDA` in the julia package manager).") end
@@ -115,7 +115,7 @@ function extract_kwargs_nopos(caller::Module, kwargs::Dict)
     return inbounds_val
 end
 
-function define_import(caller::Module, package::Symbol, parent_module::string)
+function define_import(caller::Module, package::Symbol, parent_module::String)
     if package == PKG_THREADS
         return :()
     else 
