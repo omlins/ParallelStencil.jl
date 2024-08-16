@@ -54,7 +54,7 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     end
-    return_expr = ParallelKernel.init_parallel_kernel(caller, package, numbertype, inbounds; datadoc_call=datadoc_call)
+    return_expr = ParallelKernel.init_parallel_kernel(caller, package, numbertype, inbounds; datadoc_call=datadoc_call, parent_module=ParallelStencil)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
     set_ndims(caller, ndims)
