@@ -85,7 +85,7 @@ Note that`@d2_yi` and `@d2_zi` perform the analogue operations as `@d2_xi` along
 Type `?FiniteDifferences3D` in the [Julia REPL] to explore all provided macros.
 
 ## 50-lines example deployable on GPU and CPU
-This concise 3-D heat diffusion solver uses ParallelStencil and a a simple boolean `USE_GPU` defines whether it runs on GPU or CPU (the environment variable [JULIA_NUM_THREADS] defines how many cores are used in the latter case):
+This concise 3-D heat diffusion solver uses ParallelStencil and a simple boolean `USE_GPU` defines whether it runs on GPU or CPU (the environment variable [JULIA_NUM_THREADS] defines how many cores are used in the latter case):
 
 ```julia
 const USE_GPU = true
@@ -276,7 +276,7 @@ It can be launched as follows:
 Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
 
 ## Support for logical arrays of small arrays / structs
-Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call]). To this purpose, ParallelStencil leverages `CellArray`s (from [CellArrays.jl], which relies in turn on [StaticArrays.jl]). To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
+Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)). To this purpose, ParallelStencil leverages `CellArray`s (from [CellArrays.jl], which relies in turn on [StaticArrays.jl]). To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
 ```julia
 nx, ny, nz = 128, 128, 128
 celldims   = (4, 4)
