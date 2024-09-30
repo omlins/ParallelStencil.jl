@@ -1,7 +1,6 @@
 using CellArrays, StaticArrays, MacroTools
 import MacroTools: postwalk, splitdef, combinedef, isexpr, unblock, flatten, rmlines, prewalk # NOTE: inexpr_walk used instead of MacroTools.inexpr
 
-
 ## CONSTANTS AND TYPES (and the macros wrapping them)
 # NOTE: constants needs to be defined before including the submodules to have them accessible there.
 
@@ -45,6 +44,9 @@ const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Fl
 const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
+const MODULENAME_FIELDS            = :Fields
+const VECTORNAMES                  = (:x, :y, :z)
+const TENSORNAMES                  = (:xx, :yy, :zz, :xy, :xz, :yz)
 const AD_MODE_DEFAULT              = :(Enzyme.Reverse)
 const AD_DUPLICATE_DEFAULT         = :(Enzyme.DuplicatedNoNeed)
 const AD_ANNOTATION_DEFAULT        = :(Enzyme.Const)

@@ -299,6 +299,8 @@ function create_shared_exprs(numbertype::DataType, indextype::DataType)
             # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
             # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
             # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
+
+            $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
         end
     else
         quote
@@ -360,6 +362,8 @@ function create_shared_exprs(numbertype::DataType, indextype::DataType)
             # NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
             # NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
             # NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
+
+            $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
         end
     end
 end
@@ -367,4 +371,125 @@ end
 function Data_none()
     :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
     end)
+end
+
+
+## DATA SUBMODULE FIELDS
+
+function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    if numbertype == NUMBERTYPE_NONE
+        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+                            import ..Data, Base
+
+                            # export Field, XField, ...
+                            
+                            $(create_field_exprs())
+                            
+                            const VectorField{T, N, names}        = Data.NamedArrayTuple{N, T, N, names}
+                            const BVectorField{T, N, names}       = Data.NamedArrayTuple{N, T, N, names}
+                            const DeviceVectorField{T, N, names}  = Data.NamedDeviceArrayTuple{N, T, N, names}
+                            const DeviceBVectorField{T, N, names} = Data.NamedDeviceArrayTuple{N, T, N, names}
+
+                            const TensorField{T, N, names}        = Data.NamedArrayTuple{N, T, N, names}
+                            const DeviceTensorField{T, N, names}  = Data.NamedDeviceArrayTuple{N, T, N, names}
+                        end)
+    else
+        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+                            import ..Data, Base
+                            
+                            # export Field, XField, ...
+
+                            $(create_field_exprs())
+
+                            const VectorField{N, names}        = Data.NamedArrayTuple{N, N, names}
+                            const BVectorField{N, names}       = Data.NamedArrayTuple{N, N, names}
+                            const DeviceVectorField{N, names}  = Data.NamedDeviceArrayTuple{N, N, names}
+                            const DeviceBVectorField{N, names} = Data.NamedDeviceArrayTuple{N, N, names}
+
+                            const TensorField{N, names}        = Data.NamedArrayTuple{N, N, names}
+                            const DeviceTensorField{N, names}  = Data.NamedDeviceArrayTuple{N, N, names}
+                        end)
+    end
+    return prewalk(rmlines, flatten(Fields_module))
+end
+
+
+function TData_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    if numbertype == NUMBERTYPE_NONE
+        Fields_module = :()
+    else
+        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+                            import ..TData, Base
+
+                            # export Field, XField, ...
+
+                            const Field                = TData.Array
+                            const XField               = TData.Array
+                            const YField               = TData.Array
+                            const ZField               = TData.Array
+                            const BXField              = TData.Array
+                            const BYField              = TData.Array
+                            const BZField              = TData.Array
+                            const XXField              = TData.Array
+                            const YYField              = TData.Array
+                            const ZZField              = TData.Array
+                            const XYField              = TData.Array
+                            const XZField              = TData.Array
+                            const YZField              = TData.Array
+                            const DeviceField          = TData.DeviceArray
+                            const DeviceXField         = TData.DeviceArray
+                            const DeviceYField         = TData.DeviceArray
+                            const DeviceZField         = TData.DeviceArray
+                            const DeviceBXField        = TData.DeviceArray
+                            const DeviceBYField        = TData.DeviceArray
+                            const DeviceBZField        = TData.DeviceArray
+                            const DeviceXXField        = TData.DeviceArray
+                            const DeviceYYField        = TData.DeviceArray
+                            const DeviceZZField        = TData.DeviceArray
+                            const DeviceXYField        = TData.DeviceArray
+                            const DeviceXZField        = TData.DeviceArray
+                            const DeviceYZField        = TData.DeviceArray
+
+                            const VectorField{T, N, names}        = TData.NamedArrayTuple{N, T, N, names}
+                            const BVectorField{T, N, names}       = TData.NamedArrayTuple{N, T, N, names}
+                            const DeviceVectorField{T, N, names}  = TData.NamedDeviceArrayTuple{N, T, N, names}
+                            const DeviceBVectorField{T, N, names} = TData.NamedDeviceArrayTuple{N, T, N, names}
+
+                            const TensorField{T, N, names}        = TData.NamedArrayTuple{N, T, N, names}
+                            const DeviceTensorField{T, N, names}  = TData.NamedDeviceArrayTuple{N, T, N, names}
+                        end)
+    end
+    return prewalk(rmlines, flatten(Fields_module))
+end
+
+
+function create_field_exprs()
+    quote
+        const Field                 = Data.Array
+        const XField                = Data.Array
+        const YField                = Data.Array
+        const ZField                = Data.Array
+        const BXField               = Data.Array
+        const BYField               = Data.Array
+        const BZField               = Data.Array
+        const XXField               = Data.Array
+        const YYField               = Data.Array
+        const ZZField               = Data.Array
+        const XYField               = Data.Array
+        const XZField               = Data.Array
+        const YZField               = Data.Array
+        const DeviceField           = Data.DeviceArray
+        const DeviceXField          = Data.DeviceArray
+        const DeviceYField          = Data.DeviceArray
+        const DeviceZField          = Data.DeviceArray
+        const DeviceBXField         = Data.DeviceArray
+        const DeviceBYField         = Data.DeviceArray
+        const DeviceBZField         = Data.DeviceArray
+        const DeviceXXField         = Data.DeviceArray
+        const DeviceYYField         = Data.DeviceArray
+        const DeviceZZField         = Data.DeviceArray
+        const DeviceXYField         = Data.DeviceArray
+        const DeviceXZField         = Data.DeviceArray
+        const DeviceYZField         = Data.DeviceArray
+    end
 end

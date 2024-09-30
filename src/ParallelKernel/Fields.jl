@@ -1,4 +1,4 @@
-const FIELDS_DOC = """
+"""
 Module Fields
 
 Provides macros for the allocation of different kind of fields on a grid of size `gridsize`.
@@ -26,10 +26,11 @@ Provides macros for the allocation of different kind of fields on a grid of size
 
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
-@doc FIELDS_DOC
 module Fields
 
-export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField
+using ..Exceptions
+import ..ParallelKernel: get_numbertype
+import ..ParallelKernel: NUMBERTYPE_NONE
 
 
 ##
@@ -397,7 +398,8 @@ end
 function _allocate(caller::Module; gridsize=nothing, fields=nothing, allocator=:@zeros, eltype=nothing)
     eltype = determine_eltype(caller, eltype)
     if isnothing(gridsize) || isnothing(fields) @ModuleInternalError("gridsize and fields are mandatory.") end
-    
+    @show caller, gridsize, fields, allocator, eltype
+    error("in allocate")
     
         # TODO: here i am: execute interactively and map for each field a macro call; probably call it our locate instead of Fields.
         
@@ -472,123 +474,9 @@ function determine_eltype(caller::Module, eltype)
 end
 
 
-## MODULE WITH FIELD DATA TYPES IN DATA MODULE
+## Exports
 
-const VECTORNAMES = (:x, :y, :z)
-const TENSORNAMES = (:xx, :yy, :zz, :xy, :xz, :yz)
-
-
-function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    if numbertype == NUMBERTYPE_NONE
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..Data, Base
-                            
-                            $(create_shared_exprs())
-
-                            const VectorField{T, N}        = Data.NamedArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const BVectorField{T, N}       = Data.NamedArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const DeviceVectorField{T, N}  = Data.NamedDeviceArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const DeviceBVectorField{T, N} = Data.NamedDeviceArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-
-                            const TensorField{T, N}        = Data.NamedArrayTuple{N, T, N, $TENSORNAMES[1:N]}
-                            const DeviceTensorField{T, N}  = Data.NamedDeviceArrayTuple{N, T, N, $TENSORNAMES[1:N]}
-                        end)
-    else
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..Data, Base
-                            
-                            $(create_shared_exprs())
-
-                            const VectorField{N}        = Data.NamedArrayTuple{N, N, $VECTORNAMES[1:N]}
-                            const BVectorField{N}       = Data.NamedArrayTuple{N, N, $VECTORNAMES[1:N]}
-                            const DeviceVectorField{N}  = Data.NamedDeviceArrayTuple{N, N, $VECTORNAMES[1:N]}
-                            const DeviceBVectorField{N} = Data.NamedDeviceArrayTuple{N, N, $VECTORNAMES[1:N]}
-
-                            const TensorField{N}        = Data.NamedArrayTuple{N, N, $TENSORNAMES[1:N]}
-                            const DeviceTensorField{N}  = Data.NamedDeviceArrayTuple{N, N, $TENSORNAMES[1:N]}
-                        end)
-    end
-    return prewalk(rmlines, flatten(Fields_module))
-end
-
-
-function TData_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    if numbertype == NUMBERTYPE_NONE
-        Fields_module = :()
-    else
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..TData, Base
-
-                            const Field                = TData.Array
-                            const XField               = TData.Array
-                            const YField               = TData.Array
-                            const ZField               = TData.Array
-                            const BXField              = TData.Array
-                            const BYField              = TData.Array
-                            const BZField              = TData.Array
-                            const XXField              = TData.Array
-                            const YYField              = TData.Array
-                            const ZZField              = TData.Array
-                            const XYField              = TData.Array
-                            const XZField              = TData.Array
-                            const YZField              = TData.Array
-                            const DeviceField          = TData.DeviceArray
-                            const DeviceXField         = TData.DeviceArray
-                            const DeviceYField         = TData.DeviceArray
-                            const DeviceZField         = TData.DeviceArray
-                            const DeviceBXField        = TData.DeviceArray
-                            const DeviceBYField        = TData.DeviceArray
-                            const DeviceBZField        = TData.DeviceArray
-                            const DeviceXXField        = TData.DeviceArray
-                            const DeviceYYField        = TData.DeviceArray
-                            const DeviceZZField        = TData.DeviceArray
-                            const DeviceXYField        = TData.DeviceArray
-                            const DeviceXZField        = TData.DeviceArray
-                            const DeviceYZField        = TData.DeviceArray
-
-                            const VectorField{T, N}        = TData.NamedArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const BVectorField{T, N}       = TData.NamedArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const DeviceVectorField{T, N}  = TData.NamedDeviceArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-                            const DeviceBVectorField{T, N} = TData.NamedDeviceArrayTuple{N, T, N, $VECTORNAMES[1:N]}
-
-                            const TensorField{T, N}        = TData.NamedArrayTuple{N, T, N, $TENSORNAMES[1:N]}
-                            const DeviceTensorField{T, N}  = TData.NamedDeviceArrayTuple{N, T, N, $TENSORNAMES[1:N]}
-                        end)
-    end
-    return prewalk(rmlines, flatten(Fields_module))
-end
-
-
-function create_shared_exprs()
-    quote
-        const Field                 = Data.Array
-        const XField                = Data.Array
-        const YField                = Data.Array
-        const ZField                = Data.Array
-        const BXField               = Data.Array
-        const BYField               = Data.Array
-        const BZField               = Data.Array
-        const XXField               = Data.Array
-        const YYField               = Data.Array
-        const ZZField               = Data.Array
-        const XYField               = Data.Array
-        const XZField               = Data.Array
-        const YZField               = Data.Array
-        const DeviceField           = Data.DeviceArray
-        const DeviceXField          = Data.DeviceArray
-        const DeviceYField          = Data.DeviceArray
-        const DeviceZField          = Data.DeviceArray
-        const DeviceBXField         = Data.DeviceArray
-        const DeviceBYField         = Data.DeviceArray
-        const DeviceBZField         = Data.DeviceArray
-        const DeviceXXField         = Data.DeviceArray
-        const DeviceYYField         = Data.DeviceArray
-        const DeviceZZField         = Data.DeviceArray
-        const DeviceXYField         = Data.DeviceArray
-        const DeviceXZField         = Data.DeviceArray
-        const DeviceYZField         = Data.DeviceArray
-    end
-end
+export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField
 
 
 end # Module Fields
