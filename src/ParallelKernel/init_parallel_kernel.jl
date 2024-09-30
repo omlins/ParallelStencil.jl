@@ -53,6 +53,7 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             end
         end
         @eval(caller, $pkg_import_cmd)
+        @show data_module
         @eval(caller, $data_module)
         @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :DeviceArray)
