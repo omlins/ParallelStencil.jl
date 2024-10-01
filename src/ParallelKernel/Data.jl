@@ -331,43 +331,12 @@ function Data_xpu_exprs(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         quote
             $(T_xpu_exprs())
+
             $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
         end
     else
         quote
-            const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
-            const NumberTuple{N_tuple}                                     = NTuple{N_tuple, Number}
-            const ArrayTuple{N_tuple, N}                                   = NTuple{N_tuple, Array{N}}
-            const DeviceArrayTuple{N_tuple, N}                             = NTuple{N_tuple, DeviceArray{N}}
-            const CellTuple{N_tuple, S}                                    = NTuple{N_tuple, Cell{S}}
-            const DeviceCellTuple{N_tuple, S}                              = NTuple{N_tuple, DeviceCell{S}}
-            const CellArrayTuple{N_tuple, N, B}                            = NTuple{N_tuple, CellArray{N, B}}
-            const DeviceCellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, DeviceCellArray{N, B}}
-
-            const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
-            const NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, <:NumberTuple{N_tuple}}
-            const NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
-            const NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:DeviceArrayTuple{N_tuple, N}}
-            const NamedCellTuple{N_tuple, S, names}                        = NamedTuple{names, <:CellTuple{N_tuple, S}}
-            const NamedDeviceCellTuple{N_tuple, S, names}                  = NamedTuple{names, <:DeviceCellTuple{N_tuple, S}}
-            const NamedCellArrayTuple{N_tuple, N, B, names}                = NamedTuple{names, <:CellArrayTuple{N_tuple, N, B}}
-            const NamedDeviceCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, <:DeviceCellArrayTuple{N_tuple, N, B}}
-
-            const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
-            const NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
-            const ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
-            const DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
-            const CellCollection{N_tuple, S}                               = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
-            const DeviceCellCollection{N_tuple, S}                         = Union{DeviceCellTuple{N_tuple, S}, NamedDeviceCellTuple{N_tuple, S}}
-            const CellArrayCollection{N_tuple, N, B}                       = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
-            const DeviceCellArrayCollection{N_tuple, N, B}                 = Union{DeviceCellArrayTuple{N_tuple, N, B}, NamedDeviceCellArrayTuple{N_tuple, N, B}}
-            
-            # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
-            # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
-            # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
-            # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
-            # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
-            # NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
+            $(xpu_exprs())
 
             $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
         end
@@ -381,6 +350,7 @@ function TData_xpu_exprs(numbertype::DataType, indextype::DataType)
     else
         quote
             $(T_xpu_exprs())
+            
             $(TData_Fields(MODULENAME_FIELDS, numbertype, indextype))
         end
     end
@@ -418,6 +388,44 @@ function T_xpu_exprs()
         # NamedArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.Array{T}, t)
         # NamedCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.Cell{T}, t)
         # NamedCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.CellArray{T}, t)
+    end
+end
+
+function xpu_exprs()
+    quote
+        const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
+        const NumberTuple{N_tuple}                                     = NTuple{N_tuple, Number}
+        const ArrayTuple{N_tuple, N}                                   = NTuple{N_tuple, Array{N}}
+        const DeviceArrayTuple{N_tuple, N}                             = NTuple{N_tuple, DeviceArray{N}}
+        const CellTuple{N_tuple, S}                                    = NTuple{N_tuple, Cell{S}}
+        const DeviceCellTuple{N_tuple, S}                              = NTuple{N_tuple, DeviceCell{S}}
+        const CellArrayTuple{N_tuple, N, B}                            = NTuple{N_tuple, CellArray{N, B}}
+        const DeviceCellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, DeviceCellArray{N, B}}
+
+        const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
+        const NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, <:NumberTuple{N_tuple}}
+        const NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
+        const NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:DeviceArrayTuple{N_tuple, N}}
+        const NamedCellTuple{N_tuple, S, names}                        = NamedTuple{names, <:CellTuple{N_tuple, S}}
+        const NamedDeviceCellTuple{N_tuple, S, names}                  = NamedTuple{names, <:DeviceCellTuple{N_tuple, S}}
+        const NamedCellArrayTuple{N_tuple, N, B, names}                = NamedTuple{names, <:CellArrayTuple{N_tuple, N, B}}
+        const NamedDeviceCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, <:DeviceCellArrayTuple{N_tuple, N, B}}
+
+        const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
+        const NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
+        const ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
+        const DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
+        const CellCollection{N_tuple, S}                               = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
+        const DeviceCellCollection{N_tuple, S}                         = Union{DeviceCellTuple{N_tuple, S}, NamedDeviceCellTuple{N_tuple, S}}
+        const CellArrayCollection{N_tuple, N, B}                       = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
+        const DeviceCellArrayCollection{N_tuple, N, B}                 = Union{DeviceCellArrayTuple{N_tuple, N, B}, NamedDeviceCellArrayTuple{N_tuple, N, B}}
+        
+        # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
+        # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
+        # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
+        # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
+        # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
+        # NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
     end
 end
 
