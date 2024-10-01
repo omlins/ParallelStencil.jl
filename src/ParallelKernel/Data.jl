@@ -438,17 +438,17 @@ function Data_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom d
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
 
-                            $(generic_Fields_exprs($parentmodule))
+                            $(generic_Fields_exprs(parentmodule))
                             
-                            $(T_Fields_exprs($parentmodule))
+                            $(T_Fields_exprs(parentmodule))
                         end)
     else
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
                             
-                            $(generic_Fields_exprs($parentmodule))
+                            $(generic_Fields_exprs(parentmodule))
 
-                            $(Fields_exprs($parentmodule))
+                            $(Fields_exprs(parentmodule))
                         end)
     end
     return prewalk(rmlines, flatten(Fields_module))
@@ -462,9 +462,9 @@ function TData_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom 
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
 
-                            $(generic_Fields_exprs($parentmodule))
+                            $(generic_Fields_exprs(parentmodule))
 
-                            $(T_Fields_exprs($parentmodule))
+                            $(T_Fields_exprs(parentmodule))
                         end)
     end
     return prewalk(rmlines, flatten(Fields_module))
