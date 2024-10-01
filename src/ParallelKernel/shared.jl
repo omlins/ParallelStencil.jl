@@ -46,6 +46,7 @@ const PKNumber                     = Union{Float16, Float32, Float64, Complex{Fl
 const NUMBERTYPE_NONE              = DataType
 const MODULENAME_DATA              = :Data
 const MODULENAME_TDATA             = :TData
+const MODULENAME_DEVICE            = :Device
 const MODULENAME_FIELDS            = :Fields
 const VECTORNAMES                  = (:x, :y, :z)
 const TENSORNAMES                  = (:xx, :yy, :zz, :xy, :xz, :yz)
