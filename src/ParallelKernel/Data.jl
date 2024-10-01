@@ -150,9 +150,9 @@ end
 
 # CUDA
 
-function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function Data_cuda(numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
@@ -168,7 +168,7 @@ function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType
             $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
@@ -188,11 +188,11 @@ function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function TData_cuda(numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :()
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_TDATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
@@ -213,9 +213,9 @@ end
 
 # AMDGPU
 
-function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function Data_amdgpu(numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
@@ -231,7 +231,7 @@ function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataTy
             $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
@@ -251,11 +251,11 @@ function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataTy
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function TData_amdgpu(numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :()
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_TDATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
             const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
@@ -276,9 +276,9 @@ end
 
 # CPU
 
-function Data_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function Data_cpu(numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                          = $indextype
             const Array{T, N}                    = Base.Array{T, N}
@@ -290,7 +290,7 @@ function Data_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
             $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                          = $indextype
             const Number                         = $numbertype
@@ -306,11 +306,11 @@ function Data_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
+function TData_cpu(numbertype::DataType, indextype::DataType)
     TData_module = if (numbertype == NUMBERTYPE_NONE)
         :()
     else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        :(baremodule $MODULENAME_TDATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Array{T, N}                   = Base.Array{T, N}
             const DeviceArray{T, N}             = Base.Array{T, N}
@@ -332,13 +332,13 @@ function Data_xpu_exprs(numbertype::DataType, indextype::DataType)
         quote
             $(T_xpu_exprs())
 
-            $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end
     else
         quote
             $(xpu_exprs())
 
-            $(Data_Fields(MODULENAME_FIELDS, numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end
     end
 end
@@ -351,7 +351,7 @@ function TData_xpu_exprs(numbertype::DataType, indextype::DataType)
         quote
             $(T_xpu_exprs())
             
-            $(TData_Fields(MODULENAME_FIELDS, numbertype, indextype))
+            $(TData_Fields(numbertype, indextype))
         end
     end
 end
@@ -432,10 +432,10 @@ end
 
 ## (DATA SUBMODULE FIELDS - xPU)
 
-function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    parentmodule = :Data
+function Data_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    parentmodule = MODULENAME_DATA
     if numbertype == NUMBERTYPE_NONE
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
 
                             $(generic_Fields_exprs($parentmodule))
@@ -443,7 +443,7 @@ function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataTy
                             $(T_Fields_exprs($parentmodule))
                         end)
     else
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
                             
                             $(generic_Fields_exprs($parentmodule))
@@ -454,12 +454,12 @@ function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataTy
     return prewalk(rmlines, flatten(Fields_module))
 end
 
-function TData_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    parentmodule = :TData
+function TData_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    parentmodule = MODULENAME_TDATA
     if numbertype == NUMBERTYPE_NONE
         Fields_module = :()
     else
-        Fields_module = :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+        Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
                             import ..$parentmodule
 
                             $(generic_Fields_exprs($parentmodule))
