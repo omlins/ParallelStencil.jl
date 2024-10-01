@@ -139,6 +139,17 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
         This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
 """
 
+
+# EMPTY MODULE
+
+function Data_none()
+    :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+    end)
+end
+
+
+# CUDA
+
 function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -198,6 +209,9 @@ function TData_cuda(modulename::Symbol, numbertype::DataType, indextype::DataTyp
     end
     return prewalk(rmlines, flatten(Data_module))
 end
+
+
+# AMDGPU
 
 function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
@@ -259,6 +273,9 @@ function TData_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataT
     return prewalk(rmlines, flatten(Data_module))
 end
 
+
+# CPU
+
 function Data_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -306,6 +323,9 @@ function TData_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType
     end
     return prewalk(rmlines, flatten(TData_module))
 end
+
+
+# xPU
 
 function Data_xpu_exprs(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
@@ -428,13 +448,8 @@ function TData_xpu_exprs(numbertype::DataType, indextype::DataType)
     end
 end
 
-function Data_none()
-    :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-    end)
-end
 
-
-## DATA SUBMODULE FIELDS
+## (DATA SUBMODULE FIELDS - xPU)
 
 function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
     if numbertype == NUMBERTYPE_NONE
@@ -443,7 +458,7 @@ function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataTy
 
                             # export Field, XField, ...
                             
-                            $(create_field_exprs())
+                            $(Data_Fields_exprs())
                             
                             const VectorField{T, N, names}        = Data.NamedArrayTuple{N, T, N, names}
                             const BVectorField{T, N, names}       = Data.NamedArrayTuple{N, T, N, names}
@@ -459,7 +474,7 @@ function Data_Fields(modulename::Symbol, numbertype::DataType, indextype::DataTy
                             
                             # export Field, XField, ...
 
-                            $(create_field_exprs())
+                            $(Data_Fields_exprs())
 
                             const VectorField{N, names}        = Data.NamedArrayTuple{N, N, names}
                             const BVectorField{N, names}       = Data.NamedArrayTuple{N, N, names}
@@ -523,7 +538,7 @@ function TData_Fields(modulename::Symbol, numbertype::DataType, indextype::DataT
 end
 
 
-function create_field_exprs()
+function Data_Fields_exprs()
     quote
         const Field                 = Data.Array
         const XField                = Data.Array
