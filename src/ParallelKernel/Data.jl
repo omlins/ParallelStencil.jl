@@ -546,75 +546,92 @@ end
 ## (DATA SUBMODULE FIELDS - xPU)
 
 function Data_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    parentmodule = MODULENAME_DATA
     if numbertype == NUMBERTYPE_NONE
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..$parentmodule
-
-                            $(generic_Fields_exprs(parentmodule))
-                            
-                            $(T_Fields_exprs(parentmodule))
+                            import ..$MODULENAME_DATA
+                            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(T_Fields_exprs())
+                            $(Data_Fields_Device(numbertype, indextype))
                         end)
     else
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..$parentmodule
-                            
-                            $(generic_Fields_exprs(parentmodule))
-
-                            $(Fields_exprs(parentmodule))
+                            import ..$MODULENAME_DATA
+                            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(Fields_exprs())
+                            $(Data_Fields_Device(numbertype, indextype))
                         end)
     end
     return prewalk(rmlines, flatten(Fields_module))
 end
 
 function TData_Fields(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
-    parentmodule = MODULENAME_TDATA
     if numbertype == NUMBERTYPE_NONE
         Fields_module = :()
     else
         Fields_module = :(baremodule $MODULENAME_FIELDS # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..$parentmodule
-
-                            $(generic_Fields_exprs(parentmodule))
-
-                            $(T_Fields_exprs(parentmodule))
+                            import ..$MODULENAME_TDATA
+                            import ..$MODULENAME_TDATA: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(T_Fields_exprs())
+                            $(TData_Fields_Device(numbertype, indextype))
                         end)
     end
     return prewalk(rmlines, flatten(Fields_module))
 end
 
-function T_Fields_exprs(parentmodule::Symbol)
+function Data_Fields_Device(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    if numbertype == NUMBERTYPE_NONE
+        Device_module = :(baremodule $MODULENAME_DEVICE
+                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(T_Fields_exprs())
+                        end)
+    else
+        Device_module = :(baremodule $MODULENAME_DEVICE # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(Fields_exprs())
+                        end)
+    end
+    return prewalk(rmlines, flatten(Device_module))
+end
+
+function TData_Fields_Device(numbertype::DataType, indextype::DataType) # NOTE: custom data types could be implemented for each alias.
+    if numbertype == NUMBERTYPE_NONE
+        Device_module = :()
+    else
+        Device_module = :(baremodule $MODULENAME_DEVICE # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+                            $(generic_Fields_exprs())
+                            $(T_Fields_exprs())
+                        end)
+    end
+    return prewalk(rmlines, flatten(Device_module))
+end
+
+function T_Fields_exprs()
     quote
-        import ..$parentmodule: NamedArrayTuple, NamedDeviceArrayTuple
-        export VectorField, BVectorField, DeviceVectorField, DeviceBVectorField, TensorField, DeviceTensorField
+        export VectorField, BVectorField, TensorField
         const VectorField{T, N, names}        = NamedArrayTuple{N, T, N, names}
         const BVectorField{T, N, names}       = NamedArrayTuple{N, T, N, names}
-        const DeviceVectorField{T, N, names}  = NamedDeviceArrayTuple{N, T, N, names}
-        const DeviceBVectorField{T, N, names} = NamedDeviceArrayTuple{N, T, N, names}
         const TensorField{T, N, names}        = NamedArrayTuple{N, T, N, names}
-        const DeviceTensorField{T, N, names}  = NamedDeviceArrayTuple{N, T, N, names}
     end
 end
 
-function Fields_exprs(parentmodule::Symbol)
+function Fields_exprs()
     quote
-        import ..$parentmodule: NamedArrayTuple, NamedDeviceArrayTuple
-        export VectorField, BVectorField, DeviceVectorField, DeviceBVectorField, TensorField, DeviceTensorField
+        export VectorField, BVectorField, TensorField
         const VectorField{N, names}        = NamedArrayTuple{N, N, names}
         const BVectorField{N, names}       = NamedArrayTuple{N, N, names}
-        const DeviceVectorField{N, names}  = NamedDeviceArrayTuple{N, N, names}
-        const DeviceBVectorField{N, names} = NamedDeviceArrayTuple{N, N, names}
-
         const TensorField{N, names}        = NamedArrayTuple{N, N, names}
-        const DeviceTensorField{N, names}  = NamedDeviceArrayTuple{N, N, names}
     end
 end
 
-function generic_Fields_exprs(parentmodule::Symbol)
+function generic_Fields_exprs()
     quote
-        import ..$parentmodule: Array, DeviceArray
         export Field, XField, YField, ZField, BXField, BYField, BZField, XXField, YYField, ZZField, XYField, XZField, YZField
-        export DeviceField, DeviceXField, DeviceYField, DeviceZField, DeviceBXField, DeviceBYField, DeviceBZField, DeviceXXField, DeviceYYField, DeviceZZField, DeviceXYField, DeviceXZField, DeviceYZField
         const Field                 = Array
         const XField                = Array
         const YField                = Array
@@ -628,18 +645,5 @@ function generic_Fields_exprs(parentmodule::Symbol)
         const XYField               = Array
         const XZField               = Array
         const YZField               = Array
-        const DeviceField           = DeviceArray
-        const DeviceXField          = DeviceArray
-        const DeviceYField          = DeviceArray
-        const DeviceZField          = DeviceArray
-        const DeviceBXField         = DeviceArray
-        const DeviceBYField         = DeviceArray
-        const DeviceBZField         = DeviceArray
-        const DeviceXXField         = DeviceArray
-        const DeviceYYField         = DeviceArray
-        const DeviceZZField         = DeviceArray
-        const DeviceXYField         = DeviceArray
-        const DeviceXZField         = DeviceArray
-        const DeviceYZField         = DeviceArray
     end
 end
