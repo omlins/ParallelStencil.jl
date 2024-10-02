@@ -230,7 +230,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             $(Data_xpu_exprs())
         end)
     end
-    return prewalk(rmlines, flatten(Device_module))
+    return Device_module
 end
 
 function TData_Device_cuda()
@@ -330,7 +330,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             $(Data_xpu_exprs())
         end)
     end
-    return prewalk(rmlines, flatten(Device_module))
+    return Device_module
 end
 
 function TData_Device_amdgpu()
@@ -410,7 +410,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             $(Data_xpu_exprs())
         end)
     end
-    return prewalk(rmlines, flatten(Device_module))
+    return Device_module
 end
 
 function TData_Device_cpu()
@@ -492,24 +492,24 @@ end
 ## (DATA SUBMODULE FIELDS - xPU)  # NOTE: custom data types could be implemented for each alias.
 
 function Data_Fields(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        Fields_module = :(baremodule $MODULENAME_FIELDS
-                            import ..$MODULENAME_DATA
-                            import ..$MODULENAME_DATA: Array, NamedArrayTuple
-                            $(generic_Fields_exprs())
-                            $(T_Fields_exprs())
-                            $(Data_Fields_Device(numbertype, indextype))
-                        end)
+    Fields_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_FIELDS
+            import ..$MODULENAME_DATA
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(T_Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype))
+        end)
     else
-        Fields_module = :(baremodule $MODULENAME_FIELDS
-                            import ..$MODULENAME_DATA
-                            import ..$MODULENAME_DATA: Array, NamedArrayTuple
-                            $(generic_Fields_exprs())
-                            $(Fields_exprs())
-                            $(Data_Fields_Device(numbertype, indextype))
-                        end)
+        :(baremodule $MODULENAME_FIELDS
+            import ..$MODULENAME_DATA
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype))
+        end)
     end
-    return prewalk(rmlines, flatten(Fields_module))
+    return Fields_module
 end
 
 function TData_Fields()
@@ -523,20 +523,20 @@ function TData_Fields()
 end
 
 function Data_Fields_Device(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        Device_module = :(baremodule $MODULENAME_DEVICE
-                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
-                            $(generic_Fields_exprs())
-                            $(T_Fields_exprs())
-                        end)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(T_Fields_exprs())
+        end)
     else
-        Device_module = :(baremodule $MODULENAME_DEVICE
-                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
-                            $(generic_Fields_exprs())
-                            $(Fields_exprs())
-                        end)
+        :(baremodule $MODULENAME_DEVICE
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(Fields_exprs())
+        end)
     end
-    return prewalk(rmlines, flatten(Device_module))
+    return Device_module
 end
 
 function TData_Fields_Device()
