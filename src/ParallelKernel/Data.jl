@@ -219,7 +219,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             const Array{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
@@ -232,7 +232,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             const Array{N}                 = CUDA.CuDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -251,7 +251,7 @@ function TData_Device_cuda(numbertype::DataType, indextype::DataType)
             const Array{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
-            $(TData_Device_xpu_exprs(numbertype, indextype))
+            $(TData_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -329,7 +329,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
@@ -342,7 +342,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             const Array{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -361,7 +361,7 @@ function TData_Device_amdgpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
-            $(TData_Device_xpu_exprs(numbertype, indextype))
+            $(TData_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -423,7 +423,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}              = Base.Array{T, N}
             const Cell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
@@ -432,7 +432,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             const Array{N}                 = Base.Array{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
-            $(Data_Device_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -447,7 +447,7 @@ function TData_Device_cpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}             = Base.Array{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(TData_Device_xpu_exprs(numbertype, indextype))
+            $(TData_xpu_exprs(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Device_module))
@@ -469,28 +469,6 @@ function Data_xpu_exprs(numbertype::DataType, indextype::DataType)
 end
 
 function TData_xpu_exprs(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        quote end
-    else
-        quote
-            $(T_xpu_exprs())
-        end
-    end
-end
-
-function Data_Device_xpu_exprs(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        quote
-            $(T_xpu_exprs())
-        end
-    else
-        quote
-            $(xpu_exprs())
-        end
-    end
-end
-
-function TData_Device_xpu_exprs(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         quote end
     else
