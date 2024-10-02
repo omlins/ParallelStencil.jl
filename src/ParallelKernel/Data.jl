@@ -162,7 +162,7 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const Array{T, N}                   = CUDA.CuArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_xpu_exprs()) 
+            $(Data_xpu_exprs(numbertype)) 
             $(Data_Device_cuda(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -178,7 +178,7 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const Array{N}                       = CUDA.CuArray{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}                = CuCellArray{<:Cell,N,B,$numbertype}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
             $(Data_Device_cuda(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -206,28 +206,20 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
     Device_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DEVICE
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_CuCellArray
-            # export CuCellArray
             const Index                   = $indextype
             const Array{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_CuCellArray
-            # export CuCellArray
             const Index                    = $indextype
             const Array{N}                 = CUDA.CuDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     end
     return Device_module
@@ -236,10 +228,6 @@ end
 function TData_Device_cuda()
     :(baremodule $MODULENAME_DEVICE
         import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-        # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-        const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
-        # CellArrays.@define_CuCellArray
-        # export CuCellArray
         const Array{T, N}             = CUDA.CuDeviceArray{T, N}
         const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
@@ -262,7 +250,7 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}                   = AMDGPU.ROCArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
             $(Data_Device_amdgpu(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -278,7 +266,7 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}                = ROCCellArray{<:Cell,N,B,$numbertype}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
             $(Data_Device_amdgpu(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -306,28 +294,20 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
     Device_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DEVICE
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_ROCCellArray
-            # export ROCCellArray
             const Index                   = $indextype
             const Array{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_ROCCellArray
-            # export ROCCellArray
             const Index                    = $indextype
             const Array{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     end
     return Device_module
@@ -336,10 +316,6 @@ end
 function TData_Device_amdgpu()
     :(baremodule $MODULENAME_DEVICE
         import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-        # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-        const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
-        # CellArrays.@define_ROCCellArray
-        # export ROCCellArray
         const Array{T, N}             = AMDGPU.ROCDeviceArray{T, N}
         const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
@@ -358,7 +334,7 @@ function Data_cpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}                    = Base.Array{T, N}
             const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
             $(Data_Device_cpu(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -370,7 +346,7 @@ function Data_cpu(numbertype::DataType, indextype::DataType)
             const Array{N}                       = Base.Array{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}                = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
             $(Data_Device_cpu(numbertype, indextype))
             $(Data_Fields(numbertype, indextype))
         end)
@@ -398,16 +374,16 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             const Array{T, N}              = Base.Array{T, N}
             const Cell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     else
         :(baremodule $MODULENAME_DEVICE
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            const Index                          = $indextype
+            const Index                    = $indextype
             const Array{N}                 = Base.Array{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
-            $(Data_xpu_exprs())
+            $(Data_xpu_exprs(numbertype))
         end)
     end
     return Device_module
@@ -426,7 +402,7 @@ end
 
 # xPU
 
-function Data_xpu_exprs()
+function Data_xpu_exprs(numbertype::DataType)
     if (numbertype == NUMBERTYPE_NONE) T_xpu_exprs()
     else                               xpu_exprs()
     end
