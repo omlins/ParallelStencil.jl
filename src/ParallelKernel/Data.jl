@@ -162,8 +162,9 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const Array{T, N}                   = CUDA.CuArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
-            $(Data_xpu_exprs(numbertype, indextype))
+            $(Data_xpu_exprs(numbertype, indextype)) 
             $(Data_Device_cuda(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -179,6 +180,7 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const CellArray{N, B}                = CuCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype, indextype))
             $(Data_Device_cuda(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
@@ -199,6 +201,7 @@ function TData_cuda(numbertype::DataType, indextype::DataType)
             const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs(numbertype, indextype))
             $(TData_Device_cuda(numbertype, indextype))
+            $(TData_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
@@ -212,6 +215,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
             # CellArrays.@define_CuCellArray
             # export CuCellArray
+            const Index                   = $indextype
             const Array{T, N}             = CUDA.CuDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
@@ -224,6 +228,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
             # CellArrays.@define_CuCellArray
             # export CuCellArray
+            const Index                    = $indextype
             const Array{N}                 = CUDA.CuDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
@@ -269,6 +274,7 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype, indextype))
             $(Data_Device_amdgpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -284,6 +290,7 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const CellArray{N, B}                = ROCCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype, indextype))
             $(Data_Device_amdgpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
@@ -304,6 +311,7 @@ function TData_amdgpu(numbertype::DataType, indextype::DataType)
             const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs(numbertype, indextype))
             $(TData_Device_amdgpu(numbertype, indextype))
+            $(TData_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
@@ -317,6 +325,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
             # CellArrays.@define_ROCCellArray
             # export ROCCellArray
+            const Index                   = $indextype
             const Array{T, N}             = AMDGPU.ROCDeviceArray{T, N}
             const Cell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B} = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
@@ -329,6 +338,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
             # CellArrays.@define_ROCCellArray
             # export ROCCellArray
+            const Index                    = $indextype
             const Array{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CellArray{<:Cell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
@@ -370,6 +380,7 @@ function Data_cpu(numbertype::DataType, indextype::DataType)
             const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype, indextype))
             $(Data_Device_cpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     else
         :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
@@ -381,6 +392,7 @@ function Data_cpu(numbertype::DataType, indextype::DataType)
             const CellArray{N, B}                = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype, indextype))
             $(Data_Device_cpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
@@ -397,6 +409,7 @@ function TData_cpu(numbertype::DataType, indextype::DataType)
             const CellArray{T_elem, N, B}       = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs(numbertype, indextype))
             $(TData_Device_cpu(numbertype, indextype))
+            $(TData_Fields(numbertype, indextype))
         end)
     end
     return prewalk(rmlines, flatten(TData_module))
@@ -406,6 +419,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
     Device_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DEVICE
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                    = $indextype
             const Array{T, N}              = Base.Array{T, N}
             const Cell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
@@ -414,6 +428,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
     else
         :(baremodule $MODULENAME_DEVICE
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                          = $indextype
             const Array{N}                 = Base.Array{$numbertype, N}
             const Cell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}          = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
@@ -445,12 +460,10 @@ function Data_xpu_exprs(numbertype::DataType, indextype::DataType)
     if numbertype == NUMBERTYPE_NONE
         quote
             $(T_xpu_exprs())
-            $(Data_Fields(numbertype, indextype))
         end
     else
         quote
             $(xpu_exprs())
-            $(Data_Fields(numbertype, indextype))
         end
     end
 end
@@ -461,7 +474,6 @@ function TData_xpu_exprs(numbertype::DataType, indextype::DataType)
     else
         quote
             $(T_xpu_exprs())
-            $(TData_Fields(numbertype, indextype))
         end
     end
 end
@@ -603,7 +615,7 @@ function TData_Fields_Device(numbertype::DataType, indextype::DataType) # NOTE: 
         Device_module = :()
     else
         Device_module = :(baremodule $MODULENAME_DEVICE # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-                            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+                            import ..$MODULENAME_TDATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
                             $(generic_Fields_exprs())
                             $(T_Fields_exprs())
                         end)
