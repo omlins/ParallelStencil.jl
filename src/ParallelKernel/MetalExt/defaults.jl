@@ -2,8 +2,8 @@ const ERRMSG_METALEXT_NOT_LOADED = "the Metal extension was not loaded. Make sur
 
 # shared.jl
 
-function get_priority_mtlstream end
-function get_mtlstream end
+function get_priority_metalstream end
+function get_metalstream end
 
 # allocators
 

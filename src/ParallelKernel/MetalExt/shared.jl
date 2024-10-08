@@ -11,19 +11,20 @@ import Metal.MTL
 ParallelStencil.ParallelKernel.is_loaded(::Val{:ParallelStencil_MetalExt}) = true
 
 ## FUNCTIONS TO GET CREATE AND MANAGE METAL QUEUES
-ParallelStencil.ParallelKernel.get_priority_metalqueue(arg...) = get_priority_metalqueue(arg...)
-ParallelStencil.ParallelKernel.get_metalqueue(arg...)          = get_metalqueue(arg...)
-let 
-    global get_priority_metalqueue, get_metalqueue
-    priority_metalqueues = Array{MTLCommandQueue}(undef, 0)
-    metalqueues          = Array{MTLCommandQueue}(undef, 0)
+ParallelStencil.ParallelKernel.get_priority_stream(arg...) = get_priority_metalstream(arg...)
+ParallelStencil.ParallelKernel.get_metalstream(arg...)     = get_metalstream(arg...)
 
-    function get_priority_metalqueue(id::Integer)
+let 
+    global get_priority_metalstream, get_metalstream
+    priority_metalqueues = Array{MTL.MTLCommandQueue}(undef, 0)
+    metalqueues          = Array{MTL.MTLCommandQueue}(undef, 0)
+
+    function get_priority_metalstream(id::Integer)
         while (id > length(priority_metalqueues)) push!(priority_metalqueues, MTL.MTLCommandQueue(device())) end # No priority setting available in Metal queues.
         return priority_metalqueues[id]
     end
 
-    function get_metalqueue(id::Integer)
+    function get_metalstream(id::Integer)
         while (id > length(metalqueues)) push!(metalqueues, MTL.MTLCommandQueue(device())) end
         return metalqueues[id]
     end

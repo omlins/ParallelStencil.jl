@@ -224,10 +224,10 @@ end
 
 get_priority_stream_cuda(id::Union{Integer,Symbol,Expr})   = return :(ParallelStencil.ParallelKernel.get_priority_custream($id))
 get_priority_stream_amdgpu(id::Union{Integer,Symbol,Expr}) = return :(ParallelStencil.ParallelKernel.get_priority_rocstream($id))
-get_priority_stream_metal(id::Union{Integer,Symbol,Expr})  = return :(ParallelStencil.ParallelKernel.get_priority_metalqueue($id))
+get_priority_stream_metal(id::Union{Integer,Symbol,Expr})  = return :(ParallelStencil.ParallelKernel.get_priority_metalstream($id))
 get_stream_cuda(id::Union{Integer,Symbol,Expr})            = return :(ParallelStencil.ParallelKernel.get_custream($id))
 get_stream_amdgpu(id::Union{Integer,Symbol,Expr})          = return :(ParallelStencil.ParallelKernel.get_rocstream($id))
-get_stream_metal(id::Union{Integer,Symbol,Expr})           = return :(ParallelStencil.ParallelKernel.get_metalqueue($id))
+get_stream_metal(id::Union{Integer,Symbol,Expr})           = return :(ParallelStencil.ParallelKernel.get_metalstream($id))
 
 
 ## FUNCTIONS TO EXTRACT AND PROCESS COMPUTATION AND BOUNDARY CONDITIONS CALLS / COMMUNICATION CALLS
