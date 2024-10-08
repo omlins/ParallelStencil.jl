@@ -121,6 +121,7 @@ end
 function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
+    elseif (package == PKG_METAL)   get_priority_stream_metal(args...)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -128,6 +129,7 @@ end
 function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    get_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
+    elseif (package == PKG_METAL)   get_stream_metal(args...)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -222,8 +224,10 @@ end
 
 get_priority_stream_cuda(id::Union{Integer,Symbol,Expr})   = return :(ParallelStencil.ParallelKernel.get_priority_custream($id))
 get_priority_stream_amdgpu(id::Union{Integer,Symbol,Expr}) = return :(ParallelStencil.ParallelKernel.get_priority_rocstream($id))
+get_priority_stream_metal(id::Union{Integer,Symbol,Expr})  = return :(ParallelStencil.ParallelKernel.get_priority_metalqueue($id))
 get_stream_cuda(id::Union{Integer,Symbol,Expr})            = return :(ParallelStencil.ParallelKernel.get_custream($id))
 get_stream_amdgpu(id::Union{Integer,Symbol,Expr})          = return :(ParallelStencil.ParallelKernel.get_rocstream($id))
+get_stream_metal(id::Union{Integer,Symbol,Expr})           = return :(ParallelStencil.ParallelKernel.get_metalqueue($id))
 
 
 ## FUNCTIONS TO EXTRACT AND PROCESS COMPUTATION AND BOUNDARY CONDITIONS CALLS / COMMUNICATION CALLS
