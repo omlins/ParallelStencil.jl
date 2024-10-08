@@ -8,12 +8,25 @@ import Enzyme
 #     end
 # end
 
+function promoto_to_const(args...)
+    ntuple(length(args)) do i
+        @inbounds
+        if !(args[i] isa Enzyme.Annotation)
+            return Enzyme.Const(args[i])
+        else
+            return args[i]
+        end
+    end
+end
+
 function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
+    args = promote_to_const(args...)
     Enzyme.autodiff_deferred(arg, args...)
     return
 end
 
 function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
+    args = promote_to_const(args...)
     Enzyme.autodiff_deferred_thunk(arg, args...)
     return
 end

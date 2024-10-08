@@ -114,10 +114,10 @@ import Enzyme
                         return
                     end
                     # Enzyme requires explicit argument annotation, PS injects arguments without annotation
-                    # @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
                     Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!), DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
-                    # @test Array(Ā) ≈ Ā_ref
-                    # @test Array(B̄) ≈ B̄_ref
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
                 end
             end
             @testset "@parallel_indices" begin
