@@ -26,7 +26,7 @@ let
     end
 
     function get_metalqueue(id::Integer)
-        while (id > length(metalqueues)) push!(metalqueues, MTLCommandQueue(MTLDevice.default_device())) end
+        while (id > length(metalqueues)) push!(metalqueues, MTL.MTLCommandQueue(device())) end
         return metalqueues[id]
     end
 end
