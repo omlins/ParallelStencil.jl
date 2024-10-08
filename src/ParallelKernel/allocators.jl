@@ -240,6 +240,13 @@ macro falses_amdgpu(args...)    check_initialized(__module__); esc(_falses(__mod
 macro trues_amdgpu(args...)     check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_AMDGPU)); end
 macro fill_amdgpu(args...)      check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_AMDGPU)); end
 macro fill!_amdgpu(args...)     check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_AMDGPU)); end
+macro zeros_metal(args...)      check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_METAL)); end
+macro ones_metal(args...)       check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_METAL)); end
+macro rand_metal(args...)       check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_METAL)); end
+macro falses_metal(args...)     check_initialized(__module__); esc(_falses(__module__, args...; package=PKG_METAL)); end
+macro trues_metal(args...)      check_initialized(__module__); esc(_trues(__module__, args...; package=PKG_METAL)); end
+macro fill_metal(args...)       check_initialized(__module__); esc(_fill(__module__, args...; package=PKG_METAL)); end
+macro fill!_metal(args...)      check_initialized(__module__); esc(_fill!(__module__, args...; package=PKG_METAL)); end
 macro zeros_threads(args...)    check_initialized(__module__); esc(_zeros(__module__, args...; package=PKG_THREADS)); end
 macro ones_threads(args...)     check_initialized(__module__); esc(_ones(__module__, args...; package=PKG_THREADS)); end
 macro rand_threads(args...)     check_initialized(__module__); esc(_rand(__module__, args...; package=PKG_THREADS)); end
@@ -274,6 +281,7 @@ function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, cellt
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -284,6 +292,7 @@ function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -294,6 +303,7 @@ function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -304,6 +314,7 @@ function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing,
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -314,6 +325,7 @@ function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, 
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -324,6 +336,7 @@ function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     blocklength = determine_blocklength(blocklength, package)
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -332,6 +345,7 @@ end
 function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal!($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
