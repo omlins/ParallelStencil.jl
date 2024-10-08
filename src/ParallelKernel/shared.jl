@@ -12,12 +12,14 @@ gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
+const PKG_METAL                    = :Metal
 const PKG_THREADS                  = :Threads
 const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
 const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_X_MAX               = 32
