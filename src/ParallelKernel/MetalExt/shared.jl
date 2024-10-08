@@ -8,11 +8,9 @@ import Metal.MTL
 # @define_MetalCellArray
 
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
-
 ParallelStencil.ParallelKernel.is_loaded(::Val{:ParallelStencil_MetalExt}) = true
 
 ## FUNCTIONS TO GET CREATE AND MANAGE METAL QUEUES
-
 ParallelStencil.ParallelKernel.get_priority_metalqueue(arg...) = get_priority_metalqueue(arg...)
 ParallelStencil.ParallelKernel.get_metalqueue(arg...)          = get_metalqueue(arg...)
 let 

@@ -75,6 +75,7 @@ macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 function kernel_int_type(package::Symbol)
     if     (package == PKG_CUDA)      int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)     int_type = INT_METAL
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
     elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
     end
