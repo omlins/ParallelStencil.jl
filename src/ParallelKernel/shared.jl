@@ -60,6 +60,7 @@ const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be on
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
                                    PKG_CUDA      => 0,
                                    PKG_AMDGPU    => 0,
+                                   PKG_METAL     => 0,
                                    PKG_THREADS   => 1,
                                    PKG_POLYESTER => 1)
 
@@ -463,7 +464,7 @@ end
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
 iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
-isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
+isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL))
 
 
 ## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)
