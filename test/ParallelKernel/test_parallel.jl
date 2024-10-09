@@ -28,16 +28,17 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 import Enzyme
-@static for package in TEST_PACKAGES  eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+
+const TEST_PRECISIONS = [Float32, Float64]
+for package in TEST_PACKAGES
+for precision in TEST_PRECISIONS
+(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            # @static if $package == $PKG_METAL
-            #     @init_parallel_kernel($package, Float32)
-            # else
-            #     @init_parallel_kernel($package, Float64)
-            # end
-            @init_parallel_kernel($package, Float32)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized()
             @testset "@parallel" begin
                 @static if $package == $PKG_CUDA
@@ -112,8 +113,8 @@ import Enzyme
                     B̄ = @ones(N)
                     A_ref = Array(A)
                     B_ref = Array(B)
-                    Ā_ref = ones(Float32, N)
-                    B̄_ref = ones(Float32, N)
+                    Ā_ref = ones($precision, N)
+                    B̄_ref = ones($precision, N)
                     @parallel_indices (ix) function f!(A, B, a)
                         A[ix] += a * B[ix] * 100.65
                         return
@@ -422,21 +423,21 @@ import Enzyme
             @reset_parallel_kernel()
         end;
         @testset "2. parallel macros (literal conversion)" begin
-            # @testset "@parallel_indices (Float64)" begin
-            #     @require !@is_initialized()
-            #     @static if $package == $PKG_METAL
-            #         return
-            #     end
-            #     @require @is_initialized()
-            #     expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
-            #     @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
-            #     @reset_parallel_kernel()
-            # end;
+            if $package != $PKG_METAL
+                @testset "@parallel_indices (Float64)" begin
+                    @require !@is_initialized()
+                    @init_parallel_kernel($package, Float64)
+                    @require @is_initialized()
+                    expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                    @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
+                    @reset_parallel_kernel()
+                end;
+            end
             @testset "@parallel_indices (Float32)" begin
                 @require !@is_initialized()
                 @init_parallel_kernel($package, Float32)
                 @require @is_initialized()
-                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
                 @test occursin("A[ix] = A[ix] + 1.0f0\n", expansion)
                 @reset_parallel_kernel()
             end;
@@ -448,14 +449,16 @@ import Enzyme
                 @test occursin("A[ix] = A[ix] + Float16(1.0)\n", expansion)
                 @reset_parallel_kernel()
             end;
-            @testset "@parallel_indices (ComplexF64)" begin
-                @require !@is_initialized()
-                @init_parallel_kernel($package, ComplexF64)
-                @require @is_initialized()
-                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
-                @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
-                @reset_parallel_kernel()
-            end;
+            if $package != $PKG_METAL
+                @testset "@parallel_indices (ComplexF64)" begin
+                    @require !@is_initialized()
+                    @init_parallel_kernel($package, ComplexF64)
+                    @require @is_initialized()
+                    expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
+                    @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
+                    @reset_parallel_kernel()
+                end;
+            end
             @testset "@parallel_indices (ComplexF32)" begin
                 @require !@is_initialized()
                 @init_parallel_kernel($package, ComplexF32)
@@ -476,12 +479,7 @@ import Enzyme
         @testset "3. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                # @static if $package == $PKG_METAL
-                #     @init_parallel_kernel($package, Float32, inbounds=true)
-                # else
-                #     @init_parallel_kernel($package, Float64, inbounds=true)
-                # end
-                @init_parallel_kernel($package, Float32, inbounds=true)
+                @init_parallel_kernel($package, $precision, inbounds=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -518,12 +516,7 @@ import Enzyme
         end;
         @testset "5. Exceptions" begin
             @require !@is_initialized()
-            # @static if $package == $PKG_METAL
-            #     @init_parallel_kernel($package, Float32)
-            # else
-            #     @init_parallel_kernel($package, Float64)
-            # end
-            @init_parallel_kernel($package, Float32)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                        # Error: isempty(args)
@@ -558,4 +551,6 @@ import Enzyme
             @reset_parallel_kernel()
         end;
     end;
-)) end == nothing || true;
+))
+
+end end == nothing || true;

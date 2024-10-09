@@ -21,10 +21,15 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-@static for package in TEST_PACKAGES  eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+const TEST_PRECISIONS = [Float32, Float64]
+for package in TEST_PACKAGES
+for precision in TEST_PRECISIONS
+(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, Float32, 2)
+        @init_parallel_stencil($package, $precision, 2)
         @require @is_initialized()
         nx, ny = 7, 5
         A      =  @rand(nx,   ny  );
@@ -119,4 +124,6 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
         end;
         @reset_parallel_stencil()
     end;
-)) end == nothing || true;
+))
+
+end end == nothing || true;
