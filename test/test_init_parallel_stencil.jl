@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_memopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_memopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
 import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_memopt
 using ParallelStencil.Exceptions
@@ -16,6 +16,9 @@ end
 @static if PKG_METAL in TEST_PACKAGES
     import Metal
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 

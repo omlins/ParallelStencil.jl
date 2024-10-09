@@ -14,16 +14,16 @@ ParallelStencil.ParallelKernel.rand_metal(::Type{T}, blocklength, dims...) where
 ParallelStencil.ParallelKernel.falses_metal(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_metal(T, blocklength, false, args...)
 ParallelStencil.ParallelKernel.trues_metal(::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}    = fill_metal(T, blocklength, true, args...)
 
-# function ParallelStencil.ParallelKernel.fill_metal(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
-#     if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
-#     check_datatype_metal(T, Bool, Enum)
-#     if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
-#     elseif (length(x) == length(T)) cell = convert(T, x)
-#     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
-#     end
-#     return CellArrays.fill!(MtlCellArray{T,B}(undef, args...), cell)
-# end
+function ParallelStencil.ParallelKernel.fill_metal(::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype_metal(T, Bool, Enum)
+    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+    elseif (length(x) == length(T)) cell = convert(T, x)
+    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+    end
+    return CellArrays.fill!(MtlCellArray{T,B}(undef, args...), cell)
+end
 
-# ParallelStencil.ParallelKernel.fill_metal!(A, x) = Metal.fill!(A, construct_cell(A, x))
+ParallelStencil.ParallelKernel.fill_metal!(A, x) = Metal.fill!(A, construct_cell(A, x))
 
 check_datatype_metal(args...) = check_datatype(args..., INT_METAL)

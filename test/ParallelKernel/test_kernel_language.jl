@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER
 import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
@@ -14,13 +14,25 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if PKG_METAL in TEST_PACKAGES
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. kernel language macros" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            # @static if $package == $PKG_METAL
+            #     @init_parallel_kernel($package, Float32)
+            # else
+            #     @init_parallel_kernel($package, Float64)
+            # end
+            @init_parallel_kernel($package, Float32)
             @require @is_initialized()
             @testset "mapping to package" begin
                 if $package == $PKG_CUDA
@@ -41,6 +53,15 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     # @test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_println()) == "AMDGPU.@rocprintln"
+                elseif $package == $PKG_METAL
+                    @test @prettystring(1, @gridDim()) == "Metal.threadgroups_per_grid_3d()"
+                    @test @prettystring(1, @blockIdx()) == "Metal.threadgroup_position_in_grid_3d()"
+                    @test @prettystring(1, @blockDim()) == "Metal.threads_per_threadgroup_3d()"
+                    @test @prettystring(1, @threadIdx()) == "Metal.thread_position_in_threadgroup_3d()"
+                    @test @prettystring(1, @sync_threads()) == "Metal.threadgroup_barrier(; flag = Metal.MemoryFlagThreadGroup)"
+                    @test @prettystring(1, @sharedMem(Float32, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal Float32 (2, 3)"
+                    # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"
+                    # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
@@ -193,7 +214,12 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             @reset_parallel_kernel()
         end;
         @testset "2. Exceptions" begin
-            @init_parallel_kernel($package, Float64)
+            # @static if $package == $PKG_METAL
+            #     @init_parallel_kernel($package, Float32)
+            # else
+            #     @init_parallel_kernel($package, Float64)
+            # end
+            @init_parallel_kernel($package, Float32)
             @require @is_initialized
             @testset "no arguments" begin
                 @test_throws ArgumentError checknoargs(:(something));                                                   # Error: length(args) != 0

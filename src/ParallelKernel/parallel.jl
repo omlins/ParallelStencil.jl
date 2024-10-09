@@ -598,7 +598,7 @@ end
 function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
-    elseif (package == PKG_METAL)   return :(Metal.global_queue(device())) # Use the default queue of the task.
+    elseif (package == PKG_METAL)   return :(Metal.global_queue(Metal.current_device())) # Use the default queue of the task.
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end

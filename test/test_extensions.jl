@@ -14,6 +14,9 @@ end
     import Metal
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 exename = joinpath(Sys.BINDIR, Base.julia_exename())
 const TEST_PROJECTS = ["Diffusion3D_minimal"] # ["Diffusion3D_minimal", "Diffusion3D", "Diffusion"]
 

@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_POLYESTER, INDICES
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
@@ -19,6 +19,9 @@ end
     import Metal
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 import ParallelStencil.@gorgeousexpand
@@ -27,7 +30,12 @@ import ParallelStencil.@gorgeousexpand
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, Float64, 3)
+            # @static if $package == $PKG_METAL
+            #     @init_parallel_stencil($package, Float32, 3)
+            # else
+            #     @init_parallel_stencil($package, Float64, 3)
+            # end
+            @init_parallel_stencil($package, Float32, 3)
             @require @is_initialized()
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
@@ -170,17 +178,17 @@ import ParallelStencil.@gorgeousexpand
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end
                 @testset "@parallel <kernel> (3D; on-the-fly)" begin
                     nx, ny, nz = 32, 8, 8
-                    lam=dt=_dx=_dy=_dz = 1.0
+                    lam=dt=_dx=_dy=_dz = 1.0f0
                     T      = @zeros(nx, ny, nz);
                     T2     = @zeros(nx, ny, nz);
                     T2_ref = @zeros(nx, ny, nz);
                     Ci     = @ones(nx, ny, nz);
                     copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::Float64, _dx, _dy, _dz)
+                    @parallel function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
                         @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                         @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
                         @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
@@ -194,7 +202,7 @@ import ParallelStencil.@gorgeousexpand
                                             + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                             + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                             );
-                    @test all(Array(T2) .== Array(T2_ref))
+                    @test all(Array(T2) .≈ Array(T2_ref))
                 end                
                 @static if $package in [$PKG_CUDA, $PKG_AMDGPU]
                     @testset "@parallel memopt <kernel> (nx, ny, nz = x .* threads)" begin # NOTE: the following does not work for some reason: (nx, ny, nz = ($nx, $ny, $nz))" for (nx, ny, nz) in ((32, 8, 9), (32, 8, 8), (31, 7, 9), (33, 9, 9), (33, 7, 8))
@@ -211,7 +219,7 @@ import ParallelStencil.@gorgeousexpand
                                 return
                             end
                             @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
+                            @test all(Array(A2) .≈ Array(A))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
                             A  = @zeros(nx, ny, nz);
@@ -222,7 +230,7 @@ import ParallelStencil.@gorgeousexpand
                                 return
                             end
                             @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
+                            @test all(Array(A2) .≈ Array(A))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, 0:0, -1:1); z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -237,7 +245,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2.0.*A[:,:,2:end-1] .+ A[:,:,1:end-2];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, -1:1, 0:0); y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -252,7 +260,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[:,2:end-1,:] .= A[:,3:end,:] .- 2.0.*A[:,2:end-1,:] .+ A[:,1:end-2,:];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 1:1, 0:2); z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -265,7 +273,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,2:end-1,3:end] .- 2.0.*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,2:end-1,1:end-2];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 0:2, 1:1); y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -278,7 +286,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,3:end,2:end-1] .- 2.0.*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,1:end-2,2:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -303,7 +311,7 @@ import ParallelStencil.@gorgeousexpand
                                                     - ((.-lam.*(T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1]).*_dy)).*_dy
                                                     - ((.-lam.*(T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]).*_dz) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2]).*_dz)).*_dz)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -322,7 +330,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -337,7 +345,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true higher_order_memopt!(A2, A);
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -360,7 +368,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0; 2 arrays)" begin
                             A  = @zeros(nx, ny, nz);
@@ -373,7 +381,7 @@ import ParallelStencil.@gorgeousexpand
                                 return
                             end
                             @parallel memopt=true copy_memopt!(A2, A, B);
-                            @test all(Array(A2) .== Array(A) .+ Array(B))
+                            @test all(Array(A2) .≈ Array(A) .+ Array(B))
                         end                        
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -390,7 +398,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2.0.*A[:,:,2:end-1] .+ A[:,:,1:end-2] .+ B[:,:,2:end] .- B[:,:,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -407,7 +415,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[:,2:end-1,:] .= (((A[:,3:end,:] .- 2.0.*A[:,2:end-1,:]) .+ A[:,1:end-2,:] .+ B[:,3:end,:]) .- 2.0.*B[:,2:end-1,:]) .+ B[:,1:end-2,:];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, x-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -424,7 +432,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[2:end-1,:,:] .= A[3:end,:,:] .- 2.0.*A[2:end-1,:,:] .+ A[1:end-2,:,:] .+ B[2:end,:,:] .- B[1:end-1,:,:];
-                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -444,7 +452,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -464,7 +472,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -486,7 +494,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -517,9 +525,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[5:end-1,3:end,3:end-3] .= B[5:end-1,3:end,6:end] .- 2.0.*B[3:end-3,3:end,3:end-3] .+ B[2:end-4,3:end,1:end-5];
                             C2_ref[5:end-1,3:end,3:end-3] .= C[5:end-1,3:end,6:end] .- 2.0.*C[3:end-3,3:end,3:end-3] .+ C[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:-1, 2:2, 1:2), C=(-4:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -550,9 +558,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[5:end-1,3:end,2:end-1] .= B[5:end-1,3:end,3:end] .- 2.0.*B[3:end-3,3:end,2:end-1] .+ B[2:end-4,3:end,2:end-1];
                             C2_ref[5:end-1,3:end,1:end-1] .= C[5:end-1,3:end,2:end] .- 2.0.*C[3:end-3,3:end,1:end-1] .+ C[2:end-4,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -583,9 +591,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -638,9 +646,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -693,9 +701,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, B), loopdim=3, loopsize=3, optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:1)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -741,9 +749,9 @@ import ParallelStencil.@gorgeousexpand
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2.0.*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2.0.*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2.0.*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
+                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(B2) .≈ Array(B2_ref))
+                            @test all(Array(C2) .≈ Array(C2_ref))
                         end
                     end
                     @testset "@parallel memopt <kernel> (nx, ny, nz != x .* threads)" begin
@@ -760,7 +768,7 @@ import ParallelStencil.@gorgeousexpand
                             end
                             ranges = (1:64,1:64,1:8) # TODO: must be a multiple of the number of threads
                             @parallel ranges memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
+                            @test all(Array(A2) .≈ Array(A))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
                             A  = @zeros(nx, ny, nz);
@@ -771,7 +779,7 @@ import ParallelStencil.@gorgeousexpand
                                 return
                             end
                             @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
+                            @test all(Array(A2) .≈ Array(A))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -790,7 +798,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = 1.0
@@ -812,7 +820,7 @@ import ParallelStencil.@gorgeousexpand
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .== Array(T2_ref))
+                            @test all(Array(T2) .≈ Array(T2_ref))
                         end
                     end
                 end                
@@ -826,7 +834,12 @@ import ParallelStencil.@gorgeousexpand
         end;
         @testset "2. parallel macros (2D)" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, Float64, 3)
+            # @static if $package == $PKG_METAL
+            #     @init_parallel_stencil($package, Float32, 2)
+            # else
+            #     @init_parallel_stencil($package, Float64, 2)
+            # end
+            @init_parallel_stencil($package, Float32, 2)
             @require @is_initialized()
             @static if $package in [$PKG_CUDA, $PKG_AMDGPU]
                     nx, ny, nz = 32, 8, 1
@@ -851,7 +864,7 @@ import ParallelStencil.@gorgeousexpand
                                                 - ((.-lam.*(T[3:end  ,2:end-1,1] .- T[2:end-1,2:end-1,1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[1:end-2,2:end-1,1]).*_dx)).*_dx
                                                 - ((.-lam.*(T[2:end-1,3:end  ,1] .- T[2:end-1,2:end-1,1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[2:end-1,1:end-2,1]).*_dy)).*_dy)
                                                 );
-                        @test all(Array(T2) .== Array(T2_ref))
+                        @test all(Array(T2) .≈ Array(T2_ref))
                     end;
             end;
             @reset_parallel_stencil()
@@ -859,7 +872,12 @@ import ParallelStencil.@gorgeousexpand
         @testset "3. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, Float64, 1, inbounds=true)
+                # @static if $package == $PKG_METAL
+                #     @init_parallel_stencil($package, Float32, 1, inbounds=true)
+                # else
+                #     @init_parallel_stencil($package, Float64, 1, inbounds=true)
+                # end
+                @init_parallel_stencil($package, Float32, 1, inbounds=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -871,7 +889,7 @@ import ParallelStencil.@gorgeousexpand
             end;
             @testset "@parallel_indices (I...) (1D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, Float64, 1)
+                @init_parallel_stencil($package, Float32, 1)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
                 @parallel_indices (I...) function write_indices!(A)
@@ -879,12 +897,17 @@ import ParallelStencil.@gorgeousexpand
                     return
                 end
                 @parallel write_indices!(A);
-                @test all(Array(A) .== [(ix-1) for ix=1:size(A,1)])
+                @test all(Array(A) .≈ [(ix-1) for ix=1:size(A,1)])
                 @reset_parallel_stencil()
             end;
             @testset "@parallel_indices (I...) (2D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, Float64, 2)
+                # @static if $package == $PKG_METAL
+                #     @init_parallel_stencil($package, Float32, 2)
+                # else
+                #     @init_parallel_stencil($package, Float64, 2)
+                # end
+                @init_parallel_stencil($package, Float32, 2)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
                 @parallel_indices (I...) function write_indices!(A)
@@ -892,12 +915,17 @@ import ParallelStencil.@gorgeousexpand
                     return
                 end
                 @parallel write_indices!(A);
-                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
+                @test all(Array(A) .≈ [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 @reset_parallel_stencil()
             end;
             @testset "@parallel_indices (I...) (3D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, Float64, 3)
+                # @static if $package == $PKG_METAL
+                #     @init_parallel_stencil($package, Float32, 3)
+                # else
+                #     @init_parallel_stencil($package, Float64, 3)
+                # end
+                @init_parallel_stencil($package, Float32, 3)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
                 @parallel_indices (I...) function write_indices!(A)
@@ -905,7 +933,7 @@ import ParallelStencil.@gorgeousexpand
                     return
                 end
                 @parallel write_indices!(A);
-                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                @test all(Array(A) .≈ [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 @reset_parallel_stencil()
             end;
         end;
@@ -1004,7 +1032,12 @@ import ParallelStencil.@gorgeousexpand
             @reset_parallel_stencil()
         end;
         @testset "5. Exceptions" begin
-            @init_parallel_stencil($package, Float64, 3)
+            # @static if $package == $PKG_METAL
+            #     @init_parallel_stencil($package, Float32, 3)
+            # else
+            #     @init_parallel_stencil($package, Float64, 3)
+            # end
+            @init_parallel_stencil($package, Float32, 3)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                  # Error: isempty(args)

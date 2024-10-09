@@ -2,7 +2,7 @@ using Test
 using CellArrays, StaticArrays
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring
 import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.Exceptions
@@ -16,6 +16,14 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
     @define_ROCCellArray
+end
+@static if PKG_METAL in TEST_PACKAGES
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    #@define_MetalCellArray
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
@@ -129,6 +137,17 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof(@fill(9, 2,3))                    == typeof(AMDGPU.ROCArray(fill(convert(Float16, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(AMDGPU.ROCArray(fill(convert(DATA_INDEX, 9), 2,3)))
+                elseif $package == $PKG_METAL
+                    @test typeof(@zeros(2,3))                      == typeof(Metal.MtlArray(zeros(Float16,2,3)))
+                    @test typeof(@zeros(2,3, eltype=Float32))      == typeof(Metal.MtlArray(zeros(Float32,2,3)))
+                    @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
+                    @test typeof(@ones(2,3))                       == typeof(Metal.MtlArray(ones(Float16,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))       == typeof(Metal.MtlArray(ones(Float32,2,3)))
+                    @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(Metal.MtlArray(ones(DATA_INDEX,2,3)))
+                    @test typeof(@rand(2,3))                       == typeof(Metal.MtlArray(rand(Float16,2,3)))
+                    @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(Metal.MtlArray(rand(DATA_INDEX,2,3)))
+                    @test typeof(@fill(9, 2,3))                    == typeof(Metal.MtlArray(fill(convert(Float16, 9), 2,3)))
+                    @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(fill(convert(DATA_INDEX, 9), 2,3)))
                 else
                     @test typeof(@zeros(2,3))                      == typeof(parentmodule($package).zeros(Float16,2,3))
                     @test typeof(@zeros(2,3, eltype=Float32))      == typeof(parentmodule($package).zeros(Float32,2,3))
@@ -180,6 +199,16 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(ROCCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
                     AMDGPU.allowscalar(false) #TODO: check how to do
+                elseif $package == $PKG_METAL
+                    # @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                    # @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                    # @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
+                    # @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                    # @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
+                    # @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                    # @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                    # @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
                 else
                     @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
@@ -219,6 +248,15 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                     AMDGPU.allowscalar(false)
+                elseif $package == $PKG_METAL
+                    # @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    # @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                    # @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(MtlCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                    # @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                    # @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                    # @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                    # @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                 else
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -265,6 +303,10 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof(@rand(2,3, eltype=Float64))     == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
                     @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(AMDGPU.ROCArray(zeros(DATA_INDEX,2,3)))
+                elseif $package == $PKG_METAL
+                    @test typeof(@zeros(2,3, eltype=Float32))    == typeof(Metal.MtlArray(zeros(Float32,2,3)))
+                    @test typeof(@ones(2,3, eltype=Float32))     == typeof(Metal.MtlArray(ones(Float32,2,3)))
+                    @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
                 else
                     @test typeof(@zeros(2,3, eltype=Float32))    == typeof(zeros(Float32,2,3))
                     @test typeof(@ones(2,3, eltype=Float32))     == typeof(ones(Float32,2,3))
@@ -298,6 +340,11 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     AMDGPU.allowscalar(false)
+                elseif $package == $PKG_METAL
+                    # @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MetalCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                    # @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MetalCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                    # @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MetalCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                    # @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MetalCellArray{T_Bool}(undef,2,3), trues((3,4)))
                 else
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                     @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
@@ -330,6 +377,14 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
                     AMDGPU.allowscalar(false)
+                elseif $package == $PKG_METAL
+                    # @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(MetalCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    # @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(MetalCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                    # @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(MetalCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                    # @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MetalCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                    # @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MetalCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                    # @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MetalCellArray{SymmetricTensor2D,0}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MetalCellArray{SymmetricTensor2D,0}(undef,2,3))
                 else
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -368,6 +423,13 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof( @falses(2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Bool,   0}(undef,2,3))
                     @test typeof(  @trues(2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Bool,   0}(undef,2,3))
                     AMDGPU.allowscalar(false)
+                elseif $package == $PKG_METAL
+                    # @test typeof(  @zeros(2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Float16,0}(undef,2,3))
+                    # @test typeof(   @ones(2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Float16,0}(undef,2,3))
+                    # @test typeof(   @rand(2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Float16,0}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Float16,0}(undef,2,3))
+                    # @test typeof( @falses(2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Bool,   0}(undef,2,3))
+                    # @test typeof(  @trues(2,3, celldims=(3,4)))                 == typeof(MetalCellArray{T_Bool,   0}(undef,2,3))
                 else
                     @test typeof(  @zeros(2,3, celldims=(3,4)))                 == typeof(CPUCellArray{T_Float16,1}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4)))                 == typeof(CPUCellArray{T_Float16,1}(undef,2,3))
@@ -408,6 +470,19 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test typeof( @falses(2,3, celldims=(3,4), blocklength=3))  == typeof(ROCCellArray{T_Bool,   3}(undef,2,3))
                     @test typeof(  @trues(2,3, celldims=(3,4), blocklength=3))  == typeof(ROCCellArray{T_Bool,   3}(undef,2,3))
                     AMDGPU.allowscalar(false)
+                elseif $package == $PKG_METAL
+                    # @test typeof(  @zeros(2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Float16,1}(undef,2,3))
+                    # @test typeof(   @ones(2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Float16,1}(undef,2,3))
+                    # @test typeof(   @rand(2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Float16,1}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Float16,1}(undef,2,3))
+                    # @test typeof( @falses(2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Bool,   1}(undef,2,3))
+                    # @test typeof(  @trues(2,3, celldims=(3,4), blocklength=1))  == typeof(MetalCellArray{T_Bool,   1}(undef,2,3))
+                    # @test typeof(  @zeros(2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Float16,3}(undef,2,3))
+                    # @test typeof(   @ones(2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Float16,3}(undef,2,3))
+                    # @test typeof(   @rand(2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Float16,3}(undef,2,3))
+                    # @test typeof(@fill(9, 2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Float16,3}(undef,2,3))
+                    # @test typeof( @falses(2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Bool,   3}(undef,2,3))
+                    # @test typeof(  @trues(2,3, celldims=(3,4), blocklength=3))  == typeof(MetalCellArray{T_Bool,   3}(undef,2,3))
                 else
                     @test typeof(  @zeros(2,3, celldims=(3,4), blocklength=0))  == typeof(CPUCellArray{T_Float16,0}(undef,2,3))
                     @test typeof(   @ones(2,3, celldims=(3,4), blocklength=0))  == typeof(CPUCellArray{T_Float16,0}(undef,2,3))
@@ -447,6 +522,12 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                 @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(ROCCellArray{T_Phase,0}(undef,2,3))
                 @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(ROCCellArray{T_Phase,0}(undef,2,3))
                 AMDGPU.allowscalar(false)
+            elseif $package == $PKG_METAL
+                # @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(Metal.MtlArray(rand(Phase, 2,3)))
+                # @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(MetalCellArray{T_Phase,0}(undef,2,3))
+                # @test typeof(@fill(solid, 2,3, eltype=Phase))                                   == typeof(Metal.MtlArray(rand(Phase, 2,3)))
+                # @test typeof(@fill(solid, 2,3, celldims=(3,4), eltype=Phase))                   == typeof(MetalCellArray{T_Phase,0}(undef,2,3))
+                # @test typeof(@fill(@rand(3,4,eltype=Phase), 2,3, celldims=(3,4), eltype=Phase)) == typeof(MetalCellArray{T_Phase,0}(undef,2,3))
             else
                 @test typeof(@rand(2,3, eltype=Phase))                                          == typeof(rand(Phase, 2,3))
                 @test typeof(@rand(2,3, celldims=(3,4), eltype=Phase))                          == typeof(CPUCellArray{T_Phase,1}(undef,2,3))
