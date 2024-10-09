@@ -15,6 +15,7 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 
 Beyond traditional high-performance computing, ParallelStencil supports automatic differentiation of architecture-agnostic parallel kernels relying on [Enzyme.jl], enabling both high-level and generic syntax for maximal flexibility.
 
+
 ## Contents
 * [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)
 * [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
