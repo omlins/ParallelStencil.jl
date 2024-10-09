@@ -84,12 +84,12 @@ The type of indices used in parallel kernels.
 --------------------------------------------------------------------------------
     Data.Array{numbertype, ndims}
 
-The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA and AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required).
+The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA, AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU and Metal.MtlArray or Metal.MtlDeviceArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.CellArray{numbertype, ndims}
 
-The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA and ROCCellArray or ROCDeviceCellArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
+The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MetalCellArray or MetalDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.Cell{numbertype, S}
@@ -128,7 +128,7 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
     The datatype `Data.DeviceArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuDeviceArray for CUDA and AMDGPU.ROCDeviceArray for AMDGPU).
 
     !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
+        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
 
     --------------------------------------------------------------------------------
         Data.DeviceCellArray{numbertype, ndims}
@@ -136,7 +136,7 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
     The datatype `Data.DeviceCellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuDeviceCellArray for CUDA and ROCDeviceCellArray for AMDGPU).
         
     !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
+        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
 """
 
 function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
