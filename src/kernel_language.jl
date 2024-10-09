@@ -150,12 +150,12 @@ $((:(               $A_head        = @sharedMem(eltype($A), (Int64($nx_l), Int64
     for (A, s) in shmem_vars for (shmem_offset,  nx_l, ny_l, A_head) = ((shmem_exprs[A][:offset],  s[:nx_l], s[:ny_l], s[:A_head]),)
   )...
 )
-$((:(               $reg           = 0                                                # e.g. A_ixm1_iyp2_izp2 = 0
+$((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp2 = 0.0
     ) 
     for A in optvars for regs in values(regqueue_tails[A]) for reg in values(regs)
   )...
 )
-$((:(               $reg           = 0                                                # e.g. A_ixm1_iyp2_izp3 = 0
+$((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp3 = 0.0
     )
     for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
   )...
