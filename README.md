@@ -1,6 +1,7 @@
 <h1> <img src="docs/logo/logo_ParallelStencil.png" alt="ParallelStencil.jl" width="50"> ParallelStencil.jl </h1>
 
 [![Build Status](https://github.com/omlins/ParallelStencil.jl/workflows/CI/badge.svg)](https://github.com/omlins/ParallelStencil.jl/actions)
+[![DOI](https://proceedings.juliacon.org/papers/10.21105/jcon.00138/status.svg)](https://doi.org/10.21105/jcon.00138)
 
 ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. Performance similar to CUDA C / HIP can be achieved, which is typically a large improvement over the performance reached when using only [CUDA.jl] or [AMDGPU.jl] [GPU Array programming]. For example, a 2-D shallow ice solver presented at JuliaCon 2020 \[[1][JuliaCon20a]\] achieved a nearly 20 times better performance than a corresponding [GPU Array programming] implementation; in absolute terms, it reached 70% of the theoretical upper performance bound of the used Nvidia P100 GPU, as defined by the effective throughput metric, `T_eff` (note that `T_eff` is very different from common throughput metrics, see section [Performance metric](#performance-metric)). The GPU performance of the solver is reported in green, the CPU performance in blue:
 
@@ -522,7 +523,7 @@ To discuss technical issues, please post on Julia Discourse in the [GPU topic] o
 To discuss numerical/domain-science issues, please post on Julia Discourse in the [Numerics topic] or the [Modelling & Simulations topic] or whichever other topic fits best your issue.
 
 ## Your contributions
-This project welcomes your contribution! Have you developed an application with ParallelStencil that could be featured as a mini-app? Please contribute it to share it with the world! Would you like to use other methods than finite differences with math-close notation in ParallelStencil kernels? Then check out the tiny `ParallelStencil.FiniteDifferences1D` submodule as an example for enabling math-close notation for a method and contribute your own submodule! Are you missing a great feature in the core of ParallelStencil? Maybe you can contribute yourself! 
+This project welcomes your contribution! Have you developed an application with ParallelStencil that could be featured as a mini-app? Please contribute it to share it with the world! Would you like to use other methods than finite differences with math-close notation in ParallelStencil kernels? Then check out the tiny `ParallelStencil.FiniteDifferences1D` submodule as an example for enabling math-close notation for a method and contribute your own submodule! Are you missing a great feature in the core of ParallelStencil? Maybe you can contribute yourself!
 Please open an issue to discuss your idea for a contribution beforehand. Furthermore, note that a pull request should always address a significant issue in its completeness. Moreover, pull requests should blend nicely into the existing project; common sense is the primary guide in this regard (community guideline documents, e.g. [ColPrac](https://github.com/SciML/ColPrac), can be consulted in addition for inspiration). We are looking forward to your contribution!
 
 ## References
