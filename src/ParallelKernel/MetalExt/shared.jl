@@ -4,8 +4,7 @@ using ParallelStencil.ParallelKernel.Exceptions
 using Metal, CellArrays, StaticArrays
 import Metal.MTL
 
-## TODO add Metal backend for CellArray
-# @define_MetalCellArray
+@define_MtlCellArray
 
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
 ParallelStencil.ParallelKernel.is_loaded(::Val{:ParallelStencil_MetalExt}) = true

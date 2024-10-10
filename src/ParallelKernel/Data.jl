@@ -21,7 +21,7 @@ Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype s
 --------------------------------------------------------------------------------
     Data.CellArray{ndims}
 
-Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.CellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MetalCellArray or MetalDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray when required).
+Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.CellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MtlCellArray or MtlDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray when required).
 
 --------------------------------------------------------------------------------
     Data.Cell{S}
@@ -89,7 +89,7 @@ The datatype `Data.Array` is automatically chosen to be compatible with the pack
 --------------------------------------------------------------------------------
     Data.CellArray{numbertype, ndims}
 
-The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MetalCellArray or MetalDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
+The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MtlCellArray or MetalDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.Cell{numbertype, S}
@@ -231,23 +231,23 @@ function Data_metal(modulename::Symbol, numbertype::DataType, indextype::DataTyp
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const MetalCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            # TODO: the constructors defined by CellArrays.@define_MtlCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
             #
             const Index                         = $indextype
             const Array{T, N}                   = Metal.MtlArray{T, N}
             const DeviceArray{T, N}             = Metal.MtlDeviceArray{T, N}
             const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = MetalCellArray{<:Cell{T_elem},N,B,T_elem}
+            const CellArray{T_elem, N, B}       = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
             const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
             $(create_shared_exprs(numbertype, indextype))
         end)
     else
         :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const MetalCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            # TODO: the constructors defined by CellArrays.@define_MtlCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
             #
             const Index                          = $indextype
             const Number                         = $numbertype
@@ -255,13 +255,13 @@ function Data_metal(modulename::Symbol, numbertype::DataType, indextype::DataTyp
             const DeviceArray{N}                 = Metal.MtlDeviceArray{$numbertype, N}
             const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = MetalCellArray{<:Cell,N,B,$numbertype}
+            const CellArray{N, B}                = MtlCellArray{<:Cell,N,B,$numbertype}
             const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:Metal.MtlDeviceArray{$numbertype,CellArrays._N}}
             const TArray{T, N}                   = Metal.MtlArray{T, N}
             const DeviceTArray{T, N}             = Metal.MtlDeviceArray{T, N}
             const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = MetalCellArray{<:TCell{T_elem},N,B,T_elem}
+            const TCellArray{T_elem, N, B}       = MtlCellArray{<:TCell{T_elem},N,B,T_elem}
             const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
             $(create_shared_exprs(numbertype, indextype))
         end)
