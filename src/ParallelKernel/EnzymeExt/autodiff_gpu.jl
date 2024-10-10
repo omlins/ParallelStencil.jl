@@ -11,8 +11,8 @@ import Enzyme
 # ParallelStencil injects a configuration parameter at the end, for Enzyme we need to wrap that parameter as a Annotation
 # for all purposes this ought to be Const. This is not ideal since we might accidentially wrap other parameters the user
 # provided as well. This is needed to support @parallel autodiff_deferred(...)
- function promote_to_const(args...)
-    ntuple(length(args)) do i
+ function promote_to_const(args::Vararg{Any,N}) where N
+    ntuple(Val(N)) do i
         @inline
         if !(args[i] isa Enzyme.Annotation ||
             (args[i] isa UnionAll && args[i] <: Enzyme.Annotation) || # Const
