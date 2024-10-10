@@ -17,7 +17,7 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
     @define_ROCCellArray
 end
-@static if PKG_METAL in TEST_PACKAGES
+@static if Sys.isapple() && PKG_METAL in TEST_PACKAGES
     import Metal
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
     @define_MtlCellArray
