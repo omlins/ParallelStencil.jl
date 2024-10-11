@@ -48,7 +48,7 @@ const MODULENAME_DATA              = :Data
 const MODULENAME_TDATA             = :TData
 const MODULENAME_DEVICE            = :Device
 const MODULENAME_FIELDS            = :Fields
-const DATATYPES                    = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection)
+const ARRAYTYPES                   = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection)
 const FIELDTYPES                   = (:Field, :XField, :YField, :ZField, :BXField, :BYField, :BZField, :XXField, :YYField, :ZZField, :XYField, :XZField, :YZField, :VectorField, :BVectorField, :TensorField)
 const VECTORNAMES                  = (:x, :y, :z)
 const TENSORNAMES                  = (:xx, :yy, :zz, :xy, :xz, :yz)
@@ -201,7 +201,7 @@ function add_inbounds(body::Expr)
 end
 
 function insert_device_types(caller::Module, kernel::Expr)
-    for T in DATATYPES
+    for T in ARRAYTYPES
         if !isnothing(eval_try(caller, :(Data.Device)))
             kernel = substitute(kernel, :(Data.$T), :(Data.Device.$T))
         end
