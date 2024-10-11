@@ -123,42 +123,84 @@ import ParallelStencil.@gorgeousexpand
                     expansion = @gorgeousstring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A, B, c::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
                 end
-                @testset "Data.Array to Data.DeviceArray" begin
+                @testset "Data.Array to Data.Device.Array" begin
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel f(A::Data.Array, B::Data.Array, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceArray, B::Data.DeviceArray,", expansion)
+                            @test occursin("f(A::Data.Device.Array, B::Data.Device.Array,", expansion)
                     end
                 end
-                @testset "Data.Cell to Data.DeviceCell" begin
+                @testset "Data.Cell to Data.Device.Cell" begin
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel f(A::Data.Cell, B::Data.Cell, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceCell, B::Data.DeviceCell,", expansion)
+                            @test occursin("f(A::Data.Device.Cell, B::Data.Device.Cell,", expansion)
                     end
                 end
-                @testset "Data.CellArray to Data.DeviceCellArray" begin
+                @testset "Data.CellArray to Data.Device.CellArray" begin
                     @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel f(A::Data.CellArray, B::Data.CellArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceCellArray, B::Data.DeviceCellArray,", expansion)
+                            @test occursin("f(A::Data.Device.CellArray, B::Data.Device.CellArray,", expansion)
                     end
                 end
-                @testset "Data.TArray to Data.DeviceTArray" begin
+                @testset "Data.Fields.Field to Data.Fields.Device.Field" begin
                     @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::Data.TArray, B::Data.TArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceTArray, B::Data.DeviceTArray,", expansion)
+                            expansion = @prettystring(1, @parallel f(A::Data.Fields.Field, B::Data.Fields.Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
                     end
                 end
-                @testset "Data.TCell to Data.DeviceTCell" begin
+                # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
+                # @testset "Fields.Field to Data.Fields.Device.Field" begin
+                #     @static if @isgpu($package)
+                #             import .Data.Fields
+                #             expansion = @prettystring(1, @parallel f(A::Fields.Field, B::Fields.Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                #             @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
+                #     end
+                # end
+                # @testset "Field to Data.Fields.Device.Field" begin
+                #     @static if @isgpu($package)
+                #             using .Data.Fields
+                #             expansion = @prettystring(1, @parallel f(A::Field, B::Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                #             @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
+                #     end
+                # end
+                @testset "TData.Array to TData.Device.Array" begin
                     @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::Data.TCell, B::Data.TCell, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceTCell, B::Data.DeviceTCell,", expansion)
+                            expansion = @prettystring(1, @parallel f(A::TData.Array, B::TData.Array, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::TData.Device.Array, B::TData.Device.Array,", expansion)
                     end
                 end
-                @testset "Data.TCellArray to Data.DeviceTCellArray" begin
+                @testset "TData.Cell to TData.Device.Cell" begin
                     @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::Data.TCellArray, B::Data.TCellArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
-                            @test occursin("f(A::Data.DeviceTCellArray, B::Data.DeviceTCellArray,", expansion)
+                            expansion = @prettystring(1, @parallel f(A::TData.Cell, B::TData.Cell, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::TData.Device.Cell, B::TData.Device.Cell,", expansion)
                     end
                 end
+                @testset "TData.CellArray to TData.Device.CellArray" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel f(A::TData.CellArray, B::TData.CellArray, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::TData.Device.CellArray, B::TData.Device.CellArray,", expansion)
+                    end
+                end
+                @testset "TData.Fields.Field to TData.Fields.Device.Field" begin
+                    @static if @isgpu($package)
+                            expansion = @prettystring(1, @parallel f(A::TData.Fields.Field, B::TData.Fields.Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            @test occursin("f(A::TData.Fields.Device.Field, B::TData.Fields.Device.Field,", expansion)
+                    end
+                end
+                # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
+                # @testset "Fields.Field to TData.Fields.Device.Field" begin
+                #     @static if @isgpu($package)
+                #             import .TData.Fields
+                #             expansion = @prettystring(1, @parallel f(A::Fields.Field, B::Fields.Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                #             @test occursin("f(A::TData.Fields.Device.Field, B::TData.Fields.Device.Field,", expansion)
+                #     end
+                # end
+                # @testset "Field to TData.Fields.Device.Field" begin
+                #     @static if @isgpu($package)
+                #             using .TData.Fields
+                #             expansion = @prettystring(1, @parallel f(A::Field, B::Field, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                #             @test occursin("f(A::TData.Fields.Device.Field, B::TData.Fields.Device.Field,", expansion)
+                #     end
+                # end
                 @testset "@parallel <kernel> (3D)" begin
                     A  = @zeros(4, 5, 6)
                     @parallel function write_indices!(A)
@@ -909,22 +951,22 @@ import ParallelStencil.@gorgeousexpand
             @require !@is_initialized()
             @init_parallel_stencil(package = $package)
             @require @is_initialized
-            @testset "Data.Array{T} to Data.DeviceArray{T}" begin
+            @testset "Data.Array{T} to Data.Device.Array{T}" begin
                 @static if @isgpu($package)
                     expansion = @prettystring(1, @parallel ndims=3 f(A::Data.Array{T}, B::Data.Array{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                    @test occursin("f(A::Data.DeviceArray{T}, B::Data.DeviceArray{T},", expansion)
+                    @test occursin("f(A::Data.Device.Array{T}, B::Data.Device.Array{T},", expansion)
                 end
             end;
-            @testset "Data.Cell{T} to Data.DeviceCell{T}" begin
+            @testset "Data.Cell{T} to Data.Device.Cell{T}" begin
                 @static if @isgpu($package)
                     expansion = @prettystring(1, @parallel ndims=2 f(A::Data.Cell{T}, B::Data.Cell{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                    @test occursin("f(A::Data.DeviceCell{T}, B::Data.DeviceCell{T},", expansion)
+                    @test occursin("f(A::Data.Device.Cell{T}, B::Data.Device.Cell{T},", expansion)
                 end
             end;
-            @testset "Data.CellArray{T} to Data.DeviceCellArray{T}" begin
+            @testset "Data.CellArray{T} to Data.Device.CellArray{T}" begin
                 @static if @isgpu($package)
                     expansion = @prettystring(1, @parallel ndims=1 f(A::Data.CellArray{T}, B::Data.CellArray{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
-                    @test occursin("f(A::Data.DeviceCellArray{T}, B::Data.DeviceCellArray{T},", expansion)
+                    @test occursin("f(A::Data.Device.CellArray{T}, B::Data.Device.CellArray{T},", expansion)
                 end
             end;
             @testset "N substitution | ndims tuple expansion" begin
