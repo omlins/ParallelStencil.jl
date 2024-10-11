@@ -12,6 +12,10 @@ function reset_parallel_kernel(caller::Module)
         data_module = Data_none()
         @eval(caller, $data_module)
     end
+    if isdefined(caller, :TData) && isdefined(caller.TData, :Device) # "Clear" the TData module if it has been created by ParallelKernel (i.e. contains TData.Device).
+        tdata_module = TData_none()
+        @eval(caller, $tdata_module)
+    end
     set_initialized(caller, false)
     set_package(caller, PKG_NONE)
     set_numbertype(caller, NUMBERTYPE_NONE)
