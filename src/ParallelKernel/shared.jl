@@ -214,11 +214,11 @@ function insert_device_types(caller::Module, kernel::Expr)
         if !isnothing(eval_try(caller, :(Data.Fields.Device)))
             kernel = substitute(kernel, :(Data.Fields.$T), :(Data.Fields.Device.$T))
         end
-        if !isnothing(eval_try(caller, :(TData.Device.Fields)))
-            kernel = substitute(kernel, :(TData.Fields.$T), :(TData.Device.Fields.$T))
+        if !isnothing(eval_try(caller, :(TData.Fields.Device)))
+            kernel = substitute(kernel, :(TData.Fields.$T), :(TData.Fields.Device.$T))
         end
         Device_val = eval_try(caller, :(Fields.Device))
-        if !isnothing(Device_val) && Device_val in (eval_try(caller, :(Data.Fields.Device)), eval_try(caller, :(TData.Device.Fields)))
+        if !isnothing(Device_val) && Device_val in (eval_try(caller, :(Data.Fields.Device)), eval_try(caller, :(TData.Fields.Device)))
             kernel = substitute(kernel, :(Fields.$T), :(Fields.Device.$T))
         end
     end
@@ -228,7 +228,7 @@ function insert_device_types(caller::Module, kernel::Expr)
         if !isnothing(eval_try(caller, :(Data.Fields.Device)))
             T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(Data.Fields.$T))) ? :(Data.Fields.Device.$T) : T_d
         end
-        if !isnothing(eval_try(caller, :(TData.Device.Fields)))
+        if !isnothing(eval_try(caller, :(TData.Fields.Device)))
             T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(TData.Fields.$T))) ? :(TData.Fields.Device.$T) : T_d
         end
         if !isnothing(T_d) kernel = substitute_in_kernel(kernel, T, T_d, signature_only=true) end
