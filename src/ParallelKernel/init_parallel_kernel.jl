@@ -56,7 +56,6 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
             else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
             end
         end
-        @show data_module
         @eval(caller, $data_module)
         @eval(caller, $datadoc_call)
     elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
@@ -65,7 +64,6 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
     if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
-        @show tdata_module
         @eval(caller, $tdata_module)
     elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
         if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
