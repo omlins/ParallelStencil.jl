@@ -35,15 +35,63 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
                 @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TCellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTCellArray") in @symbols($(@__MODULE__), Data)
+                @testset "Data.Device" begin
+                    @test @isdefined(Data.Device)
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                    @test Symbol("Index") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("Array") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("Cell") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("CellArray") in @symbols($(@__MODULE__), Data.Device)
+                end;
+                @testset "Data.Fields" begin
+                    @test @isdefined(Data.Fields)
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), Data.Fields)
+                end;
+                @testset "Data.Fields.Device" begin
+                    @test @isdefined(Data.Fields.Device)
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                end;
+            end;
+            @testset "TData" begin
+                @test @isdefined(TData)
+                @test length(@symbols($(@__MODULE__), TData)) > 1
+                @test Symbol("Index") in @symbols($(@__MODULE__), TData)
+                @test Symbol("Number") in @symbols($(@__MODULE__), TData)
+                @test Symbol("Array") in @symbols($(@__MODULE__), TData)
+                @test Symbol("Cell") in @symbols($(@__MODULE__), TData)
+                @test Symbol("CellArray") in @symbols($(@__MODULE__), TData)
+                @testset "TData.Device" begin
+                    @test @isdefined(TData.Device)
+                    @test length(@symbols($(@__MODULE__), TData.Device)) > 1
+                    @test Symbol("Index") in @symbols($(@__MODULE__), TData.Device)
+                    @test Symbol("Array") in @symbols($(@__MODULE__), TData.Device)
+                    @test Symbol("Cell") in @symbols($(@__MODULE__), TData.Device)
+                    @test Symbol("CellArray") in @symbols($(@__MODULE__), TData.Device)
+                end;
+                @testset "TData.Fields" begin
+                    @test @isdefined(TData.Fields)
+                    @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), TData.Fields)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), TData.Fields)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), TData.Fields)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), TData.Fields)
+                end;
+                @testset "TData.Fields.Device" begin
+                    @test @isdefined(TData.Fields.Device)
+                    @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), TData.Fields.Device)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), TData.Fields.Device)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), TData.Fields.Device)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), TData.Fields.Device)
+                end;
             end;
             @reset_parallel_kernel()
         end;
@@ -64,9 +112,30 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test Symbol("Array") in @symbols($(@__MODULE__), Data)
                 @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
                 @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
+                @testset "Data.Device" begin
+                    @test @isdefined(Data.Device)
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                    @test Symbol("Index") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("Array") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("Cell") in @symbols($(@__MODULE__), Data.Device)
+                    @test Symbol("CellArray") in @symbols($(@__MODULE__), Data.Device)
+                end;
+                @testset "Data.Fields" begin
+                    @test @isdefined(Data.Fields)
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), Data.Fields)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), Data.Fields)
+                end;
+                @testset "Data.Fields.Device" begin
+                    @test @isdefined(Data.Fields.Device)
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                    @test Symbol("Field") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("VectorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("BVectorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test Symbol("TensorField") in @symbols($(@__MODULE__), Data.Fields.Device)
+                end;
             end;
             @reset_parallel_kernel()
         end;
