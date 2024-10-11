@@ -32,15 +32,12 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @isdefined(Data)
                 @test length(@symbols($(@__MODULE__), Data)) > 1
                 @testset "Data.Device" begin
-                    @test @isdefined(Data.Device)
                     @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                 end;
                 @testset "Data.Fields" begin
-                    @test @isdefined(Data.Fields)
                     @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                 end;
                 @testset "Data.Fields.Device" begin
-                    @test @isdefined(Data.Fields.Device)
                     @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
                 end;
             end;
@@ -48,15 +45,12 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @isdefined(TData)
                 @test length(@symbols($(@__MODULE__), TData)) > 1
                 @testset "TData.Device" begin
-                    @test @isdefined(TData.Device)
                     @test length(@symbols($(@__MODULE__), TData.Device)) > 1
                 end;
                 @testset "TData.Fields" begin
-                    @test @isdefined(TData.Fields)
                     @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
                 end;
                 @testset "TData.Fields.Device" begin
-                    @test @isdefined(TData.Fields.Device)
                     @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
                 end;
             end;
@@ -77,15 +71,12 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @isdefined(Data)
                 @test length(@symbols($(@__MODULE__), Data)) > 1
                 @testset "Data.Device" begin
-                    @test @isdefined(Data.Device)
                     @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                 end;
                 @testset "Data.Fields" begin
-                    @test @isdefined(Data.Fields)
                     @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                 end;
                 @testset "Data.Fields.Device" begin
-                    @test @isdefined(Data.Fields.Device)
                     @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
                 end;
             end;

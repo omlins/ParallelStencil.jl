@@ -48,6 +48,7 @@ const MODULENAME_DATA              = :Data
 const MODULENAME_TDATA             = :TData
 const MODULENAME_DEVICE            = :Device
 const MODULENAME_FIELDS            = :Fields
+const SCALARTYPES                  = (:Index, :Number, :IndexTuple, :NumberTuple, :IndexCollection, :NumberCollection, :NamedIndexTuple, :NamedNumberTuple)
 const ARRAYTYPES                   = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection)
 const FIELDTYPES                   = (:Field, :XField, :YField, :ZField, :BXField, :BYField, :BZField, :XXField, :YYField, :ZZField, :XYField, :XZField, :YZField, :VectorField, :BVectorField, :TensorField)
 const VECTORNAMES                  = (:x, :y, :z)
@@ -425,12 +426,12 @@ check_inbounds(inbounds)        = ( if !isa(inbounds, Bool) @ArgumentError("$ERR
 
 ## FUNCTIONS AND MACROS FOR UNIT TESTS
 
-symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Module}) = @eval(eval_mod, names($mod, all=true, imported=true))
-prettystring(expr::Expr)                                           = string(remove_linenumbernodes!(expr))
-gorgeousstring(expr::Expr)                                         = string(simplify_varnames!(remove_linenumbernodes!(expr)))
-longnameof(f)                                                      = "$(parentmodule(f)).$(nameof(f))"
+prettystring(expr::Expr)   = string(remove_linenumbernodes!(expr))
+gorgeousstring(expr::Expr) = string(simplify_varnames!(remove_linenumbernodes!(expr)))
+longnameof(f)              = "$(parentmodule(f)).$(nameof(f))"
+symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Expr,Module}; imported=false, all=true) = @eval(eval_mod, names($mod, all=$all, imported=$imported))
+macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; all=all, imported=imported) end
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
-macro symbols(eval_mod, mod)           symbols(eval_mod, mod) end
 macro isgpu(package)                   isgpu(package) end
 macro iscpu(package)                   iscpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
