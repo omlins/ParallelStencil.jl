@@ -35,7 +35,7 @@ https://github.com/omlins/ParallelStencil.jl
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
-- [`ParallelStencil.Fields`](@ref)
+- [`ParallelStencil.FieldAllocators`](@ref)
 - [`ParallelStencil.FiniteDifferences1D`](@ref)
 - [`ParallelStencil.FiniteDifferences2D`](@ref)
 - [`ParallelStencil.FiniteDifferences3D`](@ref)
@@ -67,7 +67,7 @@ include("reset_parallel_stencil.jl")
 
 ## Alphabetical include of allocation/computation-submodules (must be at end as needs to import from ParallelStencil, .e.g. INDICES).
 include("AD.jl")
-include("Fields.jl")
+include("FieldAllocators.jl")
 include("FiniteDifferences.jl")
 
 ## Exports (need to be after include of submodules as re-exports from them)

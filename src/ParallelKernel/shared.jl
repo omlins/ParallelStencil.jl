@@ -47,7 +47,9 @@ const NUMBERTYPE_NONE              = DataType
 const MODULENAME_DATA              = :Data
 const MODULENAME_TDATA             = :TData
 const MODULENAME_DEVICE            = :Device
-const MODULENAME_FIELDS            = :Fields
+const MODULENAME_FIELDS            = :FieldAllocators
+const DATATYPES                    = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection)
+const FIELDTYPES                   = (:Field, :XField, :YField, :ZField, :BXField, :BYField, :BZField, :XXField, :YYField, :ZZField, :XYField, :XZField, :YZField, :VectorField, :BVectorField, :TensorField)
 const VECTORNAMES                  = (:x, :y, :z)
 const TENSORNAMES                  = (:xx, :yy, :zz, :xy, :xz, :yz)
 const AD_MODE_DEFAULT              = :(Enzyme.Reverse)
@@ -198,34 +200,40 @@ function add_inbounds(body::Expr)
     end
 end
 
-function insert_device_types(kernel::Expr)
-    kernel = substitute(kernel, :(Data.Array),                :(Data.DeviceArray))
-    kernel = substitute(kernel, :(Data.Cell),                 :(Data.DeviceCell))
-    kernel = substitute(kernel, :(Data.CellArray),            :(Data.DeviceCellArray))
-    kernel = substitute(kernel, :(Data.ArrayTuple),           :(Data.DeviceArrayTuple))
-    kernel = substitute(kernel, :(Data.CellTuple),            :(Data.DeviceCellTuple))
-    kernel = substitute(kernel, :(Data.CellArrayTuple),       :(Data.DeviceCellArrayTuple))
-    kernel = substitute(kernel, :(Data.NamedArrayTuple),      :(Data.NamedDeviceArrayTuple))
-    kernel = substitute(kernel, :(Data.NamedCellTuple),       :(Data.NamedDeviceCellTuple))
-    kernel = substitute(kernel, :(Data.NamedCellArrayTuple),  :(Data.NamedDeviceCellArrayTuple))
-    kernel = substitute(kernel, :(Data.ArrayCollection),      :(Data.DeviceArrayCollection))
-    kernel = substitute(kernel, :(Data.CellCollection),       :(Data.DeviceCellCollection))
-    kernel = substitute(kernel, :(Data.CellArrayCollection),  :(Data.DeviceCellArrayCollection))
-    kernel = substitute(kernel, :(Data.TArray),               :(Data.DeviceTArray))
-    kernel = substitute(kernel, :(Data.TCell),                :(Data.DeviceTCell))
-    kernel = substitute(kernel, :(Data.TCellArray),           :(Data.DeviceTCellArray))
-    kernel = substitute(kernel, :(Data.TArrayTuple),          :(Data.DeviceTArrayTuple))
-    kernel = substitute(kernel, :(Data.TCellTuple),           :(Data.DeviceTCellTuple))
-    kernel = substitute(kernel, :(Data.TCellArrayTuple),      :(Data.DeviceTCellArrayTuple))
-    kernel = substitute(kernel, :(Data.NamedTArrayTuple),     :(Data.NamedDeviceTArrayTuple))
-    kernel = substitute(kernel, :(Data.NamedTCellTuple),      :(Data.NamedDeviceTCellTuple))
-    kernel = substitute(kernel, :(Data.NamedTCellArrayTuple), :(Data.NamedDeviceTCellArrayTuple))
-    kernel = substitute(kernel, :(Data.TArrayCollection),     :(Data.DeviceTArrayCollection))
-    kernel = substitute(kernel, :(Data.TCellCollection),      :(Data.DeviceTCellCollection))
-    kernel = substitute(kernel, :(Data.TCellArrayCollection), :(Data.DeviceTCellArrayCollection))
+function insert_device_types(caller::Module, kernel::Expr)
+    for T in DATATYPES
+        if !isnothing(eval_try(caller, :(Data.Device)))
+            kernel = substitute(kernel, :(Data.$T), :(Data.Device.$T))
+        end
+        if !isnothing(eval_try(caller, :(TData.Device)))
+            kernel = substitute(kernel, :(TData.$T), :(TData.Device.$T))
+        end
+    end
+    for T in FIELDTYPES
+        if !isnothing(eval_try(caller, :(Data.Fields.Device)))
+            kernel = substitute(kernel, :(Data.Fields.$T), :(Data.Fields.Device.$T))
+        end
+        if !isnothing(eval_try(caller, :(TData.Device.Fields)))
+            kernel = substitute(kernel, :(TData.Fields.$T), :(TData.Device.Fields.$T))
+        end
+        Device_val = eval_try(caller, :(Fields.Device))
+        if !isnothing(Device_val) && Device_val in (eval_try(caller, :(Data.Fields.Device)), eval_try(caller, :(TData.Device.Fields)))
+            kernel = substitute(kernel, :(Fields.$T), :(Fields.Device.$T))
+        end
+    end
+    for T in FIELDTYPES
+        T_val = eval_try(caller, T)
+        T_d = nothing
+        if !isnothing(eval_try(caller, :(Data.Fields.Device)))
+            T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(Data.Fields.$T))) ? :(Data.Fields.Device.$T) : T_d
+        end
+        if !isnothing(eval_try(caller, :(TData.Device.Fields)))
+            T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(TData.Fields.$T))) ? :(TData.Fields.Device.$T) : T_d
+        end
+        if !isnothing(T_d) kernel = substitute_in_kernel(kernel, T, T_d, signature_only=true) end
+    end
     return kernel
 end
-
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
@@ -234,6 +242,7 @@ is_kernel(arg)      = isdef(arg) # NOTE: to be replaced with MacroTools.isdef(ar
 is_call(arg)        = ( isa(arg, Expr) && (arg.head == :call) )
 is_block(arg)       = ( isa(arg, Expr) && (arg.head == :block) )
 is_parallel_call(x) = isexpr(x, :macrocall) && (x.args[1] == Symbol("@parallel") || x.args[1] == :(@parallel))
+is_same(x, y)       = rmlines(x) == rmlines(y) # NOTE: this serves to compare to macros
 
 function extract_args(call::Expr, macroname::Symbol)
     if (call.head != :macrocall) @ModuleInternalError("argument is not a macro call.") end
@@ -246,7 +255,8 @@ extract_kernelcall_name(call::Expr)         = call.args[1]
 
 function is_kwarg(arg; in_kernelcall=false, separator=:(=), keyword_type=Symbol)
     if in_kernelcall return ( isa(arg, Expr) && inexpr_walk(arg, :kw; match_only_head=true) )
-    else             return ( isa(arg, Expr) && (arg.head == separator) && isa(arg.args[1], keyword_type))
+    else             return ( isa(arg, Expr) && (arg.head == separator) && isa(arg.args[1], keyword_type) ) ||
+                            ( isa(arg, Expr) && (arg.head == :call) && (arg.args[1] == separator) && isa(arg.args[2], keyword_type) )
     end
 end
 
@@ -257,6 +267,8 @@ function Base.haskey(kwargs_expr::Array{Expr}, key::Symbol)
     return key in keys(kwargs)
 end
 
+clean_args(args) = rmlines.(args)
+
 function split_args(args; in_kernelcall=false)
     posargs   = [x for x in args if !is_kwarg(x; in_kernelcall=in_kernelcall)]
     kwargs    = [x for x in args if  is_kwarg(x; in_kernelcall=in_kernelcall)]
@@ -265,7 +277,7 @@ end
 
 function split_kwargs(kwargs; separator=:(=), keyword_type=Symbol)
     if !all(is_kwarg.(kwargs; separator=separator, keyword_type=keyword_type)) @ModuleInternalError("not all of kwargs are keyword arguments.") end
-    return Dict{keyword_type,Any}(x.args[1] => x.args[2] for x in kwargs)
+    return Dict{keyword_type,Any}((x.head==:call) ? (x.args[2] => x.args[3]) : (x.args[1] => x.args[2]) for x in kwargs)
 end
 
 function validate_kwargkeys(kwargs::Dict, valid_kwargs::Tuple, macroname::String)
@@ -297,8 +309,8 @@ function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, ha
     return kwargs_known, kwargs_unknown_expr, kwargs_unknown, kwargs_unknown_dict
 end
 
-function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=())
-    kwargs_known, = extract_kwargs(caller, kwargs_expr, valid_kwargs, macroname, false; eval_args=eval_args)
+function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname; eval_args=(), separator=:(=), keyword_type=Symbol)
+    kwargs_known, = extract_kwargs(caller, kwargs_expr, valid_kwargs, macroname, false; eval_args=eval_args, separator=separator, keyword_type=keyword_type)
     return kwargs_known
 end
 
@@ -315,6 +327,14 @@ function eval_arg(caller::Module, arg)
         return @eval(caller, $arg)
     catch e
         @ArgumentEvaluationError("argument $arg could not be evaluated at parse time (in module $caller).")
+    end
+end
+
+function eval_try(caller::Module, expr)
+    try
+        return @eval(caller, $expr)
+    catch e
+        return nothing
     end
 end
 

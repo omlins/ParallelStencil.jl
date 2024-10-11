@@ -160,7 +160,7 @@ function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbo
     elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
     elseif (package == PKG_THREADS)   synchronize_threads(args...)
     elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
@@ -181,7 +181,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package) kernel = insert_device_types(kernel) end
+    if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end

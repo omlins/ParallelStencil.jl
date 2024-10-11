@@ -35,7 +35,7 @@ Enables writing parallel high-performance kernels and whole applications that ca
 
 # Submodules
 - [`ParallelKernel.AD`](@ref)
-- [`ParallelKernel.Fields`](@ref)
+- [`ParallelKernel.FieldAllocators`](@ref)
 
 # Modules generated in caller
 - [`Data`](@ref)
@@ -68,7 +68,7 @@ include("parallel.jl")
 include("reset_parallel_kernel.jl")
 
 ## Alphabetical include of submodules (not extensions)
-include("Fields.jl")
+include("FieldAllocators.jl")
 
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
