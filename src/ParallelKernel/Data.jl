@@ -55,20 +55,13 @@ Expands to: `NTuple{N_tuple, Data.Cell{S}}` | `NamedTuple{names, NTuple{N_tuple,
 
 --------------------------------------------------------------------------------
 !!! note "Advanced"
-        Data.Device.Array{ndims}
+        Data.Device
 
-    Expands to `Data.Device.Array{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.Device.Array` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuDeviceArray for CUDA AMDGPU.ROCDeviceArray for AMDGPU).
-
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
-
-    --------------------------------------------------------------------------------
-        Data.DeviceCellArray{ndims}
-
-    Expands to `Data.DeviceCellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.DeviceCellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuDeviceCellArray for CUDA and ROCDeviceCellArray for AMDGPU).
+    For each datatype in Data exist a corresponding datatype in Data.Device.
 
     !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
+        These datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data automatically to corresponding datatypes from Data.Device in kernels when required.
+
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
@@ -123,20 +116,12 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
 
 --------------------------------------------------------------------------------
 !!! note "Advanced"
-        Data.Device.Array{numbertype, ndims}
+        Data.Device
 
-    The datatype `Data.Device.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuDeviceArray for CUDA and AMDGPU.ROCDeviceArray for AMDGPU).
+    For each datatype in Data exist a corresponding datatype in Data.Device.
 
     !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
-
-    --------------------------------------------------------------------------------
-        Data.DeviceCellArray{numbertype, ndims}
-
-    The datatype `Data.DeviceCellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuDeviceCellArray for CUDA and ROCDeviceCellArray for AMDGPU).
-        
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required.
+        These datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data automatically to corresponding datatypes from Data.Device in kernels when required.
 """
 
 
