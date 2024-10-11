@@ -125,10 +125,15 @@ Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTu
 """
 
 
-# EMPTY MODULE
+# EMPTY MODULES
 
 function Data_none()
     :(baremodule Data
+    end)
+end
+
+function TData_none()
+    :(baremodule TData
     end)
 end
 
