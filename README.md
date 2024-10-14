@@ -546,7 +546,7 @@ Please open an issue to discuss your idea for a contribution beforehand. Further
 [JuliaCon20a]: https://www.youtube.com/watch?v=vPsfZUqI4_0
 [JuliaCon20b]: https://www.youtube.com/watch?v=1t1AKnnGRqA
 [JuliaCon19]: https://www.youtube.com/watch?v=b90qqbYJ58Q
-[PASC19]: https://pasc19.pasc-conference.org/program/schedule/presentation/?id=msa218&sess=sess144
+[PASC19]: https://pasc19.pasc-conference.org/program/schedule/index.html%3Fpost_type=page&p=10&id=msa218&sess=sess144.html
 [Base.Threads]: https://docs.julialang.org/en/v1/base/multi-threading/
 [ImplicitGlobalGrid.jl]: https://github.com/eth-cscs/ImplicitGlobalGrid.jl
 [JULIA_NUM_THREADS]:https://docs.julialang.org/en/v1.0.0/manual/environment-variables/#JULIA_NUM_THREADS-1
