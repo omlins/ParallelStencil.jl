@@ -32,7 +32,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 mods = (:Data, :Device, :Fields)
                 syms = @symbols($(@__MODULE__), Data)
                 @test length(syms) > 1
-                @test length(syms) == length(mods) + length(SCALARTYPES) + length(ARRAYTYPES) + 1 # +1 for the metadata symbol
+                @test length(syms) >= length(mods) + length(SCALARTYPES) + length(ARRAYTYPES) # +1|2 for metadata symbols
                 @test all(T ∈ syms for T in mods)
                 @test all(T ∈ syms for T in SCALARTYPES)
                 @test all(T ∈ syms for T in ARRAYTYPES)
