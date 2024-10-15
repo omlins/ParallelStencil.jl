@@ -548,12 +548,75 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
             @testset "eltype" begin
                 @test eltype(@Field((nx, ny, nz))) == Float16
                 @test eltype(@Field((nx, ny, nz), eltype=Float32)) == Float32
-                @test eltype.(@VectorField((nx, ny, nz))) == (Float16, Float16, Float16)
-                @test eltype.(@VectorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32)
-                @test eltype.(@BVectorField((nx, ny, nz))) == (Float16, Float16, Float16)
-                @test eltype.(@BVectorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32)
-                @test eltype.(@TensorField((nx, ny, nz))) == (Float16, Float16, Float16, Float16, Float16, Float16)
-                @test eltype.(@TensorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32, Float32, Float32, Float32)
+                @test eltype.(Tuple(@VectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
+                @test eltype.(Tuple(@VectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
+                @test eltype.(Tuple(@BVectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
+                @test eltype.(Tuple(@BVectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
+                @test eltype.(Tuple(@TensorField((nx, ny, nz)))) == (Float16, Float16, Float16, Float16, Float16, Float16)
+                @test eltype.(Tuple(@TensorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32, Float32, Float32, Float32)
+            end;
+            @testset "@allocate" begin
+                @testset "single field" begin
+                    @test occursin("F = @Field((nx, ny, nz), @zeros(), eltype = Float16)", @prettystring(1, @allocate(gridsize = (nx,ny,nz), fields = (Field=>F))))
+                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F)))
+                    @test occursin("F = @Field(nxyz, @ones(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@ones)))
+                    @test occursin("F = @Field(nxyz, @rand(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@rand)))
+                    @test occursin("F = @Field(nxyz, @falses(), eltype = Float16)", @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@falses)))
+                    @test occursin("F = @Field(nxyz, @trues(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@trues)))
+                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float32)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32)))
+                    @test occursin("F = @Field(nxyz, @rand(), eltype = Float32)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32, allocator=@rand)))
+                end;
+                @testset "multiple fields - one per type (default allocator and eltype)" begin
+                    call = @prettystring(1, @allocate(gridsize = nxyz,
+                                                      fields   = (Field        => F,
+                                                                  XField       => X,
+                                                                  YField       => Y,
+                                                                  ZField       => Z,
+                                                                  BXField      => BX,
+                                                                  BYField      => BY,
+                                                                  BZField      => BZ,
+                                                                  XXField      => XX,
+                                                                  YYField      => YY,
+                                                                  ZZField      => ZZ,
+                                                                  XYField      => XY,
+                                                                  XZField      => XZ,
+                                                                  YZField      => YZ,
+                                                                  VectorField  => V,
+                                                                  BVectorField => BV,
+                                                                  TensorField  => T) ))
+                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("X = @XField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("Y = @YField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("Z = @ZField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("BX = @BXField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("BY = @BYField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("BZ = @BZField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("XX = @XXField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("YY = @YYField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("ZZ = @ZZField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("XY = @XYField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("XZ = @XZField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("YZ = @YZField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("V = @VectorField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("BV = @BVectorField(nxyz, @zeros(), eltype = Float16)", call)
+                    @test occursin("T = @TensorField(nxyz, @zeros(), eltype = Float16)", call)
+                end;
+                @testset "multiple fields - multiple per type (custom allocator and eltype)" begin
+                    call = @prettystring(1, @allocate(gridsize = nxyz,
+                                                      fields   = (Field        => (F1, F2),
+                                                                  XField       => X,
+                                                                  VectorField  => (V1, V2, V3),
+                                                                  TensorField  => T),
+                                                      allocator = @rand,
+                                                      eltype    = Float32) )
+                    @test occursin("F1 = @Field(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("F2 = @Field(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("X = @XField(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("V1 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("V2 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("V3 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                    @test occursin("T = @TensorField(nxyz, @rand(), eltype = Float32)", call)
+                end;
             end;
             @reset_parallel_kernel()
         end;
