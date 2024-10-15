@@ -448,18 +448,18 @@ end
 
 function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
     eltype   = determine_eltype(caller, eltype)
-    if     (sizetemplate == :X)   arraysize = :($gridsize .+ (length($gridsize)==3) ? (-1,-2,-2) : (length($gridsize)==2) ? (-1,-2) : -1)
-    elseif (sizetemplate == :Y)   arraysize = :($gridsize .+ (length($gridsize)==3) ? (-2,-1,-2) : (length($gridsize)==2) ? (-2,-1) : -2)
-    elseif (sizetemplate == :Z)   arraysize = :($gridsize .+ (length($gridsize)==3) ? (-2,-2,-1) : (length($gridsize)==2) ? (-2,-2) : -2)
-    elseif (sizetemplate == :BX)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (+1, 0, 0) : (length($gridsize)==2) ? (+1, 0) : +1)
-    elseif (sizetemplate == :BY)  arraysize = :($gridsize .+ (length($gridsize)==3) ? ( 0,+1, 0) : (length($gridsize)==2) ? ( 0,+1) :  0)
-    elseif (sizetemplate == :BZ)  arraysize = :($gridsize .+ (length($gridsize)==3) ? ( 0, 0,+1) : (length($gridsize)==2) ? ( 0, 0) :  0)
-    elseif (sizetemplate == :XX)  arraysize = :($gridsize .+ (length($gridsize)==3) ? ( 0,-2,-2) : (length($gridsize)==2) ? ( 0,-2) :  0)
-    elseif (sizetemplate == :YY)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (-2, 0,-2) : (length($gridsize)==2) ? (-2, 0) : -2)
-    elseif (sizetemplate == :ZZ)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (-2,-2, 0) : (length($gridsize)==2) ? (-2,-2) : -2)
-    elseif (sizetemplate == :XY)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (-1,-1,-2) : (length($gridsize)==2) ? (-1,-1) : -1)
-    elseif (sizetemplate == :XZ)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (-1,-2,-1) : (length($gridsize)==2) ? (-1,-2) : -1)
-    elseif (sizetemplate == :YZ)  arraysize = :($gridsize .+ (length($gridsize)==3) ? (-2,-1,-1) : (length($gridsize)==2) ? (-2,-1) : -2)
+    if     (sizetemplate == :X)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-2) : (length($gridsize)==2) ? (-1,-2) : -1))
+    elseif (sizetemplate == :Y)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-2) : (length($gridsize)==2) ? (-2,-1) : -2))
+    elseif (sizetemplate == :Z)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2,-1) : (length($gridsize)==2) ? (-2,-2) : -2))
+    elseif (sizetemplate == :BX)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1, 0, 0) : (length($gridsize)==2) ? (+1, 0) : +1))
+    elseif (sizetemplate == :BY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,+1, 0) : (length($gridsize)==2) ? ( 0,+1) :  0))
+    elseif (sizetemplate == :BZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0, 0,+1) : (length($gridsize)==2) ? ( 0, 0) :  0))
+    elseif (sizetemplate == :XX)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,-2,-2) : (length($gridsize)==2) ? ( 0,-2) :  0))
+    elseif (sizetemplate == :YY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2, 0,-2) : (length($gridsize)==2) ? (-2, 0) : -2))
+    elseif (sizetemplate == :ZZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2, 0) : (length($gridsize)==2) ? (-2,-2) : -2))
+    elseif (sizetemplate == :XY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-1,-2) : (length($gridsize)==2) ? (-1,-1) : -1))
+    elseif (sizetemplate == :XZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-1) : (length($gridsize)==2) ? (-1,-2) : -1))
+    elseif (sizetemplate == :YZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-1) : (length($gridsize)==2) ? (-2,-1) : -2))
     else                          arraysize = gridsize
     end
     if     is_same(allocator, :@zeros)  return :(ParallelStencil.ParallelKernel.@zeros($arraysize..., eltype=$eltype))
@@ -474,34 +474,34 @@ end
 function _vectorfield(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
     eltype = determine_eltype(caller, eltype)
     if (sizetemplate == :B)
-        return :((length($gridsize)==3) ? (x = ParallelStencil.ParallelKernel.@BXField($gridsize, $allocator, eltype=$eltype),
-                                           y = ParallelStencil.ParallelKernel.@BYField($gridsize, $allocator, eltype=$eltype),
-                                           z = ParallelStencil.ParallelKernel.@BZField($gridsize, $allocator, eltype=$eltype)) :
-                  length($gridsize)==2  ? (x = ParallelStencil.ParallelKernel.@BXField($gridsize, $allocator, eltype=$eltype),
-                                           y = ParallelStencil.ParallelKernel.@BYField($gridsize, $allocator, eltype=$eltype)) :
-                                          (x = ParallelStencil.ParallelKernel.@BXField($gridsize, $allocator, eltype=$eltype)))
+        return :((length($gridsize)==3) ? (x = ParallelStencil.ParallelKernel.FieldAllocators.@BXField($gridsize, $allocator, eltype=$eltype),
+                                           y = ParallelStencil.ParallelKernel.FieldAllocators.@BYField($gridsize, $allocator, eltype=$eltype),
+                                           z = ParallelStencil.ParallelKernel.FieldAllocators.@BZField($gridsize, $allocator, eltype=$eltype)) :
+                  length($gridsize)==2  ? (x = ParallelStencil.ParallelKernel.FieldAllocators.@BXField($gridsize, $allocator, eltype=$eltype),
+                                           y = ParallelStencil.ParallelKernel.FieldAllocators.@BYField($gridsize, $allocator, eltype=$eltype)) :
+                                          (x = ParallelStencil.ParallelKernel.FieldAllocators.@BXField($gridsize, $allocator, eltype=$eltype),))
     else
-        return :((length($gridsize)==3) ? (x = ParallelStencil.ParallelKernel.@XField($gridsize, $allocator, eltype=$eltype),
-                                           y = ParallelStencil.ParallelKernel.@YField($gridsize, $allocator, eltype=$eltype),
-                                           z = ParallelStencil.ParallelKernel.@ZField($gridsize, $allocator, eltype=$eltype)) :
-                  length($gridsize)==2  ? (x = ParallelStencil.ParallelKernel.@XField($gridsize, $allocator, eltype=$eltype),
-                                           y = ParallelStencil.ParallelKernel.@YField($gridsize, $allocator, eltype=$eltype)) :
-                                          (x = ParallelStencil.ParallelKernel.@XField($gridsize, $allocator, eltype=$eltype)))
+        return :((length($gridsize)==3) ? (x = ParallelStencil.ParallelKernel.FieldAllocators.@XField($gridsize, $allocator, eltype=$eltype),
+                                           y = ParallelStencil.ParallelKernel.FieldAllocators.@YField($gridsize, $allocator, eltype=$eltype),
+                                           z = ParallelStencil.ParallelKernel.FieldAllocators.@ZField($gridsize, $allocator, eltype=$eltype)) :
+                  length($gridsize)==2  ? (x = ParallelStencil.ParallelKernel.FieldAllocators.@XField($gridsize, $allocator, eltype=$eltype),
+                                           y = ParallelStencil.ParallelKernel.FieldAllocators.@YField($gridsize, $allocator, eltype=$eltype)) :
+                                          (x = ParallelStencil.ParallelKernel.FieldAllocators.@XField($gridsize, $allocator, eltype=$eltype),))
     end    
 end
 
 function _tensorfield(caller::Module, gridsize, allocator=:@zeros; eltype=nothing)
     eltype = determine_eltype(caller, eltype)
-    return :((length($gridsize)==3) ? (xx = ParallelStencil.ParallelKernel.@XXField($gridsize, $allocator, eltype=$eltype),
-                                       yy = ParallelStencil.ParallelKernel.@YYField($gridsize, $allocator, eltype=$eltype),
-                                       zz = ParallelStencil.ParallelKernel.@ZZField($gridsize, $allocator, eltype=$eltype),
-                                       xy = ParallelStencil.ParallelKernel.@XYField($gridsize, $allocator, eltype=$eltype),
-                                       xz = ParallelStencil.ParallelKernel.@XZField($gridsize, $allocator, eltype=$eltype),
-                                       yz = ParallelStencil.ParallelKernel.@YZField($gridsize, $allocator, eltype=$eltype)) :
-              length($gridsize)==2  ? (xx = ParallelStencil.ParallelKernel.@XXField($gridsize, $allocator, eltype=$eltype),
-                                       yy = ParallelStencil.ParallelKernel.@YYField($gridsize, $allocator, eltype=$eltype),
-                                       xy = ParallelStencil.ParallelKernel.@XYField($gridsize, $allocator, eltype=$eltype)) :
-                                      (xx = ParallelStencil.ParallelKernel.@XXField($gridsize, $allocator, eltype=$eltype)))
+    return :((length($gridsize)==3) ? (xx = ParallelStencil.ParallelKernel.FieldAllocators.@XXField($gridsize, $allocator, eltype=$eltype),
+                                       yy = ParallelStencil.ParallelKernel.FieldAllocators.@YYField($gridsize, $allocator, eltype=$eltype),
+                                       zz = ParallelStencil.ParallelKernel.FieldAllocators.@ZZField($gridsize, $allocator, eltype=$eltype),
+                                       xy = ParallelStencil.ParallelKernel.FieldAllocators.@XYField($gridsize, $allocator, eltype=$eltype),
+                                       xz = ParallelStencil.ParallelKernel.FieldAllocators.@XZField($gridsize, $allocator, eltype=$eltype),
+                                       yz = ParallelStencil.ParallelKernel.FieldAllocators.@YZField($gridsize, $allocator, eltype=$eltype)) :
+              length($gridsize)==2  ? (xx = ParallelStencil.ParallelKernel.FieldAllocators.@XXField($gridsize, $allocator, eltype=$eltype),
+                                       yy = ParallelStencil.ParallelKernel.FieldAllocators.@YYField($gridsize, $allocator, eltype=$eltype),
+                                       xy = ParallelStencil.ParallelKernel.FieldAllocators.@XYField($gridsize, $allocator, eltype=$eltype)) :
+                                      (xx = ParallelStencil.ParallelKernel.FieldAllocators.@XXField($gridsize, $allocator, eltype=$eltype),))
 end
 
 function determine_eltype(caller::Module, eltype)

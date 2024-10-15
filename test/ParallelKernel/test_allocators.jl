@@ -5,6 +5,8 @@ using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring
 import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
+using ParallelStencil.ParallelKernel.FieldAllocators
+import ParallelStencil.ParallelKernel.FieldAllocators: checksargs_field_macros, checkargs_allocate
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -456,7 +458,106 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
             end
             @reset_parallel_kernel()
         end;
-        @testset "6. Exceptions" begin
+        @testset "6. Fields" begin
+            @require !@is_initialized()
+            @init_parallel_kernel($package, Float16)
+            @require @is_initialized()
+            (nx, ny, nz) = (3, 4, 5)
+            @testset "mapping to array allocators" begin
+                @testset "Field" begin
+                    @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz))))
+                    @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz), @zeros)))
+                    @test occursin("@ones",  @prettystring(1, @Field((nx, ny, nz), @ones)))
+                    @test occursin("@rand",  @prettystring(1, @Field((nx, ny, nz), @rand)))
+                    @test occursin("@falses",@prettystring(1, @Field((nx, ny, nz), @falses)))
+                    @test occursin("@trues", @prettystring(1, @Field((nx, ny, nz), @trues)))
+                end;
+                @testset "[B]{X|Y|Z}Field" begin
+                    @test occursin("@zeros", @prettystring(1, @XField((nx, ny, nz))))
+                    @test occursin("@zeros", @prettystring(1, @YField((nx, ny, nz), @zeros)))
+                    @test occursin("@ones",  @prettystring(1, @ZField((nx, ny, nz), @ones)))
+                    @test occursin("@rand",  @prettystring(1, @BXField((nx, ny, nz), @rand)))
+                    @test occursin("@falses",@prettystring(1, @BYField((nx, ny, nz), @falses)))
+                    @test occursin("@trues", @prettystring(1, @BZField((nx, ny, nz), @trues)))
+                end;
+                @testset "{XX|YY|ZZ|XY|XZ|YZ}Field" begin
+                    @test occursin("@zeros", @prettystring(1, @XXField((nx, ny, nz), eltype=Float32)))
+                    @test occursin("@zeros", @prettystring(1, @YYField((nx, ny, nz), @zeros, eltype=Float32)))
+                    @test occursin("@ones",  @prettystring(1, @ZZField((nx, ny, nz), @ones, eltype=Float32)))
+                    @test occursin("@rand",  @prettystring(1, @XYField((nx, ny, nz), @rand, eltype=Float32)))
+                    @test occursin("@falses",@prettystring(1, @XZField((nx, ny, nz), @falses, eltype=Float32)))
+                    @test occursin("@trues", @prettystring(1, @YZField((nx, ny, nz), @trues, eltype=Float32)))
+                end;
+            end;
+            @testset "gridsize (3D)" begin
+                @test size(  @Field((nx, ny, nz))) == (nx,   ny,   nz  )
+                @test size( @XField((nx, ny, nz))) == (nx-1, ny-2, nz-2)
+                @test size( @YField((nx, ny, nz))) == (nx-2, ny-1, nz-2)
+                @test size( @ZField((nx, ny, nz))) == (nx-2, ny-2, nz-1)
+                @test size(@BXField((nx, ny, nz))) == (nx+1, ny,   nz  )
+                @test size(@BYField((nx, ny, nz))) == (nx,   ny+1, nz  )
+                @test size(@BZField((nx, ny, nz))) == (nx,   ny,   nz+1)
+                @test size(@XXField((nx, ny, nz))) == (nx,   ny-2, nz-2)
+                @test size(@YYField((nx, ny, nz))) == (nx-2, ny,   nz-2)
+                @test size(@ZZField((nx, ny, nz))) == (nx-2, ny-2, nz  )
+                @test size(@XYField((nx, ny, nz))) == (nx-1, ny-1, nz-2)
+                @test size(@XZField((nx, ny, nz))) == (nx-1, ny-2, nz-1)
+                @test size(@YZField((nx, ny, nz))) == (nx-2, ny-1, nz-1)
+                @test size.(Tuple( @VectorField((nx, ny, nz)))) == (size( @XField((nx, ny, nz))), size( @YField((nx, ny, nz))), size( @ZField((nx, ny, nz))))
+                @test size.(Tuple(@BVectorField((nx, ny, nz)))) == (size(@BXField((nx, ny, nz))), size(@BYField((nx, ny, nz))), size(@BZField((nx, ny, nz))))
+                @test size.(Tuple( @TensorField((nx, ny, nz)))) == (size(@XXField((nx, ny, nz))), size(@YYField((nx, ny, nz))), size(@ZZField((nx, ny, nz))), 
+                                                                    size(@XYField((nx, ny, nz))), size(@XZField((nx, ny, nz))), size(@YZField((nx, ny, nz))))
+            end;
+            @testset "gridsize (2D)" begin
+                @test size(  @Field((nx, ny))) == (nx,   ny, )
+                @test size( @XField((nx, ny))) == (nx-1, ny-2)
+                @test size( @YField((nx, ny))) == (nx-2, ny-1)
+                @test size( @ZField((nx, ny))) == (nx-2, ny-2)
+                @test size(@BXField((nx, ny))) == (nx+1, ny, )
+                @test size(@BYField((nx, ny))) == (nx,   ny+1)
+                @test size(@BZField((nx, ny))) == (nx,   ny, )
+                @test size(@XXField((nx, ny))) == (nx,   ny-2)
+                @test size(@YYField((nx, ny))) == (nx-2, ny, )
+                @test size(@ZZField((nx, ny))) == (nx-2, ny-2)
+                @test size(@XYField((nx, ny))) == (nx-1, ny-1)
+                @test size(@XZField((nx, ny))) == (nx-1, ny-2)
+                @test size(@YZField((nx, ny))) == (nx-2, ny-1)
+                @test size.(Tuple( @VectorField((nx, ny)))) == (size( @XField((nx, ny))), size( @YField((nx, ny))))
+                @test size.(Tuple(@BVectorField((nx, ny)))) == (size(@BXField((nx, ny))), size(@BYField((nx, ny))))
+                @test size.(Tuple( @TensorField((nx, ny)))) == (size(@XXField((nx, ny))), size(@YYField((nx, ny))),
+                                                                size(@XYField((nx, ny))))
+            end;
+            @testset "gridsize (1D)" begin
+                @test size(  @Field((nx,))) ==  (nx,  )
+                @test size( @XField((nx,))) ==  (nx-1,)
+                @test size( @YField((nx,))) ==  (nx-2,)
+                @test size( @ZField((nx,))) ==  (nx-2,)
+                @test size(@BXField((nx,))) ==  (nx+1,)
+                @test size(@BYField((nx,))) ==  (nx,  )
+                @test size(@BZField((nx,))) ==  (nx,  )
+                @test size(@XXField((nx,))) ==  (nx,  )
+                @test size(@YYField((nx,))) ==  (nx-2,)
+                @test size(@ZZField((nx,))) ==  (nx-2,)
+                @test size(@XYField((nx,))) ==  (nx-1,)
+                @test size(@XZField((nx,))) ==  (nx-1,)
+                @test size(@YZField((nx,))) ==  (nx-2,)
+                @test size.(Tuple( @VectorField((nx,)))) == (size( @XField((nx,))),)
+                @test size.(Tuple(@BVectorField((nx,)))) == (size(@BXField((nx,))),)
+                @test size.(Tuple( @TensorField((nx,)))) == (size(@XXField((nx,))),)
+            end;
+            @testset "eltype" begin
+                @test eltype(@Field((nx, ny, nz))) == Float16
+                @test eltype(@Field((nx, ny, nz), eltype=Float32)) == Float32
+                @test eltype.(@VectorField((nx, ny, nz))) == (Float16, Float16, Float16)
+                @test eltype.(@VectorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32)
+                @test eltype.(@BVectorField((nx, ny, nz))) == (Float16, Float16, Float16)
+                @test eltype.(@BVectorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32)
+                @test eltype.(@TensorField((nx, ny, nz))) == (Float16, Float16, Float16, Float16, Float16, Float16)
+                @test eltype.(@TensorField((nx, ny, nz), eltype=Float32)) == (Float32, Float32, Float32, Float32, Float32, Float32)
+            end;
+            @reset_parallel_kernel()
+        end;
+        @testset "7. Exceptions" begin
             @require !@is_initialized()
             @init_parallel_kernel(package = $package)
             @require @is_initialized
@@ -469,7 +570,48 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                 @test_throws ArgumentError _CellType(@__MODULE__, :SymmetricTensor2D, fieldnames=:((xx, zz, xz)), dims=:((2,3)))                    # Error: isnothing(eltype) && (!parametric && eltype == NUMBERTYPE_NONE)
                 @test_throws ArgumentError _CellType(@__MODULE__, :SymmetricTensor2D, fieldnames=:((xx, zz, xz)), eltype=Float32, parametric=true)  # Error: !isnothing(fieldnames) && parametric
             end;
+            @testset "arguments field macros" begin
+                @test_throws ArgumentError checksargs_field_macros();                                         # Error: isempty(args)
+                @test_throws ArgumentError checksargs_field_macros(:(eltype=Float32));                        # Error: isempty(posargs)
+                @test_throws ArgumentError checksargs_field_macros(:nxyz, :@rand, :Float32);                  # Error: length(posargs) > 2
+                @test_throws ArgumentError checksargs_field_macros(:nxyz, :@fill);                            # Error: unsupported allocator
+                @test_throws ArgumentError checksargs_field_macros(:nxyz, :(eltype=Float32), :(something=x))  # Error: length(kwargs) > 1
+            end;
+            @testset "arguments @allocate" begin
+                @test_throws ArgumentError checkargs_allocate();                                              # Error: isempty(args)
+                @test_throws ArgumentError checkargs_allocate(:nxyz);                                         # Error: !isempty(posargs)
+                @test_throws ArgumentError checkargs_allocate(:(gridsize=(3,4)));                             # Error: length(kwargs) < 2
+                @test_throws ArgumentError checkargs_allocate(:(fields=(Field=>A)));                          # Error: length(kwargs) < 2
+                @test_throws ArgumentError checkargs_allocate(:(gridsize=(3,4)), :(fields=(Field=>A)), :(allocator=:@rand), :(eltype=Float32), :(something=x)) # Error: length(kwargs) > 4
+            end;
             @reset_parallel_kernel()
         end;
     end;
 )) end == nothing || true;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
