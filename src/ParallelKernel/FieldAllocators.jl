@@ -30,7 +30,7 @@ module FieldAllocators
 
 using ..Exceptions
 import ..ParallelKernel: check_initialized, get_numbertype, extract_kwargvalues, split_args, clean_args, is_same, extract_tuple, extract_kwargs
-import ..ParallelKernel: NUMBERTYPE_NONE
+import ..ParallelKernel: NUMBERTYPE_NONE, FIELDTYPES
 
 
 ##
@@ -206,7 +206,7 @@ const VECTORFIELD_COMP_DOC = """
     @{X|Y|Z}Field(gridsize, allocator)
     @{X|Y|Z}Field(gridsize, allocator, <keyword arguments>)
 
-Using the `allocator`, allocate a `{X|Y|Z}Field`, a field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`.
+Using the `allocator`, allocate a `{X|Y|Z}Field`, a scalar field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`.
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -259,7 +259,7 @@ const BVECTORFIELD_COMP_DOC = """
     @B{X|Y|Z}Field(gridsize, allocator)
     @B{X|Y|Z}Field(gridsize, allocator, <keyword arguments>)
 
-Using the `allocator`, allocate a `B{X|Y|Z}Field`, a field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`.
+Using the `allocator`, allocate a `B{X|Y|Z}Field`, a scalar field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`.
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -312,7 +312,7 @@ const TENSORFIELD_COMP_DOC = """
     @{XX|YY|ZZ|XY|XZ|YZ}Field(gridsize, allocator)
     @{XX|YY|ZZ|XY|XZ|YZ}Field(gridsize, allocator, <keyword arguments>)
 
-Using the `allocator`, allocate a `{XX|YY|ZZ|XY|XZ|YZ}Field`, a field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`.
+Using the `allocator`, allocate a `{XX|YY|ZZ|XY|XZ|YZ}Field`, a scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`.
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.

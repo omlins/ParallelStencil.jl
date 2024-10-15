@@ -1,7 +1,22 @@
 const DATA_DOC = """
     Module Data
 
-The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
+The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
+
+It contains the following submodules:
+
+    Data.Fields
+!!! note "Advanced"
+        Data.Device
+        Data.Fields.Device
+
+    For each datatype in Data and Data.Fields exist a corresponding datatype in Data.Device and Data.Fields.Device, respectively.
+
+    !!! warning
+        These Device datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data and Data.Fields automatically to corresponding datatypes from Data.Device and Data.Fields.Device, respectively, in kernels when required.
+
+
+The module Data provides the following types at the top level:
 
 --------------------------------------------------------------------------------
     Data.Number
@@ -54,20 +69,71 @@ Expands to: `NTuple{N_tuple, Data.CellArray{N, B}}` | `NamedTuple{names, NTuple{
 Expands to: `NTuple{N_tuple, Data.Cell{S}}` | `NamedTuple{names, NTuple{N_tuple, Data.Cell{S}}}` | `Union{Data.CellTuple{N_tuple, S}, Data.NamedCellTuple{N_tuple, S}}`
 
 --------------------------------------------------------------------------------
-!!! note "Advanced"
-        Data.Device
+--------------------------------------------------------------------------------
+    Submodule Data.Fields
 
-    For each datatype in Data exist a corresponding datatype in Data.Device.
+The submodule Data.Fields provides the types for fields allocated with macros from ParallelKernel.FieldAllocators. 
 
-    !!! warning
-        These datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data automatically to corresponding datatypes from Data.Device in kernels when required.
+!!! note "Usage"
+    using .Data.Fields # Note the preceeding dot!
 
+Data.Fields provides the following types:
+
+--------------------------------------------------------------------------------
+    Field
+
+A scalar field, on a grid of size `gridsize`; allocated with `@Fields`.
+
+--------------------------------------------------------------------------------
+    {X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`; allocated with `@{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    B{X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`; allocated with `@B{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    {XX|YY|ZZ|XY|XZ|YZ}Field
+
+A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`; allocated with `@{XX|YY|ZZ|XY|XZ|YZ}Field`.
+
+--------------------------------------------------------------------------------
+    VectorField
+
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+
+--------------------------------------------------------------------------------
+    BVectorField
+
+A vector field including boundaries, on a grid of size `gridsize`; allocated with `@BVectorField`.
+
+--------------------------------------------------------------------------------
+    TensorField
+
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
     Module Data
 
-The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
+The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
+
+It contains the following submodules:
+
+    Data.Fields
+!!! note "Advanced"
+        Data.Device
+        Data.Fields.Device
+
+    For each datatype in Data and Data.Fields exist a corresponding datatype in Data.Device and Data.Fields.Device, respectively.
+
+    !!! warning
+        These Device datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data and Data.Fields automatically to corresponding datatypes from Data.Device and Data.Fields.Device, respectively, in kernels when required.
+
+
+The module Data provides the following types at the top level:
 
 --------------------------------------------------------------------------------
     Data.Index
@@ -115,13 +181,50 @@ Expands to: `NTuple{N_tuple, Data.CellArray{numbertype, N, B}}` | `NamedTuple{na
 Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTuple{N_tuple, Data.Cell{numbertype, S}}}` | `Union{Data.CellTuple{N_tuple, numbertype, S}, Data.NamedCellTuple{N_tuple, numbertype, S}}`
 
 --------------------------------------------------------------------------------
-!!! note "Advanced"
-        Data.Device
+--------------------------------------------------------------------------------
+    Submodule Data.Fields
 
-    For each datatype in Data exist a corresponding datatype in Data.Device.
+The submodule Data.Fields provides the types for fields allocated with macros from ParallelKernel.FieldAllocators. 
 
-    !!! warning
-        These datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data automatically to corresponding datatypes from Data.Device in kernels when required.
+!!! note "Usage"
+    using .Data.Fields # Note the preceeding dot!
+
+Data.Fields provides the following types:
+
+--------------------------------------------------------------------------------
+    Field
+
+A scalar field, on a grid of size `gridsize`; allocated with `@Fields`.
+
+--------------------------------------------------------------------------------
+    {X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`; allocated with `@{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    B{X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`; allocated with `@B{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    {XX|YY|ZZ|XY|XZ|YZ}Field
+
+A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`; allocated with `@{XX|YY|ZZ|XY|XZ|YZ}Field`.
+
+--------------------------------------------------------------------------------
+    VectorField
+
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+
+--------------------------------------------------------------------------------
+    BVectorField
+
+A vector field including boundaries, on a grid of size `gridsize`; allocated with `@BVectorField`.
+
+--------------------------------------------------------------------------------
+    TensorField
+
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
 """
 
 
