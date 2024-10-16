@@ -572,7 +572,7 @@ end
 function Data_Fields(numbertype::DataType, indextype::DataType)
     Fields_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_FIELDS
-            import ..$MODULENAME_DATA
+            import ..$MODULENAME_DATA                          # NOTE: this requires Julia >=1.10
             import ..$MODULENAME_DATA: Array, NamedArrayTuple
             $(generic_Fields_exprs())
             $(T_Fields_exprs())
