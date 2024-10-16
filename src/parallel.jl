@@ -279,7 +279,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
     end
-    if isgpu(package) kernel = insert_device_types(kernel) end
+    if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
         body   = handle_indices_and_literals(body, indices, package, numbertype)

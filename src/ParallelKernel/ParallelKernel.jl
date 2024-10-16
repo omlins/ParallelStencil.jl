@@ -33,6 +33,10 @@ Enables writing parallel high-performance kernels and whole applications that ca
     - [`@sync_threads`](@ref)
     - [`@sharedMem`](@ref)
 
+# Submodules
+- [`ParallelKernel.AD`](@ref)
+- [`ParallelKernel.FieldAllocators`](@ref)
+
 # Modules generated in caller
 - [`Data`](@ref)
 
@@ -41,12 +45,11 @@ To see a description of a macro or module type `?<macroname>` (including the `@`
 module ParallelKernel
 
 ## Include of exception module
-include("Exceptions.jl");
+include("Exceptions.jl")
 using .Exceptions
 
-## Alphabetical include of submodules.
-include(joinpath("EnzymeExt", "AD.jl"));
-include("Data.jl");
+## Alphabetical include of submodules for extensions
+include(joinpath("EnzymeExt", "AD.jl"))
 
 ## Alphabetical include of defaults for extensions
 include(joinpath("AMDGPUExt", "defaults.jl"))
@@ -57,11 +60,15 @@ include("shared.jl")
 
 ## Alphabetical include of function files
 include("allocators.jl")
+include("Data.jl")
 include("hide_communication.jl")
 include("init_parallel_kernel.jl")
 include("kernel_language.jl")
 include("parallel.jl")
 include("reset_parallel_kernel.jl")
+
+## Alphabetical include of submodules (not extensions)
+include("FieldAllocators.jl")
 
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType

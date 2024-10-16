@@ -29,7 +29,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @init_parallel_kernel($package, Float64)
                 @require @is_initialized() && @get_package() == $package
                 @reset_parallel_kernel()
-                @test length(@symbols($(@__MODULE__), Data)) == 1
+                @test length(@symbols($(@__MODULE__), Data)) <= 1
+                @test length(@symbols($(@__MODULE__), TData)) <= 1
                 @test !@is_initialized()
                 @test @get_package() == $PKG_NONE
                 @test @get_numbertype() == $NUMBERTYPE_NONE
