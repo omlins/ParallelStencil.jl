@@ -92,7 +92,7 @@ import Enzyme
                 @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))"
             end;
             @testset "AD.autodiff_deferred!" begin
-                @static if $package == $PKG_THREADS
+                @static if $package == $PKG_THREADS && VERSION.minor < 11 # TODO: remove restriction to Julia version < 1.11 once Enzyme support is available.
                     N = 16
                     a = 6.5
                     A = @rand(N)
@@ -113,8 +113,8 @@ import Enzyme
                         end
                         return
                     end
-                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
-                    Enzyme.autodiff_deferred(Enzyme.Reverse, g!, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
+                    Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!),Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
                     @test Array(Ā) ≈ Ā_ref
                     @test Array(B̄) ≈ B̄_ref
                 end
