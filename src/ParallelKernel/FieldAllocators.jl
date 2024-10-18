@@ -448,7 +448,7 @@ end
 
 function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
     padding = get_padding(caller)
-    eltype   = determine_eltype(caller, eltype)
+    eltype  = determine_eltype(caller, eltype)
     if padding
         if     (sizetemplate in (:X, :BX))  arraysize = :(map(+, $gridsize, (+1, 0, 0)))
         elseif (sizetemplate in (:Y, :BY))  arraysize = :(map(+, $gridsize, ( 0,+1, 0)))
@@ -490,7 +490,7 @@ function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, siz
         elseif (sizetemplate == :XX) return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,2)), map(+, $arraysize, ( 0,-1,-1)))...))
         elseif (sizetemplate == :YY) return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,2)), map(+, $arraysize, (-1, 0,-1)))...))
         elseif (sizetemplate == :ZZ) return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (2,2,1)), map(+, $arraysize, (-1,-1, 0)))...))
-        elseif (isnothing(sizetemplate) || sizetemplate in (:BX, :BY, :BZ)) return arrayalloc
+        elseif (isnothing(sizetemplate) || sizetemplate in (:BX, :BY, :BZ)) return :(view($arrayalloc, (:).(1, $arraysize)...))
         else @ModuleInternalError("unexpected sizetemplate.")
         end
     else
