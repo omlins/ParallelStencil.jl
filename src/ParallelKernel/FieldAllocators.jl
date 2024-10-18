@@ -450,38 +450,38 @@ function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, siz
     padding = get_padding(caller)
     eltype   = determine_eltype(caller, eltype)
     if padding
-        if     (sizetemplate in (:X, :BX))  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1, 0, 0) : (length($gridsize)==2) ? (+1, 0) : +1))
-        elseif (sizetemplate in (:Y, :BY))  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,+1, 0) : (length($gridsize)==2) ? ( 0,+1) :  0))
-        elseif (sizetemplate in (:Z, :BZ))  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0, 0,+1) : (length($gridsize)==2) ? ( 0, 0) :  0))
-        elseif (sizetemplate == :XY)        arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1,+1, 0) : (length($gridsize)==2) ? (+1,+1) : +1))
-        elseif (sizetemplate == :XZ)        arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1, 0,+1) : (length($gridsize)==2) ? (+1, 0) : +1))
-        elseif (sizetemplate == :YZ)        arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,+1,+1) : (length($gridsize)==2) ? ( 0,+1) :  0))
+        if     (sizetemplate in (:X, :BX))  arraysize = :(map(+, $gridsize, (+1, 0, 0)))
+        elseif (sizetemplate in (:Y, :BY))  arraysize = :(map(+, $gridsize, ( 0,+1, 0)))
+        elseif (sizetemplate in (:Z, :BZ))  arraysize = :(map(+, $gridsize, ( 0, 0,+1)))
+        elseif (sizetemplate == :XY)        arraysize = :(map(+, $gridsize, (+1,+1, 0)))
+        elseif (sizetemplate == :XZ)        arraysize = :(map(+, $gridsize, (+1, 0,+1)))
+        elseif (sizetemplate == :YZ)        arraysize = :(map(+, $gridsize, ( 0,+1,+1)))
         elseif (isnothing(sizetemplate) || sizetemplate in (:XX, :YY, :ZZ))  arraysize = gridsize
         else @ModuleInternalError("unexpected sizetemplate.")
         end
     else
-        if     (sizetemplate == :X)    arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-2) : (length($gridsize)==2) ? (-1,-2) : -1))
-        elseif (sizetemplate == :Y)    arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-2) : (length($gridsize)==2) ? (-2,-1) : -2))
-        elseif (sizetemplate == :Z)    arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2,-1) : (length($gridsize)==2) ? (-2,-2) : -2))
-        elseif (sizetemplate == :BX)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1, 0, 0) : (length($gridsize)==2) ? (+1, 0) : +1))
-        elseif (sizetemplate == :BY)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,+1, 0) : (length($gridsize)==2) ? ( 0,+1) :  0))
-        elseif (sizetemplate == :BZ)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0, 0,+1) : (length($gridsize)==2) ? ( 0, 0) :  0))
-        elseif (sizetemplate == :XX)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,-2,-2) : (length($gridsize)==2) ? ( 0,-2) :  0))
-        elseif (sizetemplate == :YY)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2, 0,-2) : (length($gridsize)==2) ? (-2, 0) : -2))
-        elseif (sizetemplate == :ZZ)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2, 0) : (length($gridsize)==2) ? (-2,-2) : -2))
-        elseif (sizetemplate == :XY)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-1,-2) : (length($gridsize)==2) ? (-1,-1) : -1))
-        elseif (sizetemplate == :XZ)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-1) : (length($gridsize)==2) ? (-1,-2) : -1))
-        elseif (sizetemplate == :YZ)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-1) : (length($gridsize)==2) ? (-2,-1) : -2))
-        elseif isnothing(sizetemplate) arraysize = gridsize
+        if     (sizetemplate == :X)     arraysize = :(map(+, $gridsize, (-1,-2,-2)))
+        elseif (sizetemplate == :Y)     arraysize = :(map(+, $gridsize, (-2,-1,-2)))
+        elseif (sizetemplate == :Z)     arraysize = :(map(+, $gridsize, (-2,-2,-1)))
+        elseif (sizetemplate == :BX)    arraysize = :(map(+, $gridsize, (+1, 0, 0)))
+        elseif (sizetemplate == :BY)    arraysize = :(map(+, $gridsize, ( 0,+1, 0)))
+        elseif (sizetemplate == :BZ)    arraysize = :(map(+, $gridsize, ( 0, 0,+1)))
+        elseif (sizetemplate == :XX)    arraysize = :(map(+, $gridsize, ( 0,-2,-2)))
+        elseif (sizetemplate == :YY)    arraysize = :(map(+, $gridsize, (-2, 0,-2)))
+        elseif (sizetemplate == :ZZ)    arraysize = :(map(+, $gridsize, (-2,-2, 0)))
+        elseif (sizetemplate == :XY)    arraysize = :(map(+, $gridsize, (-1,-1,-2)))
+        elseif (sizetemplate == :XZ)    arraysize = :(map(+, $gridsize, (-1,-2,-1)))
+        elseif (sizetemplate == :YZ)    arraysize = :(map(+, $gridsize, (-2,-1,-1)))
+        elseif isnothing(sizetemplate)  arraysize = gridsize
         else @ModuleInternalError("unexpected sizetemplate.")
         end
     end
-    
-    if     is_same(allocator, :@zeros)  arrayalloc = :(ParallelStencil.ParallelKernel.@zeros($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@ones)   arrayalloc = :(ParallelStencil.ParallelKernel.@ones($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@rand)   arrayalloc = :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@falses) arrayalloc = :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@trues)  arrayalloc = :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
+
+    if     is_same(allocator, :@zeros)   arrayalloc = :(ParallelStencil.ParallelKernel.@zeros($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@ones)    arrayalloc = :(ParallelStencil.ParallelKernel.@ones($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@rand)    arrayalloc = :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@falses)  arrayalloc = :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@trues)   arrayalloc = :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
     else @ModuleInternalError("unexpected allocator macro.")
     end
 
