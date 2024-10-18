@@ -458,9 +458,9 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
             end
             @reset_parallel_kernel()
         end;
-        @testset "6. Fields" begin
+        @testset "6. Fields (padding=$padding)" for padding in (false, true)
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float16)
+            @init_parallel_kernel($package, Float16, padding=$padding)
             @require @is_initialized()
             (nx, ny, nz) = (3, 4, 5)
             @testset "mapping to array allocators" begin
@@ -489,7 +489,7 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                     @test occursin("@trues", @prettystring(1, @YZField((nx, ny, nz), @trues, eltype=Float32)))
                 end;
             end;
-            @testset "gridsize (3D)" begin
+            @testset "field size (3D)" begin
                 @test size(  @Field((nx, ny, nz))) == (nx,   ny,   nz  )
                 @test size( @XField((nx, ny, nz))) == (nx-1, ny-2, nz-2)
                 @test size( @YField((nx, ny, nz))) == (nx-2, ny-1, nz-2)
@@ -508,7 +508,7 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                 @test size.(Tuple( @TensorField((nx, ny, nz)))) == (size(@XXField((nx, ny, nz))), size(@YYField((nx, ny, nz))), size(@ZZField((nx, ny, nz))), 
                                                                     size(@XYField((nx, ny, nz))), size(@XZField((nx, ny, nz))), size(@YZField((nx, ny, nz))))
             end;
-            @testset "gridsize (2D)" begin
+            @testset "field size (2D)" begin
                 @test size(  @Field((nx, ny))) == (nx,   ny, )
                 @test size( @XField((nx, ny))) == (nx-1, ny-2)
                 @test size( @YField((nx, ny))) == (nx-2, ny-1)
@@ -527,7 +527,7 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                 @test size.(Tuple( @TensorField((nx, ny)))) == (size(@XXField((nx, ny))), size(@YYField((nx, ny))),
                                                                 size(@XYField((nx, ny))))
             end;
-            @testset "gridsize (1D)" begin
+            @testset "field size (1D)" begin
                 @test size(  @Field((nx,))) ==  (nx,  )
                 @test size( @XField((nx,))) ==  (nx-1,)
                 @test size( @YField((nx,))) ==  (nx-2,)
@@ -544,6 +544,98 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
                 @test size.(Tuple( @VectorField((nx,)))) == (size( @XField((nx,))),)
                 @test size.(Tuple(@BVectorField((nx,)))) == (size(@BXField((nx,))),)
                 @test size.(Tuple( @TensorField((nx,)))) == (size(@XXField((nx,))),)
+            end;
+            @static if $padding
+                @testset "array size (3D)" begin
+                    @test size(  @Field((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                    @test size( @XField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
+                    @test size( @YField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
+                    @test size( @ZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
+                    @test size(@BXField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
+                    @test size(@BYField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
+                    @test size(@BZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
+                    @test size(@XXField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                    @test size(@YYField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                    @test size(@ZZField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                    @test size(@XYField((nx, ny, nz)).parent) == (nx+1, ny+1, nz  )
+                    @test size(@XZField((nx, ny, nz)).parent) == (nx+1, ny,   nz+1)
+                    @test size(@YZField((nx, ny, nz)).parent) == (nx,   ny+1, nz+1)
+                end;
+                @testset "array size (2D)" begin
+                    @test size(  @Field((nx, ny)).parent) == (nx,   ny  )
+                    @test size( @XField((nx, ny)).parent) == (nx+1, ny  )
+                    @test size( @YField((nx, ny)).parent) == (nx,   ny+1)
+                    @test size( @ZField((nx, ny)).parent) == (nx,   ny  )
+                    @test size(@BXField((nx, ny)).parent) == (nx+1, ny  )
+                    @test size(@BYField((nx, ny)).parent) == (nx,   ny+1)
+                    @test size(@BZField((nx, ny)).parent) == (nx,   ny  )
+                    @test size(@XXField((nx, ny)).parent) == (nx,   ny  )
+                    @test size(@YYField((nx, ny)).parent) == (nx,   ny  )
+                    @test size(@ZZField((nx, ny)).parent) == (nx,   ny  )
+                    @test size(@XYField((nx, ny)).parent) == (nx+1, ny+1)
+                    @test size(@XZField((nx, ny)).parent) == (nx+1, ny  )
+                    @test size(@YZField((nx, ny)).parent) == (nx,   ny+1)
+                end;
+                @testset "array size (1D)" begin
+                    @test size(  @Field((nx,)).parent) == (nx,  )
+                    @test size( @XField((nx,)).parent) == (nx+1,)
+                    @test size( @YField((nx,)).parent) == (nx,  )
+                    @test size( @ZField((nx,)).parent) == (nx,  )
+                    @test size(@BXField((nx,)).parent) == (nx+1,)
+                    @test size(@BYField((nx,)).parent) == (nx,  )
+                    @test size(@BZField((nx,)).parent) == (nx,  )
+                    @test size(@XXField((nx,)).parent) == (nx,  )
+                    @test size(@YYField((nx,)).parent) == (nx,  )
+                    @test size(@ZZField((nx,)).parent) == (nx,  )
+                    @test size(@XYField((nx,)).parent) == (nx+1,)
+                    @test size(@XZField((nx,)).parent) == (nx+1,)
+                    @test size(@YZField((nx,)).parent) == (nx,  )
+                end;
+                @testset "view ranges (3D)" begin
+                    @test   @Field((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz  )
+                    @test  @XField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz-1)
+                    @test  @YField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz-1)
+                    @test  @ZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 2:nz  )
+                    @test @BXField((nx, ny, nz)).indices == (1:nx+1, 1:ny,   1:nz  )
+                    @test @BYField((nx, ny, nz)).indices == (1:nx,   1:ny+1, 1:nz  )
+                    @test @BZField((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz+1)
+                    @test @XXField((nx, ny, nz)).indices == (1:nx,   2:ny-1, 2:nz-1)
+                    @test @YYField((nx, ny, nz)).indices == (2:nx-1, 1:ny,   2:nz-1)
+                    @test @ZZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 1:nz  )
+                    @test @XYField((nx, ny, nz)).indices == (2:nx,   2:ny,   2:nz-1)
+                    @test @XZField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz  )
+                    @test @YZField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz  )
+                end;
+                @testset "view ranges (2D)" begin
+                    @test   @Field((nx, ny)).indices == (1:nx,   1:ny  )
+                    @test  @XField((nx, ny)).indices == (2:nx,   2:ny-1)
+                    @test  @YField((nx, ny)).indices == (2:nx-1, 2:ny  )
+                    @test  @ZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
+                    @test @BXField((nx, ny)).indices == (1:nx+1, 1:ny  )
+                    @test @BYField((nx, ny)).indices == (1:nx,   1:ny+1)
+                    @test @BZField((nx, ny)).indices == (1:nx,   1:ny  )
+                    @test @XXField((nx, ny)).indices == (1:nx,   2:ny-1)
+                    @test @YYField((nx, ny)).indices == (2:nx-1, 1:ny  )
+                    @test @ZZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
+                    @test @XYField((nx, ny)).indices == (2:nx,   2:ny  )
+                    @test @XZField((nx, ny)).indices == (2:nx,   2:ny-1)
+                    @test @YZField((nx, ny)).indices == (2:nx-1, 2:ny  )
+                end;
+                @testset "view ranges (1D)" begin
+                    @test   @Field((nx,)).indices == (1:nx,  )
+                    @test  @XField((nx,)).indices == (2:nx,  )
+                    @test  @YField((nx,)).indices == (2:nx-1,)
+                    @test  @ZField((nx,)).indices == (2:nx-1,)
+                    @test @BXField((nx,)).indices == (1:nx+1,)
+                    @test @BYField((nx,)).indices == (1:nx,  )
+                    @test @BZField((nx,)).indices == (1:nx,  )
+                    @test @XXField((nx,)).indices == (1:nx,  )
+                    @test @YYField((nx,)).indices == (2:nx-1,)
+                    @test @ZZField((nx,)).indices == (2:nx-1,)
+                    @test @XYField((nx,)).indices == (2:nx,  )
+                    @test @XZField((nx,)).indices == (2:nx,  )
+                    @test @YZField((nx,)).indices == (2:nx-1,)
+                end;
             end;
             @testset "eltype" begin
                 @test eltype(@Field((nx, ny, nz))) == Float16
