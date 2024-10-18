@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, SCALARTYPES, ARRAYTYPES, FIELDTYPES
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, SCALARTYPES, ARRAYTYPES, FIELDTYPES
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -26,6 +26,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_package() == $package
                 @test @get_numbertype() == ComplexF16
                 @test @get_inbounds() == false
+                @test @get_padding() == false
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -81,14 +82,15 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @reset_parallel_kernel()
         end;
-        @testset "2. initialization of ParallelKernel without numbertype, with inbounds" begin
+        @testset "2. initialization of ParallelKernel without numbertype, with inbounds and padding" begin
             @require !@is_initialized()
-            @init_parallel_kernel(package = $package, inbounds = true)
+            @init_parallel_kernel(package = $package, inbounds = true, padding = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_inbounds() == true
+                @test @get_padding() == true
             end;
             @testset "Data" begin # NOTE: no scalar types
                 @test @isdefined(Data)
