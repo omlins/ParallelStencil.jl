@@ -3,7 +3,7 @@ using CellArrays, StaticArrays
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
-import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring
+import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, interpolate
 import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.FieldAllocators
 import ParallelStencil.ParallelKernel.FieldAllocators: checksargs_field_macros, checkargs_allocate
@@ -458,260 +458,264 @@ const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not
             end
             @reset_parallel_kernel()
         end;
-        @testset "6. Fields (padding=$padding)" for padding in (false, true)
-            @require !@is_initialized()
-            @init_parallel_kernel($package, Float16, padding=$padding)
-            @require @is_initialized()
-            (nx, ny, nz) = (3, 4, 5)
-            @testset "mapping to array allocators" begin
-                @testset "Field" begin
-                    @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz))))
-                    @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz), @zeros)))
-                    @test occursin("@ones",  @prettystring(1, @Field((nx, ny, nz), @ones)))
-                    @test occursin("@rand",  @prettystring(1, @Field((nx, ny, nz), @rand)))
-                    @test occursin("@falses",@prettystring(1, @Field((nx, ny, nz), @falses)))
-                    @test occursin("@trues", @prettystring(1, @Field((nx, ny, nz), @trues)))
+        $(interpolate(:padding, (false, true), :(
+            @testset "6. Fields (padding=$(_$padding))" begin
+                @require !@is_initialized()
+                @init_parallel_kernel($package, Float16, padding=_$padding)
+                @require @is_initialized()
+                (nx, ny, nz) = (3, 4, 5)
+                @testset "mapping to array allocators" begin
+                    @testset "Field" begin
+                        @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz))))
+                        @test occursin("@zeros", @prettystring(1, @Field((nx, ny, nz), @zeros)))
+                        @test occursin("@ones",  @prettystring(1, @Field((nx, ny, nz), @ones)))
+                        @test occursin("@rand",  @prettystring(1, @Field((nx, ny, nz), @rand)))
+                        @test occursin("@falses",@prettystring(1, @Field((nx, ny, nz), @falses)))
+                        @test occursin("@trues", @prettystring(1, @Field((nx, ny, nz), @trues)))
+                    end;
+                    @testset "[B]{X|Y|Z}Field" begin
+                        @test occursin("@zeros", @prettystring(1, @XField((nx, ny, nz))))
+                        @test occursin("@zeros", @prettystring(1, @YField((nx, ny, nz), @zeros)))
+                        @test occursin("@ones",  @prettystring(1, @ZField((nx, ny, nz), @ones)))
+                        @test occursin("@rand",  @prettystring(1, @BXField((nx, ny, nz), @rand)))
+                        @test occursin("@falses",@prettystring(1, @BYField((nx, ny, nz), @falses)))
+                        @test occursin("@trues", @prettystring(1, @BZField((nx, ny, nz), @trues)))
+                    end;
+                    @testset "{XX|YY|ZZ|XY|XZ|YZ}Field" begin
+                        @test occursin("@zeros", @prettystring(1, @XXField((nx, ny, nz), eltype=Float32)))
+                        @test occursin("@zeros", @prettystring(1, @YYField((nx, ny, nz), @zeros, eltype=Float32)))
+                        @test occursin("@ones",  @prettystring(1, @ZZField((nx, ny, nz), @ones, eltype=Float32)))
+                        @test occursin("@rand",  @prettystring(1, @XYField((nx, ny, nz), @rand, eltype=Float32)))
+                        @test occursin("@falses",@prettystring(1, @XZField((nx, ny, nz), @falses, eltype=Float32)))
+                        @test occursin("@trues", @prettystring(1, @YZField((nx, ny, nz), @trues, eltype=Float32)))
+                    end;
                 end;
-                @testset "[B]{X|Y|Z}Field" begin
-                    @test occursin("@zeros", @prettystring(1, @XField((nx, ny, nz))))
-                    @test occursin("@zeros", @prettystring(1, @YField((nx, ny, nz), @zeros)))
-                    @test occursin("@ones",  @prettystring(1, @ZField((nx, ny, nz), @ones)))
-                    @test occursin("@rand",  @prettystring(1, @BXField((nx, ny, nz), @rand)))
-                    @test occursin("@falses",@prettystring(1, @BYField((nx, ny, nz), @falses)))
-                    @test occursin("@trues", @prettystring(1, @BZField((nx, ny, nz), @trues)))
+                @testset "field size (3D)" begin
+                    @test size(  @Field((nx, ny, nz))) == (nx,   ny,   nz  )
+                    @test size( @XField((nx, ny, nz))) == (nx-1, ny-2, nz-2)
+                    @test size( @YField((nx, ny, nz))) == (nx-2, ny-1, nz-2)
+                    @test size( @ZField((nx, ny, nz))) == (nx-2, ny-2, nz-1)
+                    @test size(@BXField((nx, ny, nz))) == (nx+1, ny,   nz  )
+                    @test size(@BYField((nx, ny, nz))) == (nx,   ny+1, nz  )
+                    @test size(@BZField((nx, ny, nz))) == (nx,   ny,   nz+1)
+                    @test size(@XXField((nx, ny, nz))) == (nx,   ny-2, nz-2)
+                    @test size(@YYField((nx, ny, nz))) == (nx-2, ny,   nz-2)
+                    @test size(@ZZField((nx, ny, nz))) == (nx-2, ny-2, nz  )
+                    @test size(@XYField((nx, ny, nz))) == (nx-1, ny-1, nz-2)
+                    @test size(@XZField((nx, ny, nz))) == (nx-1, ny-2, nz-1)
+                    @test size(@YZField((nx, ny, nz))) == (nx-2, ny-1, nz-1)
+                    @test size.(Tuple( @VectorField((nx, ny, nz)))) == (size( @XField((nx, ny, nz))), size( @YField((nx, ny, nz))), size( @ZField((nx, ny, nz))))
+                    @test size.(Tuple(@BVectorField((nx, ny, nz)))) == (size(@BXField((nx, ny, nz))), size(@BYField((nx, ny, nz))), size(@BZField((nx, ny, nz))))
+                    @test size.(Tuple( @TensorField((nx, ny, nz)))) == (size(@XXField((nx, ny, nz))), size(@YYField((nx, ny, nz))), size(@ZZField((nx, ny, nz))), 
+                                                                        size(@XYField((nx, ny, nz))), size(@XZField((nx, ny, nz))), size(@YZField((nx, ny, nz))))
                 end;
-                @testset "{XX|YY|ZZ|XY|XZ|YZ}Field" begin
-                    @test occursin("@zeros", @prettystring(1, @XXField((nx, ny, nz), eltype=Float32)))
-                    @test occursin("@zeros", @prettystring(1, @YYField((nx, ny, nz), @zeros, eltype=Float32)))
-                    @test occursin("@ones",  @prettystring(1, @ZZField((nx, ny, nz), @ones, eltype=Float32)))
-                    @test occursin("@rand",  @prettystring(1, @XYField((nx, ny, nz), @rand, eltype=Float32)))
-                    @test occursin("@falses",@prettystring(1, @XZField((nx, ny, nz), @falses, eltype=Float32)))
-                    @test occursin("@trues", @prettystring(1, @YZField((nx, ny, nz), @trues, eltype=Float32)))
+                @testset "field size (2D)" begin
+                    @test size(  @Field((nx, ny))) == (nx,   ny, )
+                    @test size( @XField((nx, ny))) == (nx-1, ny-2)
+                    @test size( @YField((nx, ny))) == (nx-2, ny-1)
+                    @test size( @ZField((nx, ny))) == (nx-2, ny-2)
+                    @test size(@BXField((nx, ny))) == (nx+1, ny, )
+                    @test size(@BYField((nx, ny))) == (nx,   ny+1)
+                    @test size(@BZField((nx, ny))) == (nx,   ny, )
+                    @test size(@XXField((nx, ny))) == (nx,   ny-2)
+                    @test size(@YYField((nx, ny))) == (nx-2, ny, )
+                    @test size(@ZZField((nx, ny))) == (nx-2, ny-2)
+                    @test size(@XYField((nx, ny))) == (nx-1, ny-1)
+                    @test size(@XZField((nx, ny))) == (nx-1, ny-2)
+                    @test size(@YZField((nx, ny))) == (nx-2, ny-1)
+                    @test size.(Tuple( @VectorField((nx, ny)))) == (size( @XField((nx, ny))), size( @YField((nx, ny))))
+                    @test size.(Tuple(@BVectorField((nx, ny)))) == (size(@BXField((nx, ny))), size(@BYField((nx, ny))))
+                    @test size.(Tuple( @TensorField((nx, ny)))) == (size(@XXField((nx, ny))), size(@YYField((nx, ny))),
+                                                                    size(@XYField((nx, ny))))
                 end;
+                @testset "field size (1D)" begin
+                    @test size(  @Field((nx,))) ==  (nx,  )
+                    @test size( @XField((nx,))) ==  (nx-1,)
+                    @test size( @YField((nx,))) ==  (nx-2,)
+                    @test size( @ZField((nx,))) ==  (nx-2,)
+                    @test size(@BXField((nx,))) ==  (nx+1,)
+                    @test size(@BYField((nx,))) ==  (nx,  )
+                    @test size(@BZField((nx,))) ==  (nx,  )
+                    @test size(@XXField((nx,))) ==  (nx,  )
+                    @test size(@YYField((nx,))) ==  (nx-2,)
+                    @test size(@ZZField((nx,))) ==  (nx-2,)
+                    @test size(@XYField((nx,))) ==  (nx-1,)
+                    @test size(@XZField((nx,))) ==  (nx-1,)
+                    @test size(@YZField((nx,))) ==  (nx-2,)
+                    @test size.(Tuple( @VectorField((nx,)))) == (size( @XField((nx,))),)
+                    @test size.(Tuple(@BVectorField((nx,)))) == (size(@BXField((nx,))),)
+                    @test size.(Tuple( @TensorField((nx,)))) == (size(@XXField((nx,))),)
+                end;
+                @static if _$padding
+                    @testset "array size (3D)" begin
+                        @test size(  @Field((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                        @test size( @XField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
+                        @test size( @YField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
+                        @test size( @ZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
+                        @test size(@BXField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
+                        @test size(@BYField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
+                        @test size(@BZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
+                        @test size(@XXField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                        @test size(@YYField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                        @test size(@ZZField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
+                        @test size(@XYField((nx, ny, nz)).parent) == (nx+1, ny+1, nz  )
+                        @test size(@XZField((nx, ny, nz)).parent) == (nx+1, ny,   nz+1)
+                        @test size(@YZField((nx, ny, nz)).parent) == (nx,   ny+1, nz+1)
+                    end;
+                    @testset "array size (2D)" begin
+                        @test size(  @Field((nx, ny)).parent) == (nx,   ny  )
+                        @test size( @XField((nx, ny)).parent) == (nx+1, ny  )
+                        @test size( @YField((nx, ny)).parent) == (nx,   ny+1)
+                        @test size( @ZField((nx, ny)).parent) == (nx,   ny  )
+                        @test size(@BXField((nx, ny)).parent) == (nx+1, ny  )
+                        @test size(@BYField((nx, ny)).parent) == (nx,   ny+1)
+                        @test size(@BZField((nx, ny)).parent) == (nx,   ny  )
+                        @test size(@XXField((nx, ny)).parent) == (nx,   ny  )
+                        @test size(@YYField((nx, ny)).parent) == (nx,   ny  )
+                        @test size(@ZZField((nx, ny)).parent) == (nx,   ny  )
+                        @test size(@XYField((nx, ny)).parent) == (nx+1, ny+1)
+                        @test size(@XZField((nx, ny)).parent) == (nx+1, ny  )
+                        @test size(@YZField((nx, ny)).parent) == (nx,   ny+1)
+                    end;
+                    # TODO: these tests fail for CUDA (most certainly a bug in CUDA)
+                    # @testset "array size (1D)" begin
+                    #     @test size(  @Field((nx,)).parent) == (nx,  )
+                    #     @test size( @XField((nx,)).parent) == (nx+1,)
+                    #     @test size( @YField((nx,)).parent) == (nx,  )
+                    #     @test size( @ZField((nx,)).parent) == (nx,  )
+                    #     @test size(@BXField((nx,)).parent) == (nx+1,)
+                    #     @test size(@BYField((nx,)).parent) == (nx,  )
+                    #     @test size(@BZField((nx,)).parent) == (nx,  )
+                    #     @test size(@XXField((nx,)).parent) == (nx,  )
+                    #     @test size(@YYField((nx,)).parent) == (nx,  )
+                    #     @test size(@ZZField((nx,)).parent) == (nx,  )
+                    #     @test size(@XYField((nx,)).parent) == (nx+1,)
+                    #     @test size(@XZField((nx,)).parent) == (nx+1,)
+                    #     @test size(@YZField((nx,)).parent) == (nx,  )
+                    # end;
+                    @testset "view ranges (3D)" begin
+                        @test   @Field((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz  )
+                        @test  @XField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz-1)
+                        @test  @YField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz-1)
+                        @test  @ZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 2:nz  )
+                        @test @BXField((nx, ny, nz)).indices == (1:nx+1, 1:ny,   1:nz  )
+                        @test @BYField((nx, ny, nz)).indices == (1:nx,   1:ny+1, 1:nz  )
+                        @test @BZField((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz+1)
+                        @test @XXField((nx, ny, nz)).indices == (1:nx,   2:ny-1, 2:nz-1)
+                        @test @YYField((nx, ny, nz)).indices == (2:nx-1, 1:ny,   2:nz-1)
+                        @test @ZZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 1:nz  )
+                        @test @XYField((nx, ny, nz)).indices == (2:nx,   2:ny,   2:nz-1)
+                        @test @XZField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz  )
+                        @test @YZField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz  )
+                    end;
+                    @testset "view ranges (2D)" begin
+                        @test   @Field((nx, ny)).indices == (1:nx,   1:ny  )
+                        @test  @XField((nx, ny)).indices == (2:nx,   2:ny-1)
+                        @test  @YField((nx, ny)).indices == (2:nx-1, 2:ny  )
+                        @test  @ZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
+                        @test @BXField((nx, ny)).indices == (1:nx+1, 1:ny  )
+                        @test @BYField((nx, ny)).indices == (1:nx,   1:ny+1)
+                        @test @BZField((nx, ny)).indices == (1:nx,   1:ny  )
+                        @test @XXField((nx, ny)).indices == (1:nx,   2:ny-1)
+                        @test @YYField((nx, ny)).indices == (2:nx-1, 1:ny  )
+                        @test @ZZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
+                        @test @XYField((nx, ny)).indices == (2:nx,   2:ny  )
+                        @test @XZField((nx, ny)).indices == (2:nx,   2:ny-1)
+                        @test @YZField((nx, ny)).indices == (2:nx-1, 2:ny  )
+                    end;
+                    # TODO: these tests fail for CUDA (most certainly a bug in CUDA)
+                    # @testset "view ranges (1D)" begin
+                    #     @test   @Field((nx,)).indices == (1:nx,  )
+                    #     @test  @XField((nx,)).indices == (2:nx,  )
+                    #     @test  @YField((nx,)).indices == (2:nx-1,)
+                    #     @test  @ZField((nx,)).indices == (2:nx-1,)
+                    #     @test @BXField((nx,)).indices == (1:nx+1,)
+                    #     @test @BYField((nx,)).indices == (1:nx,  )
+                    #     @test @BZField((nx,)).indices == (1:nx,  )
+                    #     @test @XXField((nx,)).indices == (1:nx,  )
+                    #     @test @YYField((nx,)).indices == (2:nx-1,)
+                    #     @test @ZZField((nx,)).indices == (2:nx-1,)
+                    #     @test @XYField((nx,)).indices == (2:nx,  )
+                    #     @test @XZField((nx,)).indices == (2:nx,  )
+                    #     @test @YZField((nx,)).indices == (2:nx-1,)
+                    # end;
+                end;
+                @testset "eltype" begin
+                    @test eltype(@Field((nx, ny, nz))) == Float16
+                    @test eltype(@Field((nx, ny, nz), eltype=Float32)) == Float32
+                    @test eltype.(Tuple(@VectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
+                    @test eltype.(Tuple(@VectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
+                    @test eltype.(Tuple(@BVectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
+                    @test eltype.(Tuple(@BVectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
+                    @test eltype.(Tuple(@TensorField((nx, ny, nz)))) == (Float16, Float16, Float16, Float16, Float16, Float16)
+                    @test eltype.(Tuple(@TensorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32, Float32, Float32, Float32)
+                end;
+                @testset "@allocate" begin
+                    @testset "single field" begin
+                        @test occursin("F = @Field((nx, ny, nz), @zeros(), eltype = Float16)", @prettystring(1, @allocate(gridsize = (nx,ny,nz), fields = (Field=>F))))
+                        @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F)))
+                        @test occursin("F = @Field(nxyz, @ones(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@ones)))
+                        @test occursin("F = @Field(nxyz, @rand(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@rand)))
+                        @test occursin("F = @Field(nxyz, @falses(), eltype = Float16)", @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@falses)))
+                        @test occursin("F = @Field(nxyz, @trues(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@trues)))
+                        @test occursin("F = @Field(nxyz, @zeros(), eltype = Float32)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32)))
+                        @test occursin("F = @Field(nxyz, @rand(), eltype = Float32)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32, allocator=@rand)))
+                    end;
+                    @testset "multiple fields - one per type (default allocator and eltype)" begin
+                        call = @prettystring(1, @allocate(gridsize = nxyz,
+                                                        fields   = (Field        => F,
+                                                                    XField       => X,
+                                                                    YField       => Y,
+                                                                    ZField       => Z,
+                                                                    BXField      => BX,
+                                                                    BYField      => BY,
+                                                                    BZField      => BZ,
+                                                                    XXField      => XX,
+                                                                    YYField      => YY,
+                                                                    ZZField      => ZZ,
+                                                                    XYField      => XY,
+                                                                    XZField      => XZ,
+                                                                    YZField      => YZ,
+                                                                    VectorField  => V,
+                                                                    BVectorField => BV,
+                                                                    TensorField  => T) ))
+                        @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("X = @XField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("Y = @YField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("Z = @ZField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("BX = @BXField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("BY = @BYField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("BZ = @BZField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("XX = @XXField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("YY = @YYField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("ZZ = @ZZField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("XY = @XYField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("XZ = @XZField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("YZ = @YZField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("V = @VectorField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("BV = @BVectorField(nxyz, @zeros(), eltype = Float16)", call)
+                        @test occursin("T = @TensorField(nxyz, @zeros(), eltype = Float16)", call)
+                    end;
+                    @testset "multiple fields - multiple per type (custom allocator and eltype)" begin
+                        call = @prettystring(1, @allocate(gridsize = nxyz,
+                                                        fields   = (Field        => (F1, F2),
+                                                                    XField       => X,
+                                                                    VectorField  => (V1, V2, V3),
+                                                                    TensorField  => T),
+                                                        allocator = @rand,
+                                                        eltype    = Float32) )
+                        @test occursin("F1 = @Field(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("F2 = @Field(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("X = @XField(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("V1 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("V2 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("V3 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
+                        @test occursin("T = @TensorField(nxyz, @rand(), eltype = Float32)", call)
+                    end;
+                end;
+                @reset_parallel_kernel()
             end;
-            @testset "field size (3D)" begin
-                @test size(  @Field((nx, ny, nz))) == (nx,   ny,   nz  )
-                @test size( @XField((nx, ny, nz))) == (nx-1, ny-2, nz-2)
-                @test size( @YField((nx, ny, nz))) == (nx-2, ny-1, nz-2)
-                @test size( @ZField((nx, ny, nz))) == (nx-2, ny-2, nz-1)
-                @test size(@BXField((nx, ny, nz))) == (nx+1, ny,   nz  )
-                @test size(@BYField((nx, ny, nz))) == (nx,   ny+1, nz  )
-                @test size(@BZField((nx, ny, nz))) == (nx,   ny,   nz+1)
-                @test size(@XXField((nx, ny, nz))) == (nx,   ny-2, nz-2)
-                @test size(@YYField((nx, ny, nz))) == (nx-2, ny,   nz-2)
-                @test size(@ZZField((nx, ny, nz))) == (nx-2, ny-2, nz  )
-                @test size(@XYField((nx, ny, nz))) == (nx-1, ny-1, nz-2)
-                @test size(@XZField((nx, ny, nz))) == (nx-1, ny-2, nz-1)
-                @test size(@YZField((nx, ny, nz))) == (nx-2, ny-1, nz-1)
-                @test size.(Tuple( @VectorField((nx, ny, nz)))) == (size( @XField((nx, ny, nz))), size( @YField((nx, ny, nz))), size( @ZField((nx, ny, nz))))
-                @test size.(Tuple(@BVectorField((nx, ny, nz)))) == (size(@BXField((nx, ny, nz))), size(@BYField((nx, ny, nz))), size(@BZField((nx, ny, nz))))
-                @test size.(Tuple( @TensorField((nx, ny, nz)))) == (size(@XXField((nx, ny, nz))), size(@YYField((nx, ny, nz))), size(@ZZField((nx, ny, nz))), 
-                                                                    size(@XYField((nx, ny, nz))), size(@XZField((nx, ny, nz))), size(@YZField((nx, ny, nz))))
-            end;
-            @testset "field size (2D)" begin
-                @test size(  @Field((nx, ny))) == (nx,   ny, )
-                @test size( @XField((nx, ny))) == (nx-1, ny-2)
-                @test size( @YField((nx, ny))) == (nx-2, ny-1)
-                @test size( @ZField((nx, ny))) == (nx-2, ny-2)
-                @test size(@BXField((nx, ny))) == (nx+1, ny, )
-                @test size(@BYField((nx, ny))) == (nx,   ny+1)
-                @test size(@BZField((nx, ny))) == (nx,   ny, )
-                @test size(@XXField((nx, ny))) == (nx,   ny-2)
-                @test size(@YYField((nx, ny))) == (nx-2, ny, )
-                @test size(@ZZField((nx, ny))) == (nx-2, ny-2)
-                @test size(@XYField((nx, ny))) == (nx-1, ny-1)
-                @test size(@XZField((nx, ny))) == (nx-1, ny-2)
-                @test size(@YZField((nx, ny))) == (nx-2, ny-1)
-                @test size.(Tuple( @VectorField((nx, ny)))) == (size( @XField((nx, ny))), size( @YField((nx, ny))))
-                @test size.(Tuple(@BVectorField((nx, ny)))) == (size(@BXField((nx, ny))), size(@BYField((nx, ny))))
-                @test size.(Tuple( @TensorField((nx, ny)))) == (size(@XXField((nx, ny))), size(@YYField((nx, ny))),
-                                                                size(@XYField((nx, ny))))
-            end;
-            @testset "field size (1D)" begin
-                @test size(  @Field((nx,))) ==  (nx,  )
-                @test size( @XField((nx,))) ==  (nx-1,)
-                @test size( @YField((nx,))) ==  (nx-2,)
-                @test size( @ZField((nx,))) ==  (nx-2,)
-                @test size(@BXField((nx,))) ==  (nx+1,)
-                @test size(@BYField((nx,))) ==  (nx,  )
-                @test size(@BZField((nx,))) ==  (nx,  )
-                @test size(@XXField((nx,))) ==  (nx,  )
-                @test size(@YYField((nx,))) ==  (nx-2,)
-                @test size(@ZZField((nx,))) ==  (nx-2,)
-                @test size(@XYField((nx,))) ==  (nx-1,)
-                @test size(@XZField((nx,))) ==  (nx-1,)
-                @test size(@YZField((nx,))) ==  (nx-2,)
-                @test size.(Tuple( @VectorField((nx,)))) == (size( @XField((nx,))),)
-                @test size.(Tuple(@BVectorField((nx,)))) == (size(@BXField((nx,))),)
-                @test size.(Tuple( @TensorField((nx,)))) == (size(@XXField((nx,))),)
-            end;
-            @static if $padding
-                @testset "array size (3D)" begin
-                    @test size(  @Field((nx, ny, nz)).parent) == (nx,   ny,   nz  )
-                    @test size( @XField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
-                    @test size( @YField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
-                    @test size( @ZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
-                    @test size(@BXField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
-                    @test size(@BYField((nx, ny, nz)).parent) == (nx,   ny+1, nz  )
-                    @test size(@BZField((nx, ny, nz)).parent) == (nx,   ny,   nz+1)
-                    @test size(@XXField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
-                    @test size(@YYField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
-                    @test size(@ZZField((nx, ny, nz)).parent) == (nx,   ny,   nz  )
-                    @test size(@XYField((nx, ny, nz)).parent) == (nx+1, ny+1, nz  )
-                    @test size(@XZField((nx, ny, nz)).parent) == (nx+1, ny,   nz+1)
-                    @test size(@YZField((nx, ny, nz)).parent) == (nx,   ny+1, nz+1)
-                end;
-                @testset "array size (2D)" begin
-                    @test size(  @Field((nx, ny)).parent) == (nx,   ny  )
-                    @test size( @XField((nx, ny)).parent) == (nx+1, ny  )
-                    @test size( @YField((nx, ny)).parent) == (nx,   ny+1)
-                    @test size( @ZField((nx, ny)).parent) == (nx,   ny  )
-                    @test size(@BXField((nx, ny)).parent) == (nx+1, ny  )
-                    @test size(@BYField((nx, ny)).parent) == (nx,   ny+1)
-                    @test size(@BZField((nx, ny)).parent) == (nx,   ny  )
-                    @test size(@XXField((nx, ny)).parent) == (nx,   ny  )
-                    @test size(@YYField((nx, ny)).parent) == (nx,   ny  )
-                    @test size(@ZZField((nx, ny)).parent) == (nx,   ny  )
-                    @test size(@XYField((nx, ny)).parent) == (nx+1, ny+1)
-                    @test size(@XZField((nx, ny)).parent) == (nx+1, ny  )
-                    @test size(@YZField((nx, ny)).parent) == (nx,   ny+1)
-                end;
-                @testset "array size (1D)" begin
-                    @test size(  @Field((nx,)).parent) == (nx,  )
-                    @test size( @XField((nx,)).parent) == (nx+1,)
-                    @test size( @YField((nx,)).parent) == (nx,  )
-                    @test size( @ZField((nx,)).parent) == (nx,  )
-                    @test size(@BXField((nx,)).parent) == (nx+1,)
-                    @test size(@BYField((nx,)).parent) == (nx,  )
-                    @test size(@BZField((nx,)).parent) == (nx,  )
-                    @test size(@XXField((nx,)).parent) == (nx,  )
-                    @test size(@YYField((nx,)).parent) == (nx,  )
-                    @test size(@ZZField((nx,)).parent) == (nx,  )
-                    @test size(@XYField((nx,)).parent) == (nx+1,)
-                    @test size(@XZField((nx,)).parent) == (nx+1,)
-                    @test size(@YZField((nx,)).parent) == (nx,  )
-                end;
-                @testset "view ranges (3D)" begin
-                    @test   @Field((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz  )
-                    @test  @XField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz-1)
-                    @test  @YField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz-1)
-                    @test  @ZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 2:nz  )
-                    @test @BXField((nx, ny, nz)).indices == (1:nx+1, 1:ny,   1:nz  )
-                    @test @BYField((nx, ny, nz)).indices == (1:nx,   1:ny+1, 1:nz  )
-                    @test @BZField((nx, ny, nz)).indices == (1:nx,   1:ny,   1:nz+1)
-                    @test @XXField((nx, ny, nz)).indices == (1:nx,   2:ny-1, 2:nz-1)
-                    @test @YYField((nx, ny, nz)).indices == (2:nx-1, 1:ny,   2:nz-1)
-                    @test @ZZField((nx, ny, nz)).indices == (2:nx-1, 2:ny-1, 1:nz  )
-                    @test @XYField((nx, ny, nz)).indices == (2:nx,   2:ny,   2:nz-1)
-                    @test @XZField((nx, ny, nz)).indices == (2:nx,   2:ny-1, 2:nz  )
-                    @test @YZField((nx, ny, nz)).indices == (2:nx-1, 2:ny,   2:nz  )
-                end;
-                @testset "view ranges (2D)" begin
-                    @test   @Field((nx, ny)).indices == (1:nx,   1:ny  )
-                    @test  @XField((nx, ny)).indices == (2:nx,   2:ny-1)
-                    @test  @YField((nx, ny)).indices == (2:nx-1, 2:ny  )
-                    @test  @ZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
-                    @test @BXField((nx, ny)).indices == (1:nx+1, 1:ny  )
-                    @test @BYField((nx, ny)).indices == (1:nx,   1:ny+1)
-                    @test @BZField((nx, ny)).indices == (1:nx,   1:ny  )
-                    @test @XXField((nx, ny)).indices == (1:nx,   2:ny-1)
-                    @test @YYField((nx, ny)).indices == (2:nx-1, 1:ny  )
-                    @test @ZZField((nx, ny)).indices == (2:nx-1, 2:ny-1)
-                    @test @XYField((nx, ny)).indices == (2:nx,   2:ny  )
-                    @test @XZField((nx, ny)).indices == (2:nx,   2:ny-1)
-                    @test @YZField((nx, ny)).indices == (2:nx-1, 2:ny  )
-                end;
-                @testset "view ranges (1D)" begin
-                    @test   @Field((nx,)).indices == (1:nx,  )
-                    @test  @XField((nx,)).indices == (2:nx,  )
-                    @test  @YField((nx,)).indices == (2:nx-1,)
-                    @test  @ZField((nx,)).indices == (2:nx-1,)
-                    @test @BXField((nx,)).indices == (1:nx+1,)
-                    @test @BYField((nx,)).indices == (1:nx,  )
-                    @test @BZField((nx,)).indices == (1:nx,  )
-                    @test @XXField((nx,)).indices == (1:nx,  )
-                    @test @YYField((nx,)).indices == (2:nx-1,)
-                    @test @ZZField((nx,)).indices == (2:nx-1,)
-                    @test @XYField((nx,)).indices == (2:nx,  )
-                    @test @XZField((nx,)).indices == (2:nx,  )
-                    @test @YZField((nx,)).indices == (2:nx-1,)
-                end;
-            end;
-            @testset "eltype" begin
-                @test eltype(@Field((nx, ny, nz))) == Float16
-                @test eltype(@Field((nx, ny, nz), eltype=Float32)) == Float32
-                @test eltype.(Tuple(@VectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
-                @test eltype.(Tuple(@VectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
-                @test eltype.(Tuple(@BVectorField((nx, ny, nz)))) == (Float16, Float16, Float16)
-                @test eltype.(Tuple(@BVectorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32)
-                @test eltype.(Tuple(@TensorField((nx, ny, nz)))) == (Float16, Float16, Float16, Float16, Float16, Float16)
-                @test eltype.(Tuple(@TensorField((nx, ny, nz), eltype=Float32))) == (Float32, Float32, Float32, Float32, Float32, Float32)
-            end;
-            @testset "@allocate" begin
-                @testset "single field" begin
-                    @test occursin("F = @Field((nx, ny, nz), @zeros(), eltype = Float16)", @prettystring(1, @allocate(gridsize = (nx,ny,nz), fields = (Field=>F))))
-                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F)))
-                    @test occursin("F = @Field(nxyz, @ones(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@ones)))
-                    @test occursin("F = @Field(nxyz, @rand(), eltype = Float16)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@rand)))
-                    @test occursin("F = @Field(nxyz, @falses(), eltype = Float16)", @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@falses)))
-                    @test occursin("F = @Field(nxyz, @trues(), eltype = Float16)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, allocator=@trues)))
-                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float32)",  @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32)))
-                    @test occursin("F = @Field(nxyz, @rand(), eltype = Float32)",   @prettystring(1, @allocate(gridsize = nxyz, fields = Field=>F, eltype=Float32, allocator=@rand)))
-                end;
-                @testset "multiple fields - one per type (default allocator and eltype)" begin
-                    call = @prettystring(1, @allocate(gridsize = nxyz,
-                                                      fields   = (Field        => F,
-                                                                  XField       => X,
-                                                                  YField       => Y,
-                                                                  ZField       => Z,
-                                                                  BXField      => BX,
-                                                                  BYField      => BY,
-                                                                  BZField      => BZ,
-                                                                  XXField      => XX,
-                                                                  YYField      => YY,
-                                                                  ZZField      => ZZ,
-                                                                  XYField      => XY,
-                                                                  XZField      => XZ,
-                                                                  YZField      => YZ,
-                                                                  VectorField  => V,
-                                                                  BVectorField => BV,
-                                                                  TensorField  => T) ))
-                    @test occursin("F = @Field(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("X = @XField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("Y = @YField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("Z = @ZField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("BX = @BXField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("BY = @BYField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("BZ = @BZField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("XX = @XXField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("YY = @YYField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("ZZ = @ZZField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("XY = @XYField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("XZ = @XZField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("YZ = @YZField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("V = @VectorField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("BV = @BVectorField(nxyz, @zeros(), eltype = Float16)", call)
-                    @test occursin("T = @TensorField(nxyz, @zeros(), eltype = Float16)", call)
-                end;
-                @testset "multiple fields - multiple per type (custom allocator and eltype)" begin
-                    call = @prettystring(1, @allocate(gridsize = nxyz,
-                                                      fields   = (Field        => (F1, F2),
-                                                                  XField       => X,
-                                                                  VectorField  => (V1, V2, V3),
-                                                                  TensorField  => T),
-                                                      allocator = @rand,
-                                                      eltype    = Float32) )
-                    @test occursin("F1 = @Field(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("F2 = @Field(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("X = @XField(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("V1 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("V2 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("V3 = @VectorField(nxyz, @rand(), eltype = Float32)", call)
-                    @test occursin("T = @TensorField(nxyz, @rand(), eltype = Float32)", call)
-                end;
-            end;
-            @reset_parallel_kernel()
-        end;
+        )))
         @testset "7. Exceptions" begin
             @require !@is_initialized()
             @init_parallel_kernel(package = $package)
