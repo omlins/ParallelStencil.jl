@@ -132,7 +132,7 @@ function extract_kwargs_nopos(caller::Module, kwargs::Dict)
     if (:padding in keys(kwargs))  padding_val = eval_arg(caller, kwargs[:padding]); check_padding(padding_val)
     else                           padding_val = false
     end
-    return inbounds_val, padding
+    return inbounds_val, padding_val
 end
 
 function define_import(caller::Module, package::Symbol, parent_module::String)
