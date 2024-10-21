@@ -29,7 +29,7 @@ To see a description of a macro type `?<macroname>` (including the `@`).
 module FieldAllocators
 
 using ..Exceptions
-import ..ParallelKernel: check_initialized, get_numbertype, extract_kwargvalues, split_args, clean_args, is_same, extract_tuple, extract_kwargs
+import ..ParallelKernel: check_initialized, get_numbertype, get_padding, extract_kwargvalues, split_args, clean_args, is_same, extract_tuple, extract_kwargs
 import ..ParallelKernel: NUMBERTYPE_NONE, FIELDTYPES
 
 
