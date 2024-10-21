@@ -61,6 +61,7 @@ const ERRMSG_UNSUPPORTED_PACKAGE   = "unsupported package for parallelization"
 const ERRMSG_CHECK_PACKAGE         = "package has to be functional and one of the following: $(join(SUPPORTED_PACKAGES,", "))"
 const ERRMSG_CHECK_NUMBERTYPE      = "numbertype has to be one of the following (and evaluatable at parse time): $(join(SUPPORTED_NUMBERTYPES,", "))"
 const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
+const ERRMSG_CHECK_PADDING         = "padding must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
@@ -402,6 +403,7 @@ inexpr_walk(expr,         s::Symbol; match_only_head=false) = false
 inexpr_walk(expr,         e::Expr)                          = false
 
 Base.unquoted(s::Symbol) = s
+Base.unquoted(b::Bool)   = b
 
 function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
     if isa(t, Expr) && t.head == :tuple
@@ -422,6 +424,7 @@ check_literaltype(T::DataType)  = ( if !(T in SUPPORTED_LITERALTYPES) @ArgumentE
 check_numbertype(datatypes...)  = check_numbertype.(datatypes)
 check_literaltype(datatypes...) = check_literaltype.(datatypes)
 check_inbounds(inbounds)        = ( if !isa(inbounds, Bool) @ArgumentError("$ERRMSG_CHECK_INBOUNDS (obtained: $inbounds)." ) end )
+check_padding(padding)          = ( if !isa(padding, Bool) @ArgumentError("$ERRMSG_CHECK_INBOUNDS (obtained: $padding)." ) end )
 
 
 ## FUNCTIONS AND MACROS FOR UNIT TESTS
@@ -441,6 +444,7 @@ macro prettyexpand(expr)               return QuoteNode(remove_linenumbernodes!(
 macro gorgeousexpand(expr)             return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpand(__module__, expr; recursive=true)))) end
 macro prettystring(args...)            return esc(:(string(ParallelStencil.ParallelKernel.@prettyexpand($(args...))))) end
 macro gorgeousstring(args...)          return esc(:(string(ParallelStencil.ParallelKernel.@gorgeousexpand($(args...))))) end
+macro interpolate(args...)             esc(interpolate(args...)) end
 
 function macroexpandn(m::Module, expr, n::Integer)
     for i = 1:n
@@ -481,6 +485,15 @@ function simplify_varnames!(expr::Expr)
     end
     return expr
 end
+
+
+function interpolate(sym::Symbol, vals::NTuple, block::Expr)
+    return quote
+        $((substitute(block, :(_$($sym)), val) for val in vals)...)
+    end
+end
+
+interpolate(sym::Symbol, vals_expr::Expr, block::Expr) = interpolate(sym, (extract_tuple(vals_expr)...,), block)
 
 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
