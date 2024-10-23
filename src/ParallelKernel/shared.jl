@@ -23,6 +23,7 @@ const NTHREADS_X_MAX               = 32
 const NTHREADS_X_MAX_AMDGPU        = 64
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
+const INDICES_INN                  = (gensym_world("ixi", @__MODULE__), gensym_world("iyi", @__MODULE__), gensym_world("izi", @__MODULE__)) # ( :($(INDICES[1])+1), :($(INDICES[2])+1), :($(INDICES[3])+1) )
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
 const RANGELENGTHS_VARNAMES        = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
 const THREADIDS_VARNAMES           = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
