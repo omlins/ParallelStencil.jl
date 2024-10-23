@@ -172,17 +172,18 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     indices = extract_tuple(indices)
     body = get_body(kernel)
     body = remove_return(body)
+    body = macroexpand(caller, body)
     use_aliases = !all(indices .== INDICES[1:length(indices)])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
         indices = [INDICES[1:length(indices)]...]
-        body = macroexpand(caller, body)
         for i=1:length(indices_aliases)
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
+    body   = handle_padding(body, get_padding(caller)) # TODO: padding can later be made configurable per kernel (to enable working with arrays as before).
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
@@ -361,6 +362,14 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     return kernel
+end
+
+function handle_padding(body::Expr, padding::Bool)
+    for i=1:length(INDICES_INN)
+        index_inn = (padding) ? INDICES[i] : :($(INDICES[i]) + 1) # NOTE: expression of ixi with ix, etc.: if padding is not used, they must be shifted by 1.
+        body = substitute(body, INDICES_INN[i], index_inn)
+    end
+    return body
 end
 
 function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)
