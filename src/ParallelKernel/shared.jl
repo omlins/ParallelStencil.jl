@@ -11,12 +11,14 @@ gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
+const PKG_METAL                    = :Metal
 const PKG_THREADS                  = :Threads
 const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU]
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
 const NTHREADS_X_MAX               = 32
@@ -66,6 +68,7 @@ const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be on
 const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
                                    PKG_CUDA      => 0,
                                    PKG_AMDGPU    => 0,
+                                   PKG_METAL     => 0,
                                    PKG_THREADS   => 1,
                                    PKG_POLYESTER => 1)
 
@@ -81,6 +84,7 @@ macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 function kernel_int_type(package::Symbol)
     if     (package == PKG_CUDA)      int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)     int_type = INT_METAL
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
     elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
     end
@@ -486,7 +490,7 @@ end
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
 iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
-isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU))
+isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL))
 
 
 ## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)

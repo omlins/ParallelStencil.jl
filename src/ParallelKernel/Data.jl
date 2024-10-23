@@ -31,12 +31,12 @@ The type of indices used in parallel kernels.
 --------------------------------------------------------------------------------
     Data.Array{ndims}
 
-Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.Array` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA and AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required).
+Expands to `Data.Array{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.Array` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA, AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU and Metal.MtlArray or Metal.MtlDeviceArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.CellArray{ndims}
 
-Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.CellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA and ROCCellArray or ROCDeviceCellArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray when required).
+Expands to `Data.CellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.CellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MtlCellArray or MtlDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray when required).
 
 --------------------------------------------------------------------------------
     Data.Cell{S}
@@ -143,12 +143,12 @@ The type of indices used in parallel kernels.
 --------------------------------------------------------------------------------
     Data.Array{numbertype, ndims}
 
-The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA and AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray and AMDGPU.ROCArray automatically to CUDA.CuDeviceArray and AMDGPU.ROCDeviceArray in kernels when required).
+The datatype `Data.Array` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuArray or CUDA.CuDeviceArray for CUDA, AMDGPU.ROCArray or AMDGPU.ROCDeviceArray for AMDGPU and Metal.MtlArray or Metal.MtlDeviceArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.CellArray{numbertype, ndims}
 
-The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA and ROCCellArray or ROCDeviceCellArray for AMDGPU; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
+The datatype `Data.CellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuCellArray or CuDeviceCellArray for CUDA, ROCCellArray or ROCDeviceCellArray for AMDGPU and MtlCellArray or MetalDeviceCellArray for Metal; [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CellArray automatically to DeviceCellArray in kernels when required).
 
 --------------------------------------------------------------------------------
     Data.Cell{numbertype, S}
@@ -422,6 +422,86 @@ function TData_Device_amdgpu()
     end)
 end
 
+# Metal
+
+function Data_metal(numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Index                     = $indextype
+            const Array{T, N}               = Metal.MtlArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype)) 
+            $(Data_Device_metal(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_DATA
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Index                     = $indextype
+            const Number                    = $numbertype
+            const Array{N}                  = Metal.MtlArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = MtlCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_metal(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    end
+    return prewalk(rmlines, flatten(Data_module))
+end
+
+function TData_metal()
+    TData_module = :(
+        baremodule $MODULENAME_TDATA
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Array{T, N}               = Metal.MtlArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(TData_xpu_exprs())
+            $(TData_Device_metal())
+            $(TData_Fields())
+        end
+    )
+    return prewalk(rmlines, flatten(TData_module))
+end
+
+function Data_Device_metal(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{T, N}               = Metal.MtlDeviceArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{N}                  = Metal.MtlDeviceArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = CellArrays.CellArray{<:Cell,N,B,<:Metal.MtlDeviceArray{$numbertype,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    end
+    return Device_module
+end
+
+function TData_Device_metal()
+    :(baremodule $MODULENAME_DEVICE
+        import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+        const Array{T, N}                   = Metal.MtlDeviceArray{T, N}
+        const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+        const CellArray{T_elem, N, B}       = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
+        $(TData_xpu_exprs())
+    end)
+end
 
 # CPU
 

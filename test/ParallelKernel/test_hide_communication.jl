@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
 import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
@@ -14,13 +14,25 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if Sys.isapple() && PKG_METAL in TEST_PACKAGES
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-@static for package in TEST_PACKAGES  eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+const TEST_PRECISIONS = [Float32, Float64]
+for package in TEST_PACKAGES
+for precision in TEST_PRECISIONS
+(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+    
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
         @testset "1. hide_communication macro" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized()
             @testset "@hide_communication boundary_width block (macro expansion)" begin
                 @static if @isgpu($package)
@@ -82,7 +94,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel add_indices!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width block" begin  # This test verifies that the results are correct, even for CUDA.jl < v2.0, where it cannot overlap.
                     A  = @zeros(6, 7, 8)
@@ -95,7 +107,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         communication_y!(A);
                         communication_z!(A);
                     end
-                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width block" begin
                     A  = @zeros(6, 7, 8)
@@ -110,7 +122,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         communication_y!(A);
                         communication_z!(A);
                     end
-                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -119,7 +131,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -128,7 +140,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel (1:6, 1:7, 1:8) add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -137,7 +149,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel (1:6, 1:7, 1:8) add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=3 block" begin
                     A  = @zeros(6, 7, 8)
@@ -147,7 +159,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel add_indices3!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication ranges_outer ranges_inner block" begin
                     A  = @zeros(6, 7, 8)
@@ -157,14 +169,14 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @parallel add_indices!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
             end;
             @reset_parallel_kernel()
         end;
         @testset "2. Exceptions" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized
             @testset "arguments @hide_communication" begin
                 @test_throws ArgumentError checkargs_hide_communication(:boundary_width, :block)               # Error: the last argument must be a code block.
@@ -204,4 +216,6 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             @reset_parallel_kernel()
         end;
     end;
-)) end == nothing || true;
+))
+
+end end == nothing || true;

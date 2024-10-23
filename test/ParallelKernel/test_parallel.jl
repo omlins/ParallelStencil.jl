@@ -3,7 +3,7 @@ import ParallelStencil
 using Enzyme
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel.AD
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_THREADS, PKG_POLYESTER, INDICES, ARRAYTYPES, FIELDTYPES
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, ARRAYTYPES, FIELDTYPES
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize
 using ParallelStencil.ParallelKernel.Exceptions
@@ -16,6 +16,10 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if Sys.isapple() && PKG_METAL in TEST_PACKAGES
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
@@ -24,11 +28,17 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 import Enzyme
-@static for package in TEST_PACKAGES  eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+
+const TEST_PRECISIONS = [Float32, Float64]
+for package in TEST_PACKAGES
+for precision in TEST_PRECISIONS
+(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized()
             @testset "@parallel" begin
                 @static if $package == $PKG_CUDA
@@ -55,6 +65,8 @@ import Enzyme
                     @test occursin("AMDGPU.@roc gridsize = nblocks groupsize = nthreads stream = AMDGPU.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("AMDGPU.@roc gridsize = nblocks groupsize = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                elseif $package == $PKG_METAL
+                    ## TODO
                 elseif @iscpu($package)
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
@@ -70,7 +82,7 @@ import Enzyme
                 @testset "maxsize" begin
                     struct BitstypeStruct
                         x::Int
-                        y::Float64
+                        y::Float32
                     end
                     @test maxsize([9 9; 9 9; 9 9]) == (3, 2, 1)
                     @test maxsize(8) == (1, 1, 1)
@@ -101,8 +113,8 @@ import Enzyme
                     B̄ = @ones(N)
                     A_ref = Array(A)
                     B_ref = Array(B)
-                    Ā_ref = ones(N)
-                    B̄_ref = ones(N)
+                    Ā_ref = ones($precision, N)
+                    B̄_ref = ones($precision, N)
                     @parallel_indices (ix) function f!(A, B, a)
                         A[ix] += a * B[ix] * 100.65
                         return
@@ -367,7 +379,7 @@ import Enzyme
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix for ix=1:size(A,1)])
+                    @test all(Array(A) .≈ [ix for ix=1:size(A,1)])
                 end;
                 @testset "@parallel_indices (2D)" begin
                     A  = @zeros(4, 5)
@@ -376,7 +388,7 @@ import Enzyme
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
+                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 end;
                 @testset "@parallel_indices (3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -385,7 +397,7 @@ import Enzyme
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (1D in 3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -394,7 +406,7 @@ import Enzyme
                         return
                     end
                     @parallel 1:size(A,2) write_indices!(A);
-                    @test all(Array(A)[1,:,1] .== [iy for iy=1:size(A,2)])
+                    @test all(Array(A)[1,:,1] .≈ [iy for iy=1:size(A,2)])
                 end;
                 @testset "@parallel_indices (2D in 3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -403,7 +415,7 @@ import Enzyme
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (2D in 3D with macro)" begin
                     A  = @zeros(4, 5, 6)
@@ -412,7 +424,7 @@ import Enzyme
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (2D in 3D with macro with aliases)" begin
                     A  = @zeros(4, 5, 6)
@@ -421,7 +433,7 @@ import Enzyme
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @static if $package != $PKG_POLYESTER
                     @testset "nested function (long definition, array modification)" begin
@@ -435,7 +447,7 @@ import Enzyme
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (short definition, array modification)" begin
                         A  = @zeros(4, 5, 6)
@@ -445,7 +457,7 @@ import Enzyme
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (long definition, return value)" begin
                         A  = @zeros(4, 5, 6)
@@ -457,7 +469,7 @@ import Enzyme
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (short definition, return value)" begin
                         A  = @zeros(4, 5, 6)
@@ -467,7 +479,7 @@ import Enzyme
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                 end
             end;
@@ -489,19 +501,21 @@ import Enzyme
             @reset_parallel_kernel()
         end;
         @testset "2. parallel macros (literal conversion)" begin
-            @testset "@parallel_indices (Float64)" begin
-                @require !@is_initialized()
-                @init_parallel_kernel($package, Float64)
-                @require @is_initialized()
-                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
-                @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
-                @reset_parallel_kernel()
-            end;
+            if $package != $PKG_METAL
+                @testset "@parallel_indices (Float64)" begin
+                    @require !@is_initialized()
+                    @init_parallel_kernel($package, Float64)
+                    @require @is_initialized()
+                    expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                    @test occursin("A[ix] = A[ix] + 1.0\n", expansion)
+                    @reset_parallel_kernel()
+                end;
+            end
             @testset "@parallel_indices (Float32)" begin
                 @require !@is_initialized()
                 @init_parallel_kernel($package, Float32)
                 @require @is_initialized()
-                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0; return))
+                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = A[ix] + 1.0f0; return))
                 @test occursin("A[ix] = A[ix] + 1.0f0\n", expansion)
                 @reset_parallel_kernel()
             end;
@@ -513,14 +527,16 @@ import Enzyme
                 @test occursin("A[ix] = A[ix] + Float16(1.0)\n", expansion)
                 @reset_parallel_kernel()
             end;
-            @testset "@parallel_indices (ComplexF64)" begin
-                @require !@is_initialized()
-                @init_parallel_kernel($package, ComplexF64)
-                @require @is_initialized()
-                expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
-                @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
-                @reset_parallel_kernel()
-            end;
+            if $package != $PKG_METAL
+                @testset "@parallel_indices (ComplexF64)" begin
+                    @require !@is_initialized()
+                    @init_parallel_kernel($package, ComplexF64)
+                    @require @is_initialized()
+                    expansion = @gorgeousstring(@parallel_indices (ix) f!(A) = (A[ix] = 2.0f0 - 1.0f0im - A[ix] + 1.0f0; return))
+                    @test occursin("A[ix] = ((2.0 - 1.0im) - A[ix]) + 1.0\n", expansion)
+                    @reset_parallel_kernel()
+                end;
+            end
             @testset "@parallel_indices (ComplexF32)" begin
                 @require !@is_initialized()
                 @init_parallel_kernel($package, ComplexF32)
@@ -541,7 +557,7 @@ import Enzyme
         @testset "3. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                @init_parallel_kernel($package, Float64, inbounds=true)
+                @init_parallel_kernel($package, $precision, inbounds=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -602,7 +618,7 @@ import Enzyme
         end;
         @testset "5. Exceptions" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, Float64)
+            @init_parallel_kernel($package, $precision)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                        # Error: isempty(args)
@@ -637,4 +653,6 @@ import Enzyme
             @reset_parallel_kernel()
         end;
     end;
-)) end == nothing || true;
+))
+
+end end == nothing || true;

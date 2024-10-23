@@ -71,6 +71,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)   int_type = INT_METAL
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     body                  = eval_offsets(caller, body, indices, int_type)

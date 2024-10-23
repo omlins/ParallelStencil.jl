@@ -7,7 +7,7 @@ ParallelStencil empowers domain scientists to write architecture-agnostic high-l
 
 <a id="fig_teff">![Performance ParallelStencil Teff](docs/images/perf_ps2.png)</a>
 
-ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl] and [AMDGPU.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
+ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl], [AMDGPU.jl], [Metal.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
 
 ![Parallel efficiency of ParallelStencil with CUDA C backend](docs/images/par_eff_c_julia2.png)
 
@@ -33,7 +33,7 @@ Beyond traditional high-performance computing, ParallelStencil supports automati
 * [References](#references)
 
 ## Parallelization and optimization with one macro call
-A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl] and [AMDGPU.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
+A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl], [AMDGPU.jl] and [Metal.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
 ```julia
 #(...)
 @init_parallel_stencil(CUDA,...)
@@ -554,6 +554,7 @@ Please open an issue to discuss your idea for a contribution beforehand. Further
 [CellArrays.jl]: https://github.com/omlins/CellArrays.jl
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
 [AMDGPU.jl]: https://github.com/JuliaGPU/AMDGPU.jl
+[Metal.jl]: https://github.com/JuliaGPU/Metal.jl
 [Enzyme.jl]: https://github.com/EnzymeAD/Enzyme.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
