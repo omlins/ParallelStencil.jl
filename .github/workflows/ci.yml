@@ -12,8 +12,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - '1.9' # Minimum version supporting extensions
-          - '1'   # Latest stable 1.x release of Julia
+          - '1.10' # Minimum version supporting Data module creation
+          - '1'    # Latest stable 1.x release of Julia
           #- 'nightly'
         os:
           - ubuntu-latest

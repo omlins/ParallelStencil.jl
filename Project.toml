@@ -1,7 +1,7 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
 authors = ["Samuel Omlin", "Ludovic Räss"]
-version = "0.13.5"
+version = "0.13.6"
 
 [deps]
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
@@ -31,7 +31,7 @@ MacroTools = "0.5"
 Metal = "^1.2"
 Polyester = "0.7"
 StaticArrays = "1"
-julia = "1.9" # Minimum version supporting extensions
+julia = "1.10" # Minimum version supporting Data module creation
 
 [extras]
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"

@@ -1,7 +1,22 @@
 const DATA_DOC = """
     Module Data
 
-The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
+The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
+
+It contains the following submodules:
+
+    Data.Fields
+!!! note "Advanced"
+        Data.Device
+        Data.Fields.Device
+
+    For each datatype in Data and Data.Fields exist a corresponding datatype in Data.Device and Data.Fields.Device, respectively.
+
+    !!! warning
+        These Device datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data and Data.Fields automatically to corresponding datatypes from Data.Device and Data.Fields.Device, respectively, in kernels when required.
+
+
+The module Data provides the following types at the top level:
 
 --------------------------------------------------------------------------------
     Data.Number
@@ -54,27 +69,71 @@ Expands to: `NTuple{N_tuple, Data.CellArray{N, B}}` | `NamedTuple{names, NTuple{
 Expands to: `NTuple{N_tuple, Data.Cell{S}}` | `NamedTuple{names, NTuple{N_tuple, Data.Cell{S}}}` | `Union{Data.CellTuple{N_tuple, S}, Data.NamedCellTuple{N_tuple, S}}`
 
 --------------------------------------------------------------------------------
-!!! note "Advanced"
-        Data.DeviceArray{ndims}
+--------------------------------------------------------------------------------
+    Submodule Data.Fields
 
-    Expands to `Data.DeviceArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.DeviceArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuDeviceArray for CUDA, AMDGPU.ROCDeviceArray for AMDGPU and Metal.MtlDeviceArray for Metal).
+The submodule Data.Fields provides the types for fields allocated with macros from ParallelKernel.FieldAllocators. 
 
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
+!!! note "Usage"
+    using .Data.Fields # Note the preceeding dot!
 
-    --------------------------------------------------------------------------------
-        Data.DeviceCellArray{ndims}
+Data.Fields provides the following types:
 
-    Expands to `Data.DeviceCellArray{numbertype, ndims}`, where `numbertype` is the datatype selected with [`@init_parallel_kernel`](@ref) and the datatype `Data.DeviceCellArray` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuDeviceCellArray for CUDA, ROCDeviceCellArray for AMDGPU and MetalDeviceCellArray for Metal).
+--------------------------------------------------------------------------------
+    Field
 
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
+A scalar field, on a grid of size `gridsize`; allocated with `@Fields`.
+
+--------------------------------------------------------------------------------
+    {X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`; allocated with `@{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    B{X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`; allocated with `@B{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    {XX|YY|ZZ|XY|XZ|YZ}Field
+
+A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`; allocated with `@{XX|YY|ZZ|XY|XZ|YZ}Field`.
+
+--------------------------------------------------------------------------------
+    VectorField
+
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+
+--------------------------------------------------------------------------------
+    BVectorField
+
+A vector field including boundaries, on a grid of size `gridsize`; allocated with `@BVectorField`.
+
+--------------------------------------------------------------------------------
+    TensorField
+
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
     Module Data
 
-The module Data is created in the module where `@init_parallel_kernel` is called from. It provides the following types:
+The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
+
+It contains the following submodules:
+
+    Data.Fields
+!!! note "Advanced"
+        Data.Device
+        Data.Fields.Device
+
+    For each datatype in Data and Data.Fields exist a corresponding datatype in Data.Device and Data.Fields.Device, respectively.
+
+    !!! warning
+        These Device datatypes are not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert datatypes from Data and Data.Fields automatically to corresponding datatypes from Data.Device and Data.Fields.Device, respectively, in kernels when required.
+
+
+The module Data provides the following types at the top level:
 
 --------------------------------------------------------------------------------
     Data.Index
@@ -122,291 +181,563 @@ Expands to: `NTuple{N_tuple, Data.CellArray{numbertype, N, B}}` | `NamedTuple{na
 Expands to: `NTuple{N_tuple, Data.Cell{numbertype, S}}` | `NamedTuple{names, NTuple{N_tuple, Data.Cell{numbertype, S}}}` | `Union{Data.CellTuple{N_tuple, numbertype, S}, Data.NamedCellTuple{N_tuple, numbertype, S}}`
 
 --------------------------------------------------------------------------------
-!!! note "Advanced"
-        Data.DeviceArray{numbertype, ndims}
+--------------------------------------------------------------------------------
+    Submodule Data.Fields
 
-    The datatype `Data.DeviceArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Array for Threads or Polyester, CUDA.CuDeviceArray for CUDA and AMDGPU.ROCDeviceArray for AMDGPU).
+The submodule Data.Fields provides the types for fields allocated with macros from ParallelKernel.FieldAllocators. 
 
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
+!!! note "Usage"
+    using .Data.Fields # Note the preceeding dot!
 
-    --------------------------------------------------------------------------------
-        Data.DeviceCellArray{numbertype, ndims}
+Data.Fields provides the following types:
 
-    The datatype `Data.DeviceCellArray` is automatically chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (CPUCellArray for Threads or Polyester, CuDeviceCellArray for CUDA and ROCDeviceCellArray for AMDGPU).
-        
-    !!! warning
-        This datatype is not intended for explicit manual usage. [`@parallel`](@ref) and [`@parallel_indices`](@ref) convert CUDA.CuArray, AMDGPU.ROCArray and Metal.MtlArray automatically to CUDA.CuDeviceArray, AMDGPU.ROCDeviceArray and Metal.MtlDeviceArray in kernels when required.
+--------------------------------------------------------------------------------
+    Field
+
+A scalar field, on a grid of size `gridsize`; allocated with `@Fields`.
+
+--------------------------------------------------------------------------------
+    {X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `VectorField`, on a grid of size `gridsize`; allocated with `@{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    B{X|Y|Z}Field
+
+A scalar field of the same size as the {X|Y|Z}-component of a `BVectorField` (a vector field including boundaries), on a grid of size `gridsize`; allocated with `@B{X|Y|Z}Field`.
+
+--------------------------------------------------------------------------------
+    {XX|YY|ZZ|XY|XZ|YZ}Field
+
+A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `TensorField`, on a grid of size `gridsize`; allocated with `@{XX|YY|ZZ|XY|XZ|YZ}Field`.
+
+--------------------------------------------------------------------------------
+    VectorField
+
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+
+--------------------------------------------------------------------------------
+    BVectorField
+
+A vector field including boundaries, on a grid of size `gridsize`; allocated with `@BVectorField`.
+
+--------------------------------------------------------------------------------
+    TensorField
+
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
 """
 
-function Data_cuda(modulename::Symbol, numbertype::DataType, indextype::DataType)
-    Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_CuCellArray
-            # export CuCellArray
-            const Index                         = $indextype
-            const Array{T, N}                   = CUDA.CuArray{T, N}
-            const DeviceArray{T, N}             = CUDA.CuDeviceArray{T, N}
-            const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = CuCellArray{<:Cell{T_elem},N,B,T_elem}
-            const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_CuCellArray
-            # export CuCellArray
-            const Index                          = $indextype
-            const Number                         = $numbertype
-            const Array{N}                       = CUDA.CuArray{$numbertype, N}
-            const DeviceArray{N}                 = CUDA.CuDeviceArray{$numbertype, N}
-            const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = CuCellArray{<:Cell,N,B,$numbertype}
-            const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
-            const TArray{T, N}                   = CUDA.CuArray{T, N}
-            const DeviceTArray{T, N}             = CUDA.CuDeviceArray{T, N}
-            const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = CuCellArray{<:TCell{T_elem},N,B,T_elem}
-            const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    end
-    return prewalk(rmlines, flatten(Data_module))
-end
 
-function Data_amdgpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
-    Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_ROCCellArray
-            # export ROCCellArray
-            const Index                         = $indextype
-            const Array{T, N}                   = AMDGPU.ROCArray{T, N}
-            const DeviceArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
-            const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
-            const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
-            # CellArrays.@define_ROCCellArray
-            # export ROCCellArray
-            const Index                          = $indextype
-            const Number                         = $numbertype
-            const Array{N}                       = AMDGPU.ROCArray{$numbertype, N}
-            const DeviceArray{N}                 = AMDGPU.ROCDeviceArray{$numbertype, N}
-            const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = ROCCellArray{<:Cell,N,B,$numbertype}
-            const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
-            const TArray{T, N}                   = AMDGPU.ROCArray{T, N}
-            const DeviceTArray{T, N}             = AMDGPU.ROCDeviceArray{T, N}
-            const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = ROCCellArray{<:TCell{T_elem},N,B,T_elem}
-            const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    end
-    return prewalk(rmlines, flatten(Data_module))
-end
-
-function Data_metal(modulename::Symbol, numbertype::DataType, indextype::DataType)
-    Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_MtlCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
-            #
-            const Index                         = $indextype
-            const Array{T, N}                   = Metal.MtlArray{T, N}
-            const DeviceArray{T, N}             = Metal.MtlDeviceArray{T, N}
-            const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}       = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
-            const DeviceCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceCell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            # TODO: the constructors defined by CellArrays.@define_MtlCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
-            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
-            #
-            const Index                          = $indextype
-            const Number                         = $numbertype
-            const Array{N}                       = Metal.MtlArray{$numbertype, N}
-            const DeviceArray{N}                 = Metal.MtlDeviceArray{$numbertype, N}
-            const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = MtlCellArray{<:Cell,N,B,$numbertype}
-            const DeviceCellArray{N, B}          = CellArrays.CellArray{<:DeviceCell,N,B,<:Metal.MtlDeviceArray{$numbertype,CellArrays._N}}
-            const TArray{T, N}                   = Metal.MtlArray{T, N}
-            const DeviceTArray{T, N}             = Metal.MtlDeviceArray{T, N}
-            const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = MtlCellArray{<:TCell{T_elem},N,B,T_elem}
-            const DeviceTCellArray{T_elem, N, B} = CellArrays.CellArray{<:DeviceTCell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    end
-    return prewalk(rmlines, flatten(Data_module))
-end
-
-function Data_cpu(modulename::Symbol, numbertype::DataType, indextype::DataType)
-    Data_module = if (numbertype == NUMBERTYPE_NONE)
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            const Index                          = $indextype
-            const Array{T, N}                    = Base.Array{T, N}
-            const DeviceArray{T, N}              = Base.Array{T, N}
-            const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceCell{T, S}               = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
-            const DeviceCellArray{T_elem, N, B}  = CellArrays.CPUCellArray{<:DeviceCell{T_elem},N,B,T_elem}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    else
-        :(baremodule $modulename # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
-            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
-            const Index                          = $indextype
-            const Number                         = $numbertype
-            const Array{N}                       = Base.Array{$numbertype, N}
-            const DeviceArray{N}                 = Base.Array{$numbertype, N}
-            const Cell{S}                        = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const DeviceCell{S}                  = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
-            const CellArray{N, B}                = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
-            const DeviceCellArray{N, B}          = CellArrays.CPUCellArray{<:DeviceCell,N,B,$numbertype}
-            const TArray{T, N}                   = Base.Array{T, N}
-            const DeviceTArray{T, N}             = Base.Array{T, N}
-            const TCell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const DeviceTCell{T, S}              = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
-            const TCellArray{T_elem, N, B}       = CellArrays.CPUCellArray{<:TCell{T_elem},N,B,T_elem}
-            const DeviceTCellArray{T_elem, N, B} = CellArrays.CPUCellArray{<:DeviceTCell{T_elem},N,B,T_elem}
-            $(create_shared_exprs(numbertype, indextype))
-        end)
-    end
-    return prewalk(rmlines, flatten(Data_module))
-end
-
-function create_shared_exprs(numbertype::DataType, indextype::DataType)
-    if numbertype == NUMBERTYPE_NONE
-        quote
-            const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
-            const NumberTuple{N_tuple, T}                                  = NTuple{N_tuple, T}
-            const ArrayTuple{N_tuple, T, N}                                = NTuple{N_tuple, Array{T, N}}
-            const DeviceArrayTuple{N_tuple, T, N}                          = NTuple{N_tuple, DeviceArray{T, N}}
-            const CellTuple{N_tuple, T, S}                                 = NTuple{N_tuple, Cell{T, S}}
-            const DeviceCellTuple{N_tuple, T, S}                           = NTuple{N_tuple, DeviceCell{T, S}}
-            const CellArrayTuple{N_tuple, T_elem, N, B}                    = NTuple{N_tuple, CellArray{T_elem, N, B}}
-            const DeviceCellArrayTuple{N_tuple, T_elem, N, B}              = NTuple{N_tuple, DeviceCellArray{T_elem, N, B}}
-
-            const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
-            const NamedNumberTuple{N_tuple, T, names}                      = NamedTuple{names, <:NumberTuple{N_tuple, T}}
-            const NamedArrayTuple{N_tuple, T, N, names}                    = NamedTuple{names, <:ArrayTuple{N_tuple, T, N}}
-            const NamedDeviceArrayTuple{N_tuple, T, N, names}              = NamedTuple{names, <:DeviceArrayTuple{N_tuple, T, N}}
-            const NamedCellTuple{N_tuple, T, S, names}                     = NamedTuple{names, <:CellTuple{N_tuple, T, S}}
-            const NamedDeviceCellTuple{N_tuple, T, S, names}               = NamedTuple{names, <:DeviceCellTuple{N_tuple, T, S}}
-            const NamedCellArrayTuple{N_tuple, T_elem, N, B, names}        = NamedTuple{names, <:CellArrayTuple{N_tuple, T_elem, N, B}}
-            const NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B, names}  = NamedTuple{names, <:DeviceCellArrayTuple{N_tuple, T_elem, N, B}}
-
-            const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
-            const NumberCollection{N_tuple, T}                             = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
-            const ArrayCollection{N_tuple, T, N}                           = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
-            const DeviceArrayCollection{N_tuple, T, N}                     = Union{DeviceArrayTuple{N_tuple, T, N}, NamedDeviceArrayTuple{N_tuple, T, N}}
-            const CellCollection{N_tuple, T, S}                            = Union{CellTuple{N_tuple, T, S}, NamedCellTuple{N_tuple, T, S}}
-            const DeviceCellCollection{N_tuple, T, S}                      = Union{DeviceCellTuple{N_tuple, T, S}, NamedDeviceCellTuple{N_tuple, T, S}}
-            const CellArrayCollection{N_tuple, T_elem, N, B}               = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}
-            const DeviceCellArrayCollection{N_tuple, T_elem, N, B}         = Union{DeviceCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceCellArrayTuple{N_tuple, T_elem, N, B}}
-
-            # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
-            # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
-            # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
-            # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
-            # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
-            # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
-        end
-    else
-        quote
-            const IndexTuple{N_tuple}                                      = NTuple{N_tuple, Index}
-            const NumberTuple{N_tuple}                                     = NTuple{N_tuple, Number}
-            const ArrayTuple{N_tuple, N}                                   = NTuple{N_tuple, Array{N}}
-            const DeviceArrayTuple{N_tuple, N}                             = NTuple{N_tuple, DeviceArray{N}}
-            const CellTuple{N_tuple, S}                                    = NTuple{N_tuple, Cell{S}}
-            const DeviceCellTuple{N_tuple, S}                              = NTuple{N_tuple, DeviceCell{S}}
-            const CellArrayTuple{N_tuple, N, B}                            = NTuple{N_tuple, CellArray{N, B}}
-            const DeviceCellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, DeviceCellArray{N, B}}
-            const TNumberTuple{N_tuple, T}                                 = NTuple{N_tuple, T}
-            const TArrayTuple{N_tuple, T, N}                               = NTuple{N_tuple, TArray{T, N}}
-            const DeviceTArrayTuple{N_tuple, T, N}                         = NTuple{N_tuple, DeviceTArray{T, N}}
-            const TCellTuple{N_tuple, T, S}                                = NTuple{N_tuple, TCell{T, S}}
-            const DeviceTCellTuple{N_tuple, T, S}                          = NTuple{N_tuple, DeviceTCell{T, S}}
-            const TCellArrayTuple{N_tuple, T_elem, N, B}                   = NTuple{N_tuple, TCellArray{T_elem, N, B}}
-            const DeviceTCellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, DeviceTCellArray{T_elem, N, B}}
-
-            const NamedIndexTuple{N_tuple, names}                          = NamedTuple{names, <:IndexTuple{N_tuple}}
-            const NamedNumberTuple{N_tuple, names}                         = NamedTuple{names, <:NumberTuple{N_tuple}}
-            const NamedArrayTuple{N_tuple, N, names}                       = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
-            const NamedDeviceArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:DeviceArrayTuple{N_tuple, N}}
-            const NamedCellTuple{N_tuple, S, names}                        = NamedTuple{names, <:CellTuple{N_tuple, S}}
-            const NamedDeviceCellTuple{N_tuple, S, names}                  = NamedTuple{names, <:DeviceCellTuple{N_tuple, S}}
-            const NamedCellArrayTuple{N_tuple, N, B, names}                = NamedTuple{names, <:CellArrayTuple{N_tuple, N, B}}
-            const NamedDeviceCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, <:DeviceCellArrayTuple{N_tuple, N, B}}
-            const NamedTNumberTuple{N_tuple, T, names}                     = NamedTuple{names, <:TNumberTuple{N_tuple, T}}
-            const NamedTArrayTuple{N_tuple, T, N, names}                   = NamedTuple{names, <:TArrayTuple{N_tuple, T, N}}
-            const NamedDeviceTArrayTuple{N_tuple, T, N, names}             = NamedTuple{names, <:DeviceTArrayTuple{N_tuple, T, N}}
-            const NamedTCellTuple{N_tuple, T, S, names}                    = NamedTuple{names, <:TCellTuple{N_tuple, T, S}}
-            const NamedDeviceTCellTuple{N_tuple, T, S, names}              = NamedTuple{names, <:DeviceTCellTuple{N_tuple, T, S}}
-            const NamedTCellArrayTuple{N_tuple, T_elem, N, B, names}       = NamedTuple{names, <:TCellArrayTuple{N_tuple, T_elem, N, B}}
-            const NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, <:DeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
-
-            const IndexCollection{N_tuple}                                 = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
-            const NumberCollection{N_tuple}                                = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
-            const ArrayCollection{N_tuple, N}                              = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
-            const DeviceArrayCollection{N_tuple, N}                        = Union{DeviceArrayTuple{N_tuple, N}, NamedDeviceArrayTuple{N_tuple, N}}
-            const CellCollection{N_tuple, S}                               = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
-            const DeviceCellCollection{N_tuple, S}                         = Union{DeviceCellTuple{N_tuple, S}, NamedDeviceCellTuple{N_tuple, S}}
-            const CellArrayCollection{N_tuple, N, B}                       = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
-            const DeviceCellArrayCollection{N_tuple, N, B}                 = Union{DeviceCellArrayTuple{N_tuple, N, B}, NamedDeviceCellArrayTuple{N_tuple, N, B}}
-            const TNumberCollection{N_tuple, T}                            = Union{TNumberTuple{N_tuple, T}, NamedTNumberTuple{N_tuple, T}}
-            const TArrayCollection{N_tuple, T, N}                          = Union{TArrayTuple{N_tuple, T, N}, NamedTArrayTuple{N_tuple, T, N}}
-            const DeviceTArrayCollection{N_tuple, T, N}                    = Union{DeviceTArrayTuple{N_tuple, T, N}, NamedDeviceTArrayTuple{N_tuple, T, N}}
-            const TCellCollection{N_tuple, T, S}                           = Union{TCellTuple{N_tuple, T, S}, NamedTCellTuple{N_tuple, T, S}}
-            const DeviceTCellCollection{N_tuple, T, S}                     = Union{DeviceTCellTuple{N_tuple, T, S}, NamedDeviceTCellTuple{N_tuple, T, S}}
-            const TCellArrayCollection{N_tuple, T_elem, N, B}              = Union{TCellArrayTuple{N_tuple, T_elem, N, B}, NamedTCellArrayTuple{N_tuple, T_elem, N, B}}
-            const DeviceTCellArrayCollection{N_tuple, T_elem, N, B}        = Union{DeviceTCellArrayTuple{N_tuple, T_elem, N, B}, NamedDeviceTCellArrayTuple{N_tuple, T_elem, N, B}}
-
-            # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
-            # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
-            # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
-            # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
-            # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
-            # NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
-            # NamedTNumberTuple{}(T, t::NamedTuple)                    = Base.map(T, t)
-            # NamedTArrayTuple{}(T, t::NamedTuple)                     = Base.map(Data.TArray{T}, t)
-            # NamedTCellTuple{}(T, t::NamedTuple)                      = Base.map(Data.TCell{T}, t)
-            # NamedTCellArrayTuple{}(T, t::NamedTuple)                 = Base.map(Data.TCellArray{T}, t)
-        end
-    end
-end
+# EMPTY MODULES
 
 function Data_none()
-    :(baremodule Data # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+    :(baremodule Data
     end)
+end
+
+function TData_none()
+    :(baremodule TData
+    end)
+end
+
+
+# CUDA
+
+function Data_cuda(numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_CuCellArray
+            # export CuCellArray
+            const Index                     = $indextype
+            const Array{T, N}               = CUDA.CuArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = CuCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype)) 
+            $(Data_Device_cuda(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_DATA
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_CuCellArray
+            # export CuCellArray
+            const Index                     = $indextype
+            const Number                    = $numbertype
+            const Array{N}                  = CUDA.CuArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = CuCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_cuda(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    end
+    return prewalk(rmlines, flatten(Data_module))
+end
+
+function TData_cuda()
+    TData_module = :(
+        baremodule $MODULENAME_TDATA
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_CuCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const CuCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,CUDA.CuArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_CuCellArray
+            # export CuCellArray
+            const Array{T, N}               = CUDA.CuArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = CuCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(TData_xpu_exprs())
+            $(TData_Device_cuda())
+            $(TData_Fields())
+        end
+    )
+    return prewalk(rmlines, flatten(TData_module))
+end
+
+function Data_Device_cuda(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{T, N}               = CUDA.CuDeviceArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{N}                  = CUDA.CuDeviceArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = CellArrays.CellArray{<:Cell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    end
+    return Device_module
+end
+
+function TData_Device_cuda()
+    :(baremodule $MODULENAME_DEVICE
+        import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+        const Array{T, N}                   = CUDA.CuDeviceArray{T, N}
+        const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+        const CellArray{T_elem, N, B}       = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
+        $(TData_xpu_exprs())
+    end)
+end
+
+
+# AMDGPU
+
+function Data_amdgpu(numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DATA
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_ROCCellArray
+            # export ROCCellArray
+            const Index                      = $indextype
+            const Array{T, N}                = AMDGPU.ROCArray{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_amdgpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_DATA
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_ROCCellArray
+            # export ROCCellArray
+            const Index                      = $indextype
+            const Number                     = $numbertype
+            const Array{N}                   = AMDGPU.ROCArray{$numbertype, N}
+            const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}            = ROCCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_amdgpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    end
+    return prewalk(rmlines, flatten(Data_module))
+end
+
+function TData_amdgpu()
+    TData_module = :(
+        baremodule $MODULENAME_TDATA
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            # TODO: the constructors defined by CellArrays.@define_ROCCellArray lead to pre-compilation issues due to a bug in Julia. We therefore only create the type alias here for now.
+            const ROCCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,AMDGPU.ROCArray{T_elem,CellArrays._N}}
+            # CellArrays.@define_ROCCellArray
+            # export ROCCellArray
+            const Array{T, N}                = AMDGPU.ROCArray{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(TData_xpu_exprs())
+            $(TData_Device_amdgpu())
+            $(TData_Fields())
+        end
+        )
+    return prewalk(rmlines, flatten(TData_module))
+end
+
+function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Array{T, N}                = AMDGPU.ROCDeviceArray{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Array{N}                   = AMDGPU.ROCDeviceArray{$numbertype, N}
+            const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}            = CellArrays.CellArray{<:Cell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    end
+    return Device_module
+end
+
+function TData_Device_amdgpu()
+    :(baremodule $MODULENAME_DEVICE
+        import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+        const Array{T, N}                    = AMDGPU.ROCDeviceArray{T, N}
+        const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+        const CellArray{T_elem, N, B}        = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
+        $(TData_xpu_exprs())
+    end)
+end
+
+# Metal
+
+function Data_metal(numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Index                     = $indextype
+            const Array{T, N}               = Metal.MtlArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype)) 
+            $(Data_Device_metal(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_DATA
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Index                     = $indextype
+            const Number                    = $numbertype
+            const Array{N}                  = Metal.MtlArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = MtlCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_metal(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    end
+    return prewalk(rmlines, flatten(Data_module))
+end
+
+function TData_metal()
+    TData_module = :(
+        baremodule $MODULENAME_TDATA
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
+            const Array{T, N}               = Metal.MtlArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(TData_xpu_exprs())
+            $(TData_Device_metal())
+            $(TData_Fields())
+        end
+    )
+    return prewalk(rmlines, flatten(TData_module))
+end
+
+function Data_Device_metal(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{T, N}               = Metal.MtlDeviceArray{T, N}
+            const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}   = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                     = $indextype
+            const Array{N}                  = Metal.MtlDeviceArray{$numbertype, N}
+            const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}           = CellArrays.CellArray{<:Cell,N,B,<:Metal.MtlDeviceArray{$numbertype,CellArrays._N}}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    end
+    return Device_module
+end
+
+function TData_Device_metal()
+    :(baremodule $MODULENAME_DEVICE
+        import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+        const Array{T, N}                   = Metal.MtlDeviceArray{T, N}
+        const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+        const CellArray{T_elem, N, B}       = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
+        $(TData_xpu_exprs())
+    end)
+end
+
+# CPU
+
+function Data_cpu(numbertype::DataType, indextype::DataType)
+    Data_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DATA
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Array{T, N}                = Base.Array{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_cpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_DATA
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Number                     = $numbertype
+            const Array{N}                   = Base.Array{$numbertype, N}
+            const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}            = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+            $(Data_Device_cpu(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype))
+        end)
+    end
+    return prewalk(rmlines, flatten(Data_module))
+end
+
+function TData_cpu()
+    TData_module = :(
+        baremodule $MODULENAME_TDATA
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Array{T, N}                = Base.Array{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(TData_xpu_exprs())
+            $(TData_Device_cpu())
+            $(TData_Fields())
+        end
+    )
+    return prewalk(rmlines, flatten(TData_module))
+end
+
+function Data_Device_cpu(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Array{T, N}                = Base.Array{T, N}
+            const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+            const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+            const Index                      = $indextype
+            const Array{N}                   = Base.Array{$numbertype, N}
+            const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
+            const CellArray{N, B}            = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
+            $(Data_xpu_exprs(numbertype))
+        end)
+    end
+    return Device_module
+end
+
+function TData_Device_cpu()
+    :(baremodule $MODULENAME_DEVICE
+        import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
+        const Array{T, N}                    = Base.Array{T, N}
+        const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
+        const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
+        $(TData_xpu_exprs())
+    end)
+end
+
+
+# xPU
+
+function Data_xpu_exprs(numbertype::DataType)
+    if (numbertype == NUMBERTYPE_NONE) T_xpu_exprs()
+    else                               xpu_exprs()
+    end
+end
+
+TData_xpu_exprs() = T_xpu_exprs()
+
+function T_xpu_exprs()
+    quote
+        const NumberTuple{N_tuple, T}                           = NTuple{N_tuple, T}
+        const ArrayTuple{N_tuple, T, N}                         = NTuple{N_tuple, Array{T, N}}
+        const CellTuple{N_tuple, T, S}                          = NTuple{N_tuple, Cell{T, S}}
+        const CellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, CellArray{T_elem, N, B}}
+
+        const NamedNumberTuple{N_tuple, T, names}               = NamedTuple{names, <:NumberTuple{N_tuple, T}}
+        const NamedArrayTuple{N_tuple, T, N, names}             = NamedTuple{names, <:ArrayTuple{N_tuple, T, N}}
+        const NamedCellTuple{N_tuple, T, S, names}              = NamedTuple{names, <:CellTuple{N_tuple, T, S}}
+        const NamedCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, <:CellArrayTuple{N_tuple, T_elem, N, B}}
+
+        const NumberCollection{N_tuple, T}                       = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
+        const ArrayCollection{N_tuple, T, N}                     = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
+        const CellCollection{N_tuple, T, S}                      = Union{CellTuple{N_tuple, T, S}, NamedCellTuple{N_tuple, T, S}}
+        const CellArrayCollection{N_tuple, T_elem, N, B}         = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}        
+
+        # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
+        # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
+        # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
+        # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
+        # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
+    end
+end
+
+function xpu_exprs()
+    quote
+        const IndexTuple{N_tuple}                                = NTuple{N_tuple, Index}
+        const NumberTuple{N_tuple}                               = NTuple{N_tuple, Number}
+        const ArrayTuple{N_tuple, N}                             = NTuple{N_tuple, Array{N}}
+        const CellTuple{N_tuple, S}                              = NTuple{N_tuple, Cell{S}}
+        const CellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, CellArray{N, B}}
+
+        const NamedIndexTuple{N_tuple, names}                    = NamedTuple{names, <:IndexTuple{N_tuple}}
+        const NamedNumberTuple{N_tuple, names}                   = NamedTuple{names, <:NumberTuple{N_tuple}}
+        const NamedArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
+        const NamedCellTuple{N_tuple, S, names}                  = NamedTuple{names, <:CellTuple{N_tuple, S}}
+        const NamedCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, <:CellArrayTuple{N_tuple, N, B}}
+
+        const IndexCollection{N_tuple}                           = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
+        const NumberCollection{N_tuple}                          = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
+        const ArrayCollection{N_tuple, N}                        = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
+        const CellCollection{N_tuple, S}                         = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
+        const CellArrayCollection{N_tuple, N, B}                 = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
+        
+        # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
+        # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
+        # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
+        # NamedArrayTuple{}(t::NamedTuple)                         = Base.map(Data.Array, t)
+        # NamedCellTuple{}(t::NamedTuple)                          = Base.map(Data.Cell, t)
+        # NamedCellArrayTuple{}(t::NamedTuple)                     = Base.map(Data.CellArray, t)
+    end
+end
+
+
+## (DATA SUBMODULE FIELDS - xPU)  # NOTE: custom data types could be implemented for each alias.
+
+function Data_Fields(numbertype::DataType, indextype::DataType)
+    Fields_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_FIELDS
+            import ..$MODULENAME_DATA                          # NOTE: this requires Julia >=1.10
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(T_Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype))
+        end)
+    else
+        :(baremodule $MODULENAME_FIELDS
+            import ..$MODULENAME_DATA
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype))
+        end)
+    end
+    return Fields_module
+end
+
+function TData_Fields()
+    :(baremodule $MODULENAME_FIELDS
+        import ..$MODULENAME_TDATA
+        import ..$MODULENAME_TDATA: Array, NamedArrayTuple
+        $(generic_Fields_exprs())
+        $(T_Fields_exprs())
+        $(TData_Fields_Device())
+    end)
+end
+
+function Data_Fields_Device(numbertype::DataType, indextype::DataType)
+    Device_module = if (numbertype == NUMBERTYPE_NONE)
+        :(baremodule $MODULENAME_DEVICE
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(T_Fields_exprs())
+        end)
+    else
+        :(baremodule $MODULENAME_DEVICE
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+            $(generic_Fields_exprs())
+            $(Fields_exprs())
+        end)
+    end
+    return Device_module
+end
+
+function TData_Fields_Device()
+    :(baremodule $MODULENAME_DEVICE
+        import ..$MODULENAME_TDATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
+        $(generic_Fields_exprs())
+        $(T_Fields_exprs())
+    end)
+end
+
+function T_Fields_exprs()
+    quote
+        export VectorField, BVectorField, TensorField
+        const VectorField{T, N, names}  = NamedArrayTuple{N, T, N, names}
+        const BVectorField{T, N, names} = NamedArrayTuple{N, T, N, names}
+        const TensorField{T, N, names}  = NamedArrayTuple{N, T, N, names}
+    end
+end
+
+function Fields_exprs()
+    quote
+        export VectorField, BVectorField, TensorField
+        const VectorField{N, names}     = NamedArrayTuple{N, N, names}
+        const BVectorField{N, names}    = NamedArrayTuple{N, N, names}
+        const TensorField{N, names}     = NamedArrayTuple{N, N, names}
+    end
+end
+
+function generic_Fields_exprs()
+    quote
+        export Field, XField, YField, ZField, BXField, BYField, BZField, XXField, YYField, ZZField, XYField, XZField, YZField
+        const Field                     = Array
+        const XField                    = Array
+        const YField                    = Array
+        const ZField                    = Array
+        const BXField                   = Array
+        const BYField                   = Array
+        const BZField                   = Array
+        const XXField                   = Array
+        const YYField                   = Array
+        const ZZField                   = Array
+        const XYField                   = Array
+        const XZField                   = Array
+        const YZField                   = Array
+    end
 end

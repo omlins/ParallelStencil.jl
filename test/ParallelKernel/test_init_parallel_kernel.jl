@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, SCALARTYPES, ARRAYTYPES, FIELDTYPES
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -36,21 +36,55 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
-                @test length(@symbols($(@__MODULE__), Data)) > 1
-                @test Symbol("Index") in @symbols($(@__MODULE__), Data)
-                @test Symbol("Number") in @symbols($(@__MODULE__), Data)
-                @test Symbol("Array") in @symbols($(@__MODULE__), Data)
-                @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("TCellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceTCellArray") in @symbols($(@__MODULE__), Data)
+                mods = (:Data, :Device, :Fields)
+                syms = @symbols($(@__MODULE__), Data)
+                @test length(syms) > 1
+                @test length(syms) >= length(mods) + length(SCALARTYPES) + length(ARRAYTYPES) # +1|2 for metadata symbols
+                @test all(T ∈ syms for T in mods)
+                @test all(T ∈ syms for T in SCALARTYPES)
+                @test all(T ∈ syms for T in ARRAYTYPES)
+                @testset "Data.Device" begin
+                    syms = @symbols($(@__MODULE__), Data.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                end;
+                @testset "Data.Fields" begin
+                    mods = (:Fields, :Device)
+                    syms = @symbols($(@__MODULE__), Data.Fields)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in mods)
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
+                @testset "Data.Fields.Device" begin
+                    syms = @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
+            end;
+            @testset "TData" begin # NOTE: no scalar types
+                @test @isdefined(TData)
+                mods = (:TData, :Device, :Fields)
+                syms = @symbols($(@__MODULE__), TData)
+                @test length(syms) > 1
+                @test all(T ∈ syms for T in mods)
+                @test all(T ∈ syms for T in ARRAYTYPES)
+                @testset "TData.Device" begin
+                    syms = @symbols($(@__MODULE__), TData.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                end;
+                @testset "TData.Fields" begin
+                    mods = (:Fields, :Device)
+                    syms = @symbols($(@__MODULE__), TData.Fields)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in mods)
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
+                @testset "TData.Fields.Device" begin
+                    syms = @symbols($(@__MODULE__), TData.Fields.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
             end;
             @reset_parallel_kernel()
         end;
@@ -63,17 +97,31 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_inbounds() == true
             end;
-            @testset "Data" begin
+            @testset "Data" begin # NOTE: no scalar types
                 @test @isdefined(Data)
-                @test length(@symbols($(@__MODULE__), Data)) > 1
-                @test Symbol("Index") in @symbols($(@__MODULE__), Data)
-                @test !(Symbol("Number") in @symbols($(@__MODULE__), Data))
-                @test Symbol("Array") in @symbols($(@__MODULE__), Data)
-                @test Symbol("Cell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("CellArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceArray") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCell") in @symbols($(@__MODULE__), Data)
-                @test Symbol("DeviceCellArray") in @symbols($(@__MODULE__), Data)
+                mods = (:Data, :Device, :Fields)
+                syms = @symbols($(@__MODULE__), Data)
+                @test length(syms) > 1
+                @test all(T ∈ syms for T in mods)
+                @test !(Symbol("Number") in syms)
+                @test all(T ∈ syms for T in ARRAYTYPES)
+                @testset "Data.Device" begin
+                    syms = @symbols($(@__MODULE__), Data.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                end;
+                @testset "Data.Fields" begin
+                    mods = (:Fields, :Device)
+                    syms = @symbols($(@__MODULE__), Data.Fields)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in mods)
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
+                @testset "Data.Fields.Device" begin
+                    syms = @symbols($(@__MODULE__), Data.Fields.Device)
+                    @test length(syms) > 0
+                    @test all(T ∈ syms for T in FIELDTYPES)
+                end;
             end;
             @reset_parallel_kernel()
         end;
