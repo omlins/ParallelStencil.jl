@@ -519,7 +519,7 @@ julia>]
 ```
 
 ## Questions, comments and discussions
-To discuss technical issues, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#distributed` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
+To discuss technical issues, please post on Julia Discourse in the [GPU topic] or the [Julia at Scale topic] or in the `#gpu` or `#hpc` channels on the [Julia Slack] (to join, visit https://julialang.org/slack/).
 To discuss numerical/domain-science issues, please post on Julia Discourse in the [Numerics topic] or the [Modelling & Simulations topic] or whichever other topic fits best your issue.
 
 ## Your contributions
