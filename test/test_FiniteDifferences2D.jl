@@ -78,11 +78,11 @@ eval(:(
                 @parallel av_ya!(R, Ay)   = (@all(R) = @av_ya(Ay); return)
                 @parallel av_xi!(R, Axyy) = (@all(R) = @av_xi(Axyy); return)
                 @parallel av_yi!(R, Axxy) = (@all(R) = @av_yi(Axxy); return)
-                R.=0; @parallel av!(R, Axy);      @test all(Array(R .== (Axy[1:end-1,1:end-1].+Axy[2:end,1:end-1].+Axy[1:end-1,2:end].+Axy[2:end,2:end])./4))
-                R.=0; @parallel av_xa!(R, Ax);    @test all(Array(R .== (Ax[2:end,    :].+Ax[1:end-1,      :])./2))
-                R.=0; @parallel av_ya!(R, Ay);    @test all(Array(R .== (Ay[    :,2:end].+Ay[      :,1:end-1])./2))
-                R.=0; @parallel av_xi!(R, Axyy);  @test all(Array(R .== (Axyy[2:end  ,2:end-1].+Axyy[1:end-1,2:end-1])./2))
-                R.=0; @parallel av_yi!(R, Axxy);  @test all(Array(R .== (Axxy[2:end-1,2:end  ].+Axxy[2:end-1,1:end-1])./2))
+                R.=0; @parallel av!(R, Axy);      @test all(Array(R .== (Axy[1:end-1,1:end-1].+Axy[2:end,1:end-1].+Axy[1:end-1,2:end].+Axy[2:end,2:end]).*$precision(0.25)))
+                R.=0; @parallel av_xa!(R, Ax);    @test all(Array(R .== (Ax[2:end,    :].+Ax[1:end-1,      :]).*$precision(0.5)))
+                R.=0; @parallel av_ya!(R, Ay);    @test all(Array(R .== (Ay[    :,2:end].+Ay[      :,1:end-1]).*$precision(0.5)))
+                R.=0; @parallel av_xi!(R, Axyy);  @test all(Array(R .== (Axyy[2:end  ,2:end-1].+Axyy[1:end-1,2:end-1]).*$precision(0.5)))
+                R.=0; @parallel av_yi!(R, Axxy);  @test all(Array(R .== (Axxy[2:end-1,2:end  ].+Axxy[2:end-1,1:end-1]).*$precision(0.5)))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Axy)     = (@all(R) = @harm(Axy); return)

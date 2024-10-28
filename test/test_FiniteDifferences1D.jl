@@ -52,7 +52,7 @@ eval(:(
             end;
             @testset "averages" begin
                 @parallel av!(R, Ax) = (@all(R) = @av(Ax); return)
-                R.=0; @parallel av!(R, Ax);  @test all(Array(R .== (Ax[1:end-1].+Ax[2:end])./2))
+                R.=0; @parallel av!(R, Ax);  @test all(Array(R .== (Ax[1:end-1].+Ax[2:end]).*$precision(0.5)))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Ax) = (@all(R) = @harm(Ax); return)
