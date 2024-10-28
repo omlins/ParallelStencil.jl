@@ -94,7 +94,7 @@ eval(:(
                         @parallel add_indices!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width block" begin  # This test verifies that the results are correct, even for CUDA.jl < v2.0, where it cannot overlap.
                     A  = @zeros(6, 7, 8)
@@ -107,7 +107,7 @@ eval(:(
                         communication_y!(A);
                         communication_z!(A);
                     end
-                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width block" begin
                     A  = @zeros(6, 7, 8)
@@ -122,7 +122,7 @@ eval(:(
                         communication_y!(A);
                         communication_z!(A);
                     end
-                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -131,7 +131,7 @@ eval(:(
                         @parallel add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -140,7 +140,7 @@ eval(:(
                         @parallel (1:6, 1:7, 1:8) add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=2 block" begin
                     A  = @zeros(6, 7, 8)
@@ -149,7 +149,7 @@ eval(:(
                         @parallel (1:6, 1:7, 1:8) add_indices2!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([2*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication boundary_width computation_calls=3 block" begin
                     A  = @zeros(6, 7, 8)
@@ -159,7 +159,7 @@ eval(:(
                         @parallel add_indices3!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
                 @testset "@hide_communication ranges_outer ranges_inner block" begin
                     A  = @zeros(6, 7, 8)
@@ -169,7 +169,7 @@ eval(:(
                         @parallel add_indices!(A);
                         communication!(A);
                     end
-                    @test all(Array(A) .≈ communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
             end;
             @reset_parallel_kernel()

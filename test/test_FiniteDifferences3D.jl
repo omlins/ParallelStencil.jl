@@ -66,15 +66,15 @@ eval(:(
                 @parallel d2_xi!(R, Axxyyzz) = (@all(R) = @d2_xi(Axxyyzz); return)
                 @parallel d2_yi!(R, Axxyyzz) = (@all(R) = @d2_yi(Axxyyzz); return)
                 @parallel d2_zi!(R, Axxyyzz) = (@all(R) = @d2_zi(Axxyyzz); return)
-                R.=0; @parallel  d_xa!(R, Ax);       @test all(Array(R .≈ Ax[2:end,    :,    :].-Ax[1:end-1,      :,      :]))
-                R.=0; @parallel  d_ya!(R, Ay);       @test all(Array(R .≈ Ay[    :,2:end,    :].-Ay[      :,1:end-1,      :]))
-                R.=0; @parallel  d_za!(R, Az);       @test all(Array(R .≈ Az[    :,    :,2:end].-Az[      :,      :,1:end-1]))
-                R.=0; @parallel  d_xi!(R, Axyyzz);   @test all(Array(R .≈ Axyyzz[2:end  ,2:end-1,2:end-1].-Axyyzz[1:end-1,2:end-1,2:end-1]))
-                R.=0; @parallel  d_yi!(R, Axxyzz);   @test all(Array(R .≈ Axxyzz[2:end-1,2:end  ,2:end-1].-Axxyzz[2:end-1,1:end-1,2:end-1]))
-                R.=0; @parallel  d_zi!(R, Axxyyz);   @test all(Array(R .≈ Axxyyz[2:end-1,2:end-1,2:end  ].-Axxyyz[2:end-1,2:end-1,1:end-1]))
-                R.=0; @parallel d2_xi!(R, Axxyyzz);  @test all(Array(R .≈ (Axxyyzz[3:end,2:end-1,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[1:end-2,2:end-1,2:end-1])))
-                R.=0; @parallel d2_yi!(R, Axxyyzz);  @test all(Array(R .≈ (Axxyyzz[2:end-1,3:end,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,1:end-2,2:end-1])))
-                R.=0; @parallel d2_zi!(R, Axxyyzz);  @test all(Array(R .≈ (Axxyyzz[2:end-1,2:end-1,3:end].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,2:end-1,1:end-2])))
+                R.=0; @parallel  d_xa!(R, Ax);       @test all(Array(R .== Ax[2:end,    :,    :].-Ax[1:end-1,      :,      :]))
+                R.=0; @parallel  d_ya!(R, Ay);       @test all(Array(R .== Ay[    :,2:end,    :].-Ay[      :,1:end-1,      :]))
+                R.=0; @parallel  d_za!(R, Az);       @test all(Array(R .== Az[    :,    :,2:end].-Az[      :,      :,1:end-1]))
+                R.=0; @parallel  d_xi!(R, Axyyzz);   @test all(Array(R .== Axyyzz[2:end  ,2:end-1,2:end-1].-Axyyzz[1:end-1,2:end-1,2:end-1]))
+                R.=0; @parallel  d_yi!(R, Axxyzz);   @test all(Array(R .== Axxyzz[2:end-1,2:end  ,2:end-1].-Axxyzz[2:end-1,1:end-1,2:end-1]))
+                R.=0; @parallel  d_zi!(R, Axxyyz);   @test all(Array(R .== Axxyyz[2:end-1,2:end-1,2:end  ].-Axxyyz[2:end-1,2:end-1,1:end-1]))
+                R.=0; @parallel d2_xi!(R, Axxyyzz);  @test all(Array(R .== (Axxyyzz[3:end,2:end-1,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[1:end-2,2:end-1,2:end-1])))
+                R.=0; @parallel d2_yi!(R, Axxyyzz);  @test all(Array(R .== (Axxyyzz[2:end-1,3:end,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,1:end-2,2:end-1])))
+                R.=0; @parallel d2_zi!(R, Axxyyzz);  @test all(Array(R .== (Axxyyzz[2:end-1,2:end-1,3:end].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,2:end-1,1:end-2])))
             end;
             @testset "selection" begin
                 @parallel all!(R, A)        = (@all(R) = @all(A); return)
@@ -85,14 +85,14 @@ eval(:(
                 @parallel inn_xy!(R, Axxyy) = (@all(R) = @inn_xy(Axxyy); return)
                 @parallel inn_xz!(R, Axxzz) = (@all(R) = @inn_xz(Axxzz); return)
                 @parallel inn_yz!(R, Ayyzz) = (@all(R) = @inn_yz(Ayyzz); return)
-                R.=0; @parallel all!(R, A);         @test all(Array(R .≈ A))
-                R.=0; @parallel inn!(R, Axxyyzz);   @test all(Array(R .≈ Axxyyzz[2:end-1,2:end-1,2:end-1]))
-                R.=0; @parallel inn_x!(R, Axx);     @test all(Array(R .≈ Axx[2:end-1,      :,      :]))
-                R.=0; @parallel inn_y!(R, Ayy);     @test all(Array(R .≈ Ayy[      :,2:end-1,      :]))
-                R.=0; @parallel inn_z!(R, Azz);     @test all(Array(R .≈ Azz[      :,      :,2:end-1]))
-                R.=0; @parallel inn_xy!(R, Axxyy);  @test all(Array(R .≈ Axxyy[2:end-1,2:end-1,      :]))
-                R.=0; @parallel inn_xz!(R, Axxzz);  @test all(Array(R .≈ Axxzz[2:end-1,      :,2:end-1]))
-                R.=0; @parallel inn_yz!(R, Ayyzz);  @test all(Array(R .≈ Ayyzz[      :,2:end-1,2:end-1]))
+                R.=0; @parallel all!(R, A);         @test all(Array(R .== A))
+                R.=0; @parallel inn!(R, Axxyyzz);   @test all(Array(R .== Axxyyzz[2:end-1,2:end-1,2:end-1]))
+                R.=0; @parallel inn_x!(R, Axx);     @test all(Array(R .== Axx[2:end-1,      :,      :]))
+                R.=0; @parallel inn_y!(R, Ayy);     @test all(Array(R .== Ayy[      :,2:end-1,      :]))
+                R.=0; @parallel inn_z!(R, Azz);     @test all(Array(R .== Azz[      :,      :,2:end-1]))
+                R.=0; @parallel inn_xy!(R, Axxyy);  @test all(Array(R .== Axxyy[2:end-1,2:end-1,      :]))
+                R.=0; @parallel inn_xz!(R, Axxzz);  @test all(Array(R .== Axxzz[2:end-1,      :,2:end-1]))
+                R.=0; @parallel inn_yz!(R, Ayyzz);  @test all(Array(R .== Ayyzz[      :,2:end-1,2:end-1]))
             end;
             @testset "averages" begin
                 @parallel av!(R, Axyz)      = (@all(R) = @av(Axyz); return)
@@ -108,19 +108,19 @@ eval(:(
                 @parallel av_xyi!(R, Axyzz) = (@all(R) = @av_xyi(Axyzz); return)
                 @parallel av_xzi!(R, Axyyz) = (@all(R) = @av_xzi(Axyyz); return)
                 @parallel av_yzi!(R, Axxyz) = (@all(R) = @av_yzi(Axxyz); return)
-                R.=0; @parallel av!(R, Axyz);       @test all(Array(R .≈ (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[2:end,2:end,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,1:end-1])./8))
-                R.=0; @parallel av_xa!(R, Ax);      @test all(Array(R .≈ (Ax[2:end,    :,    :].+Ax[1:end-1,      :,    :])./2))
-                R.=0; @parallel av_ya!(R, Ay);      @test all(Array(R .≈ (Ay[    :,2:end,    :].+Ay[      :,1:end-1,    :])./2))
-                R.=0; @parallel av_za!(R, Az);      @test all(Array(R .≈ (Az[    :,    :,2:end].+Az[      :,    :,1:end-1])./2))
-                R.=0; @parallel av_xi!(R, Axyyzz);  @test all(Array(R .≈ (Axyyzz[2:end  ,2:end-1,2:end-1].+Axyyzz[1:end-1,2:end-1,2:end-1])./2))
-                R.=0; @parallel av_yi!(R, Axxyzz);  @test all(Array(R .≈ (Axxyzz[2:end-1,2:end  ,2:end-1].+Axxyzz[2:end-1,1:end-1,2:end-1])./2))
-                R.=0; @parallel av_zi!(R, Axxyyz);  @test all(Array(R .≈ (Axxyyz[2:end-1,2:end-1,2:end  ].+Axxyyz[2:end-1,2:end-1,1:end-1])./2))
-                R.=0; @parallel av_xya!(R, Axy);    @test all(Array(R .≈ (Axy[1:end-1,1:end-1,:].+Axy[2:end,1:end-1,:].+Axy[1:end-1,2:end,:].+Axy[2:end,2:end,:])./4))
-                R.=0; @parallel av_xza!(R, Axz);    @test all(Array(R .≈ (Axz[1:end-1,:,1:end-1].+Axz[2:end,:,1:end-1].+Axz[1:end-1,:,2:end].+Axz[2:end,:,2:end])./4))
-                R.=0; @parallel av_yza!(R, Ayz);    @test all(Array(R .≈ (Ayz[:,1:end-1,1:end-1].+Ayz[:,2:end,1:end-1].+Ayz[:,1:end-1,2:end].+Ayz[:,2:end,2:end])./4))
-                R.=0; @parallel av_xyi!(R, Axyzz);  @test all(Array(R .≈ (Axyzz[1:end-1,1:end-1,2:end-1].+Axyzz[2:end,1:end-1,2:end-1].+Axyzz[1:end-1,2:end,2:end-1].+Axyzz[2:end,2:end,2:end-1])./4))
-                R.=0; @parallel av_xzi!(R, Axyyz);  @test all(Array(R .≈ (Axyyz[1:end-1,2:end-1,1:end-1].+Axyyz[2:end,2:end-1,1:end-1].+Axyyz[1:end-1,2:end-1,2:end].+Axyyz[2:end,2:end-1,2:end])./4))
-                R.=0; @parallel av_yzi!(R, Axxyz);  @test all(Array(R .≈ (Axxyz[2:end-1,1:end-1,1:end-1].+Axxyz[2:end-1,2:end,1:end-1].+Axxyz[2:end-1,1:end-1,2:end].+Axxyz[2:end-1,2:end,2:end])./4))
+                R.=0; @parallel av!(R, Axyz);       @test all(Array(R .== (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[2:end,2:end,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,1:end-1])./8))
+                R.=0; @parallel av_xa!(R, Ax);      @test all(Array(R .== (Ax[2:end,    :,    :].+Ax[1:end-1,      :,    :])./2))
+                R.=0; @parallel av_ya!(R, Ay);      @test all(Array(R .== (Ay[    :,2:end,    :].+Ay[      :,1:end-1,    :])./2))
+                R.=0; @parallel av_za!(R, Az);      @test all(Array(R .== (Az[    :,    :,2:end].+Az[      :,    :,1:end-1])./2))
+                R.=0; @parallel av_xi!(R, Axyyzz);  @test all(Array(R .== (Axyyzz[2:end  ,2:end-1,2:end-1].+Axyyzz[1:end-1,2:end-1,2:end-1])./2))
+                R.=0; @parallel av_yi!(R, Axxyzz);  @test all(Array(R .== (Axxyzz[2:end-1,2:end  ,2:end-1].+Axxyzz[2:end-1,1:end-1,2:end-1])./2))
+                R.=0; @parallel av_zi!(R, Axxyyz);  @test all(Array(R .== (Axxyyz[2:end-1,2:end-1,2:end  ].+Axxyyz[2:end-1,2:end-1,1:end-1])./2))
+                R.=0; @parallel av_xya!(R, Axy);    @test all(Array(R .== (Axy[1:end-1,1:end-1,:].+Axy[2:end,1:end-1,:].+Axy[1:end-1,2:end,:].+Axy[2:end,2:end,:])./4))
+                R.=0; @parallel av_xza!(R, Axz);    @test all(Array(R .== (Axz[1:end-1,:,1:end-1].+Axz[2:end,:,1:end-1].+Axz[1:end-1,:,2:end].+Axz[2:end,:,2:end])./4))
+                R.=0; @parallel av_yza!(R, Ayz);    @test all(Array(R .== (Ayz[:,1:end-1,1:end-1].+Ayz[:,2:end,1:end-1].+Ayz[:,1:end-1,2:end].+Ayz[:,2:end,2:end])./4))
+                R.=0; @parallel av_xyi!(R, Axyzz);  @test all(Array(R .== (Axyzz[1:end-1,1:end-1,2:end-1].+Axyzz[2:end,1:end-1,2:end-1].+Axyzz[1:end-1,2:end,2:end-1].+Axyzz[2:end,2:end,2:end-1])./4))
+                R.=0; @parallel av_xzi!(R, Axyyz);  @test all(Array(R .== (Axyyz[1:end-1,2:end-1,1:end-1].+Axyyz[2:end,2:end-1,1:end-1].+Axyyz[1:end-1,2:end-1,2:end].+Axyyz[2:end,2:end-1,2:end])./4))
+                R.=0; @parallel av_yzi!(R, Axxyz);  @test all(Array(R .== (Axxyz[2:end-1,1:end-1,1:end-1].+Axxyz[2:end-1,2:end,1:end-1].+Axxyz[2:end-1,1:end-1,2:end].+Axxyz[2:end-1,2:end,2:end])./4))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Axyz)      = (@all(R) = @harm(Axyz); return)
@@ -136,44 +136,44 @@ eval(:(
                 @parallel harm_xyi!(R, Axyzz) = (@all(R) = @harm_xyi(Axyzz); return)
                 @parallel harm_xzi!(R, Axyyz) = (@all(R) = @harm_xzi(Axyyz); return)
                 @parallel harm_yzi!(R, Axxyz) = (@all(R) = @harm_yzi(Axxyz); return)
-                R.=0; @parallel harm!(R, Axyz);       @test all(Array(R .≈ 8 ./(1 ./Axyz[1:end-1,1:end-1,1:end-1].+1 ./Axyz[2:end,1:end-1,1:end-1].+1 ./Axyz[2:end,2:end,1:end-1].+1 ./Axyz[2:end,2:end,2:end].+1 ./Axyz[1:end-1,2:end,2:end].+1 ./Axyz[1:end-1,1:end-1,2:end].+1 ./Axyz[2:end,1:end-1,2:end].+1 ./Axyz[1:end-1,2:end,1:end-1]) ))
-                R.=0; @parallel harm_xa!(R, Ax);      @test all(Array(R .≈ 2 ./(1 ./Ax[2:end,    :,    :].+1 ./Ax[1:end-1,      :,    :])))
-                R.=0; @parallel harm_ya!(R, Ay);      @test all(Array(R .≈ 2 ./(1 ./Ay[    :,2:end,    :].+1 ./Ay[      :,1:end-1,    :])))
-                R.=0; @parallel harm_za!(R, Az);      @test all(Array(R .≈ 2 ./(1 ./Az[    :,    :,2:end].+1 ./Az[      :,    :,1:end-1])))
-                R.=0; @parallel harm_xi!(R, Axyyzz);  @test all(Array(R .≈ 2 ./(1 ./Axyyzz[2:end  ,2:end-1,2:end-1].+1 ./Axyyzz[1:end-1,2:end-1,2:end-1])))
-                R.=0; @parallel harm_yi!(R, Axxyzz);  @test all(Array(R .≈ 2 ./(1 ./Axxyzz[2:end-1,2:end  ,2:end-1].+1 ./Axxyzz[2:end-1,1:end-1,2:end-1])))
-                R.=0; @parallel harm_zi!(R, Axxyyz);  @test all(Array(R .≈ 2 ./(1 ./Axxyyz[2:end-1,2:end-1,2:end  ].+1 ./Axxyyz[2:end-1,2:end-1,1:end-1])))
-                R.=0; @parallel harm_xya!(R, Axy);    @test all(Array(R .≈ 4 ./(1 ./Axy[1:end-1,1:end-1,:].+1 ./Axy[2:end,1:end-1,:].+1 ./Axy[1:end-1,2:end,:].+1 ./Axy[2:end,2:end,:])))
-                R.=0; @parallel harm_xza!(R, Axz);    @test all(Array(R .≈ 4 ./(1 ./Axz[1:end-1,:,1:end-1].+1 ./Axz[2:end,:,1:end-1].+1 ./Axz[1:end-1,:,2:end].+1 ./Axz[2:end,:,2:end])))
-                R.=0; @parallel harm_yza!(R, Ayz);    @test all(Array(R .≈ 4 ./(1 ./Ayz[:,1:end-1,1:end-1].+1 ./Ayz[:,2:end,1:end-1].+1 ./Ayz[:,1:end-1,2:end].+1 ./Ayz[:,2:end,2:end])))
-                R.=0; @parallel harm_xyi!(R, Axyzz);  @test all(Array(R .≈ 4 ./(1 ./Axyzz[1:end-1,1:end-1,2:end-1].+1 ./Axyzz[2:end,1:end-1,2:end-1].+1 ./Axyzz[1:end-1,2:end,2:end-1].+1 ./Axyzz[2:end,2:end,2:end-1])))
-                R.=0; @parallel harm_xzi!(R, Axyyz);  @test all(Array(R .≈ 4 ./(1 ./Axyyz[1:end-1,2:end-1,1:end-1].+1 ./Axyyz[2:end,2:end-1,1:end-1].+1 ./Axyyz[1:end-1,2:end-1,2:end].+1 ./Axyyz[2:end,2:end-1,2:end])))
-                R.=0; @parallel harm_yzi!(R, Axxyz);  @test all(Array(R .≈ 4 ./(1 ./Axxyz[2:end-1,1:end-1,1:end-1].+1 ./Axxyz[2:end-1,2:end,1:end-1].+1 ./Axxyz[2:end-1,1:end-1,2:end].+1 ./Axxyz[2:end-1,2:end,2:end])))
+                R.=0; @parallel harm!(R, Axyz);       @test all(Array(R .== 8 ./(1 ./Axyz[1:end-1,1:end-1,1:end-1].+1 ./Axyz[2:end,1:end-1,1:end-1].+1 ./Axyz[2:end,2:end,1:end-1].+1 ./Axyz[2:end,2:end,2:end].+1 ./Axyz[1:end-1,2:end,2:end].+1 ./Axyz[1:end-1,1:end-1,2:end].+1 ./Axyz[2:end,1:end-1,2:end].+1 ./Axyz[1:end-1,2:end,1:end-1]) ))
+                R.=0; @parallel harm_xa!(R, Ax);      @test all(Array(R .== 2 ./(1 ./Ax[2:end,    :,    :].+1 ./Ax[1:end-1,      :,    :])))
+                R.=0; @parallel harm_ya!(R, Ay);      @test all(Array(R .== 2 ./(1 ./Ay[    :,2:end,    :].+1 ./Ay[      :,1:end-1,    :])))
+                R.=0; @parallel harm_za!(R, Az);      @test all(Array(R .== 2 ./(1 ./Az[    :,    :,2:end].+1 ./Az[      :,    :,1:end-1])))
+                R.=0; @parallel harm_xi!(R, Axyyzz);  @test all(Array(R .== 2 ./(1 ./Axyyzz[2:end  ,2:end-1,2:end-1].+1 ./Axyyzz[1:end-1,2:end-1,2:end-1])))
+                R.=0; @parallel harm_yi!(R, Axxyzz);  @test all(Array(R .== 2 ./(1 ./Axxyzz[2:end-1,2:end  ,2:end-1].+1 ./Axxyzz[2:end-1,1:end-1,2:end-1])))
+                R.=0; @parallel harm_zi!(R, Axxyyz);  @test all(Array(R .== 2 ./(1 ./Axxyyz[2:end-1,2:end-1,2:end  ].+1 ./Axxyyz[2:end-1,2:end-1,1:end-1])))
+                R.=0; @parallel harm_xya!(R, Axy);    @test all(Array(R .== 4 ./(1 ./Axy[1:end-1,1:end-1,:].+1 ./Axy[2:end,1:end-1,:].+1 ./Axy[1:end-1,2:end,:].+1 ./Axy[2:end,2:end,:])))
+                R.=0; @parallel harm_xza!(R, Axz);    @test all(Array(R .== 4 ./(1 ./Axz[1:end-1,:,1:end-1].+1 ./Axz[2:end,:,1:end-1].+1 ./Axz[1:end-1,:,2:end].+1 ./Axz[2:end,:,2:end])))
+                R.=0; @parallel harm_yza!(R, Ayz);    @test all(Array(R .== 4 ./(1 ./Ayz[:,1:end-1,1:end-1].+1 ./Ayz[:,2:end,1:end-1].+1 ./Ayz[:,1:end-1,2:end].+1 ./Ayz[:,2:end,2:end])))
+                R.=0; @parallel harm_xyi!(R, Axyzz);  @test all(Array(R .== 4 ./(1 ./Axyzz[1:end-1,1:end-1,2:end-1].+1 ./Axyzz[2:end,1:end-1,2:end-1].+1 ./Axyzz[1:end-1,2:end,2:end-1].+1 ./Axyzz[2:end,2:end,2:end-1])))
+                R.=0; @parallel harm_xzi!(R, Axyyz);  @test all(Array(R .== 4 ./(1 ./Axyyz[1:end-1,2:end-1,1:end-1].+1 ./Axyyz[2:end,2:end-1,1:end-1].+1 ./Axyyz[1:end-1,2:end-1,2:end].+1 ./Axyyz[2:end,2:end-1,2:end])))
+                R.=0; @parallel harm_yzi!(R, Axxyz);  @test all(Array(R .== 4 ./(1 ./Axxyz[2:end-1,1:end-1,1:end-1].+1 ./Axxyz[2:end-1,2:end,1:end-1].+1 ./Axxyz[2:end-1,1:end-1,2:end].+1 ./Axxyz[2:end-1,2:end,2:end])))
             end;
             @testset "others" begin
                 @parallel maxloc!(R, Axxyyzz) = (@all(R) = @maxloc(Axxyyzz); return)
-                R.=0; @parallel maxloc!(R, Axxyyzz); @test all(Array(R .≈ max.(max.(max.(max.(max.(max.(Axxyyzz[1:end-2,2:end-1,2:end-1],Axxyyzz[3:end,2:end-1,2:end-1]),Axxyyzz[2:end-1,2:end-1,2:end-1]),Axxyyzz[2:end-1,1:end-2,2:end-1]),Axxyyzz[2:end-1,3:end,2:end-1]),Axxyyzz[2:end-1,2:end-1,1:end-2]),Axxyyzz[2:end-1,2:end-1,3:end])))
+                R.=0; @parallel maxloc!(R, Axxyyzz); @test all(Array(R .== max.(max.(max.(max.(max.(max.(Axxyyzz[1:end-2,2:end-1,2:end-1],Axxyyzz[3:end,2:end-1,2:end-1]),Axxyyzz[2:end-1,2:end-1,2:end-1]),Axxyyzz[2:end-1,1:end-2,2:end-1]),Axxyyzz[2:end-1,3:end,2:end-1]),Axxyyzz[2:end-1,2:end-1,1:end-2]),Axxyyzz[2:end-1,2:end-1,3:end])))
             end;
         end;
         @testset "2. apply masks" begin
             @testset "selection" begin
                 @parallel inn_all!(Rxxyyzz, A)       = (@inn(Rxxyyzz) = @all(A); return)
                 @parallel inn_inn!(Rxxyyzz, Axxyyzz) = (@inn(Rxxyyzz) = @inn(Axxyyzz); return)
-                Rxxyyzz.=0; @parallel inn_all!(Rxxyyzz, A);        @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .≈ A))
-                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;               @test all(Array(Rxxyyzz .≈ 0))  # Test that boundary values remained zero.
-                Rxxyyzz.=0; @parallel inn_inn!(Rxxyyzz, Axxyyzz);  @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .≈ Axxyyzz[2:end-1,2:end-1,2:end-1]))
-                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;               @test all(Array(Rxxyyzz .≈ 0))  # Test that boundary values remained zero.
+                Rxxyyzz.=0; @parallel inn_all!(Rxxyyzz, A);        @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== A))
+                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;               @test all(Array(Rxxyyzz .== 0))  # Test that boundary values remained zero.
+                Rxxyyzz.=0; @parallel inn_inn!(Rxxyyzz, Axxyyzz);  @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== Axxyyzz[2:end-1,2:end-1,2:end-1]))
+                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;               @test all(Array(Rxxyyzz .== 0))  # Test that boundary values remained zero.
             end;
             @testset "differences" begin
                 @parallel  inn_d_xa!(Rxxyyzz, Ax)       = (@inn(Rxxyyzz) = @d_xa(Ax); return)
                 @parallel  inn_d_yi!(Rxxyyzz, Axxyzz)   = (@inn(Rxxyyzz) = @d_yi(Axxyzz); return)
                 @parallel  inn_d2_yi!(Rxxyyzz, Axxyyzz) = (@inn(Rxxyyzz) = @d2_yi(Axxyyzz); return)
-                Rxxyyzz.=0; @parallel  inn_d_xa!(Rxxyyzz, Ax);       @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .≈ Ax[2:end,    :,    :].-Ax[1:end-1,      :,    :]))
-                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .≈ 0))  # Test that boundary values remained zero.
-                Rxxyyzz.=0; @parallel  inn_d_yi!(Rxxyyzz, Axxyzz);   @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .≈ Axxyzz[2:end-1,2:end  ,2:end-1].-Axxyzz[2:end-1,1:end-1,2:end-1]))
-                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .≈ 0))  # Test that boundary values remained zero.
-                Rxxyyzz.=0; @parallel inn_d2_yi!(Rxxyyzz, Axxyyzz);  @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .≈ (Axxyyzz[2:end-1,3:end,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,1:end-2,2:end-1])))
-                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .≈ 0))  # Test that boundary values remained zero.
+                Rxxyyzz.=0; @parallel  inn_d_xa!(Rxxyyzz, Ax);       @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== Ax[2:end,    :,    :].-Ax[1:end-1,      :,    :]))
+                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .== 0))  # Test that boundary values remained zero.
+                Rxxyyzz.=0; @parallel  inn_d_yi!(Rxxyyzz, Axxyzz);   @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== Axxyzz[2:end-1,2:end  ,2:end-1].-Axxyzz[2:end-1,1:end-1,2:end-1]))
+                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .== 0))  # Test that boundary values remained zero.
+                Rxxyyzz.=0; @parallel inn_d2_yi!(Rxxyyzz, Axxyyzz);  @test all(Array(Rxxyyzz[2:end-1,2:end-1,2:end-1] .== (Axxyyzz[2:end-1,3:end,2:end-1].-Axxyyzz[2:end-1,2:end-1,2:end-1]).-(Axxyyzz[2:end-1,2:end-1,2:end-1].-Axxyyzz[2:end-1,1:end-2,2:end-1])))
+                Rxxyyzz[2:end-1,2:end-1,2:end-1].=0;                 @test all(Array(Rxxyyzz .== 0))  # Test that boundary values remained zero.
             end;
         end;
         @reset_parallel_stencil()

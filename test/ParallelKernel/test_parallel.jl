@@ -379,7 +379,7 @@ eval(:(
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .≈ [ix for ix=1:size(A,1)])
+                    @test all(Array(A) .== [ix for ix=1:size(A,1)])
                 end;
                 @testset "@parallel_indices (2D)" begin
                     A  = @zeros(4, 5)
@@ -388,7 +388,7 @@ eval(:(
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
+                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 end;
                 @testset "@parallel_indices (3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -397,7 +397,7 @@ eval(:(
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (1D in 3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -406,7 +406,7 @@ eval(:(
                         return
                     end
                     @parallel 1:size(A,2) write_indices!(A);
-                    @test all(Array(A)[1,:,1] .≈ [iy for iy=1:size(A,2)])
+                    @test all(Array(A)[1,:,1] .== [iy for iy=1:size(A,2)])
                 end;
                 @testset "@parallel_indices (2D in 3D)" begin
                     A  = @zeros(4, 5, 6)
@@ -415,7 +415,7 @@ eval(:(
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (2D in 3D with macro)" begin
                     A  = @zeros(4, 5, 6)
@@ -424,7 +424,7 @@ eval(:(
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @testset "@parallel_indices (2D in 3D with macro with aliases)" begin
                     A  = @zeros(4, 5, 6)
@@ -433,7 +433,7 @@ eval(:(
                         return
                     end
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
-                    @test all(Array(A)[:,end,:] .≈ [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
+                    @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
                 @static if $package != $PKG_POLYESTER
                     @testset "nested function (long definition, array modification)" begin
@@ -447,7 +447,7 @@ eval(:(
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (short definition, array modification)" begin
                         A  = @zeros(4, 5, 6)
@@ -457,7 +457,7 @@ eval(:(
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (long definition, return value)" begin
                         A  = @zeros(4, 5, 6)
@@ -469,7 +469,7 @@ eval(:(
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                     @testset "nested function (short definition, return value)" begin
                         A  = @zeros(4, 5, 6)
@@ -479,7 +479,7 @@ eval(:(
                             return
                         end
                         @parallel write_indices!(A);
-                        @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end;
                 end
             end;
