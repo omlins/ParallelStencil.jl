@@ -12,7 +12,7 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
-@static if Sys.isapple() && PKG_METAL in TEST_PACKAGES
+@static if PKG_METAL in TEST_PACKAGES
     import Metal
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
