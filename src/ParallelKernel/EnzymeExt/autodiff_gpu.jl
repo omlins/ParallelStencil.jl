@@ -2,16 +2,17 @@ import ParallelStencil
 import ParallelStencil: PKG_THREADS, PKG_POLYESTER
 import Enzyme
 
+# NOTE: package specific initialization of Enzyme could be done as follows (not needed in the currently supported versions of Enzyme)
 # function ParallelStencil.ParallelKernel.AD.init_AD(package::Symbol)
 #     if iscpu(package)
 #         Enzyme.API.runtimeActivity!(true) # NOTE: this is currently required for Enzyme to work correctly with threads
 #     end
 # end
 
-# ParallelStencil injects a configuration parameter at the end, for Enzyme we need to wrap that parameter as a Annotation
-# for all purposes this ought to be Const. This is not ideal since we might accidentially wrap other parameters the user
-# provided as well. This is needed to support @parallel autodiff_deferred(...)
- function promote_to_const(args::Vararg{Any,N}) where N
+# NOTE: @parallel injects four parameters at the end, which need to be wrapped as Annotations. The current solution is to wrap all
+# arguments which are not already Annotations (all the other arguments must be Annotations). Should this change, then one could 
+# explicitly wrap just the injected parameters.
+function promote_to_const(args::Vararg{Any,N}) where N
     ntuple(Val(N)) do i
         @inline
         if !(args[i] isa Enzyme.Annotation ||
