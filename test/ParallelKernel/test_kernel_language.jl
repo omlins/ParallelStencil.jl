@@ -41,7 +41,7 @@ eval(:(
                     @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
                     @test @prettystring(1, @threadIdx()) == "CUDA.threadIdx()"
                     @test @prettystring(1, @sync_threads()) == "CUDA.sync_threads()"
-                    @test @prettystring(1, @sharedMem($precision, (2,3))) == "CUDA.@cuDynamicSharedMem $precision (2, 3)"
+                    @test @prettystring(1, @sharedMem($precision, (2,3))) == "CUDA.@cuDynamicSharedMem $(nameof($precision)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
                 elseif $package == $AMDGPU
@@ -50,7 +50,7 @@ eval(:(
                     @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
                     @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
                     @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
-                    # @test @prettystring(1, @sharedMem(Float32, (2,3))) == ""    #TODO: not yet supported for AMDGPU
+                    # @test @prettystring(1, @sharedMem($precision, (2,3))) == ""    #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"        #TODO: not yet supported for AMDGPU
                     # @test @prettystring(1, @pk_println()) == "AMDGPU.@rocprintln"
                 elseif $package == $PKG_METAL
