@@ -5,7 +5,7 @@ import ParallelStencil # Precompile it.
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL
 @static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
 @static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
-@static if (PKG_METAL in SUPPORTED_PACKAGES) import Metal end
+@static if (PKG_METAL in SUPPORTED_PACKAGES && Sys.isapple()) import Metal end
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
