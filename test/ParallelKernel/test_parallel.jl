@@ -23,7 +23,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
-import Enzyme
+
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
@@ -113,8 +113,8 @@ import Enzyme
                         end
                         return
                     end
-                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
-                    Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!),Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const.
+                    Enzyme.autodiff_deferred(Enzyme.Reverse, g!, Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
                     @test Array(Ā) ≈ Ā_ref
                     @test Array(B̄) ≈ B̄_ref
                 end
