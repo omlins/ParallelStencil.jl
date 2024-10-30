@@ -857,8 +857,8 @@ import ParallelStencil.@gorgeousexpand
             end;
             @testset "apply masks" begin
                 expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                @test occursin("if @within(\"@all\", A)", expansion)
                 @test @prettystring(@within("@all", A)) == string(:($ix <= size(A, 1) && ($iy <= size(A, 2) && $iz <= size(A, 3))))
+                @test occursin("if $(@prettystring(@within("@all", A)))", expansion)
             end;
             @reset_parallel_stencil()
         end;
