@@ -224,13 +224,13 @@ eval(:(
                 end
                 @testset "@parallel <kernel> (3D; on-the-fly)" begin
                     nx, ny, nz = 32, 8, 8
-                    lam=dt=_dx=_dy=_dz = 1
+                    lam=dt=_dx=_dy=_dz = $precision(1)
                     T      = @zeros(nx, ny, nz);
                     T2     = @zeros(nx, ny, nz);
                     T2_ref = @zeros(nx, ny, nz);
                     Ci     = @ones(nx, ny, nz);
                     copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                    @parallel function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$precision, _dx, _dy, _dz)
                         @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                         @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
                         @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
@@ -331,7 +331,7 @@ eval(:(
                             @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -390,13 +390,13 @@ eval(:(
                             @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
                             Ci     = @ones(nx, ny, nz);
                             copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$precision, _dx, _dy, _dz)
                                 @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                                 @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
                                 @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
@@ -477,7 +477,7 @@ eval(:(
                             @test all(Array(A2) .≈ Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -497,7 +497,7 @@ eval(:(
                             @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -517,7 +517,7 @@ eval(:(
                             @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -828,7 +828,7 @@ eval(:(
                             @test all(Array(A2) .== Array(A))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -847,7 +847,7 @@ eval(:(
                             @test all(Array(T2) .≈ Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = 1
+                            lam=dt=_dx=_dy=_dz = $precision(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -885,7 +885,7 @@ eval(:(
             @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
                     nx, ny, nz = 32, 8, 1
                     @testset "@parallel_indices <kernel> (2D, memopt, stencilranges=(-1:1,-1:1,0:0))" begin
-                        lam=dt=_dx=_dy = 1
+                        lam=dt=_dx=_dy = $precision(1)
                         T      = @zeros(nx, ny, nz);
                         T2     = @zeros(nx, ny, nz);
                         T2_ref = @zeros(nx, ny, nz);
@@ -928,7 +928,7 @@ eval(:(
                 @init_parallel_stencil($package, $precision, 1)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
-                one = 1
+                one = $precision(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one));
                     return
@@ -942,7 +942,7 @@ eval(:(
                 @init_parallel_stencil($package, $precision, 2)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
-                one = 1
+                one = $precision(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one, size(A,1)));
                     return
@@ -956,7 +956,7 @@ eval(:(
                 @init_parallel_stencil($package, $precision, 3)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
-                one = 1
+                one = $precision(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one, size(A,1), size(A,1)*size(A,2)));
                     return
