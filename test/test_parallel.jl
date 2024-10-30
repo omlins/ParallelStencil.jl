@@ -878,7 +878,7 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2 parallel macros (2D)" begin
+        @testset "2. parallel macros (2D)" begin
             @require !@is_initialized()
             @init_parallel_stencil($package, $precision, 2)
             @require @is_initialized()
