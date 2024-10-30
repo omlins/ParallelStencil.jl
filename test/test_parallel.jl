@@ -220,7 +220,7 @@ eval(:(
                         return
                     end
                     @parallel write_indices!(A);
-                    @test all(Array(A) .≈ [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 end
                 @testset "@parallel <kernel> (3D; on-the-fly)" begin
                     nx, ny, nz = 32, 8, 8
@@ -244,7 +244,7 @@ eval(:(
                                             + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                             + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                             );
-                    @test all(Array(T2) .≈ Array(T2_ref))
+                    @test all(Array(T2) .== Array(T2_ref))
                 end                
                 @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
                     @testset "@parallel memopt <kernel> (nx, ny, nz = x .* threads)" begin # NOTE: the following does not work for some reason: (nx, ny, nz = ($nx, $ny, $nz))" for (nx, ny, nz) in ((32, 8, 9), (32, 8, 8), (31, 7, 9), (33, 9, 9), (33, 7, 8))
@@ -287,7 +287,7 @@ eval(:(
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, -1:1, 0:0); y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -302,7 +302,7 @@ eval(:(
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
                             A2_ref[:,2:end-1,:] .= A[:,3:end,:] .- 2*A[:,2:end-1,:] .+ A[:,1:end-2,:];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 1:1, 0:2); z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -314,8 +314,8 @@ eval(:(
                                 return
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,2:end-1,3:end] .- 2*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,2:end-1,1:end-2];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,2:end-1,3:end] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,2:end-1,1:end-2]);
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 0:2, 1:1); y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -327,8 +327,8 @@ eval(:(
                                 return
                             end
                             @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[2:end-1,2:end-1,2:end-1] .= A[2:end-1,3:end,2:end-1] .- 2*A[2:end-1,2:end-1,2:end-1] .+ A[2:end-1,1:end-2,2:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,3:end,2:end-1] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,1:end-2,2:end-1]);
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -353,7 +353,7 @@ eval(:(
                                                     - ((.-lam.*(T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1]).*_dy)).*_dy
                                                     - ((.-lam.*(T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]).*_dz) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2]).*_dz)).*_dz)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
                             lam=dt=_dx=_dy=_dz = 1
@@ -372,7 +372,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -387,7 +387,7 @@ eval(:(
                             end
                             @parallel memopt=true higher_order_memopt!(A2, A);
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -410,7 +410,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0; 2 arrays)" begin
                             A  = @zeros(nx, ny, nz);
@@ -423,7 +423,7 @@ eval(:(
                                 return
                             end
                             @parallel memopt=true copy_memopt!(A2, A, B);
-                            @test all(Array(A2) .≈ Array(A) .+ Array(B))
+                            @test all(Array(A2) .== Array(A) .+ Array(B))
                         end                        
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, z-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -440,7 +440,7 @@ eval(:(
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2] .+ B[:,:,2:end] .- B[:,:,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, y-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -457,7 +457,7 @@ eval(:(
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[:,2:end-1,:] .= (((A[:,3:end,:] .- 2*A[:,2:end-1,:]) .+ A[:,1:end-2,:] .+ B[:,3:end,:]) .- 2*B[:,2:end-1,:]) .+ B[:,1:end-2,:];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, x-stencil)" begin
                             A      = @zeros(nx, ny, nz);
@@ -474,7 +474,7 @@ eval(:(
                             end
                             @parallel memopt=true d2_memopt!(A2, A, B);
                             A2_ref[2:end-1,:,:] .= A[3:end,:,:] .- 2*A[2:end-1,:,:] .+ A[1:end-2,:,:] .+ B[2:end,:,:] .- B[1:end-1,:,:];
-                            @test all(Array(A2) .≈ Array(A2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -494,7 +494,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -514,7 +514,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -536,7 +536,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -567,9 +567,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[5:end-1,3:end,3:end-3] .= B[5:end-1,3:end,6:end] .- 2*B[3:end-3,3:end,3:end-3] .+ B[2:end-4,3:end,1:end-5];
                             C2_ref[5:end-1,3:end,3:end-3] .= C[5:end-1,3:end,6:end] .- 2*C[3:end-3,3:end,3:end-3] .+ C[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:-1, 2:2, 1:2), C=(-4:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -600,9 +600,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[5:end-1,3:end,2:end-1] .= B[5:end-1,3:end,3:end] .- 2*B[3:end-3,3:end,2:end-1] .+ B[2:end-4,3:end,2:end-1];
                             C2_ref[5:end-1,3:end,1:end-1] .= C[5:end-1,3:end,2:end] .- 2*C[3:end-3,3:end,1:end-1] .+ C[2:end-4,3:end,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -633,9 +633,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -690,9 +690,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -747,9 +747,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, B), loopdim=3, loopsize=3, optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:1)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
                             A      = @zeros(nx, ny, nz);
@@ -795,9 +795,9 @@ eval(:(
                             A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
                             B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
                             C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .≈ Array(A2_ref))
-                            @test all(Array(B2) .≈ Array(B2_ref))
-                            @test all(Array(C2) .≈ Array(C2_ref))
+                            @test all(Array(A2) .== Array(A2_ref))
+                            @test all(Array(B2) .== Array(B2_ref))
+                            @test all(Array(C2) .== Array(C2_ref))
                         end
                     end
                     @testset "@parallel memopt <kernel> (nx, ny, nz != x .* threads)" begin
@@ -844,7 +844,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     );
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
                             lam=dt=_dx=_dy=_dz = $precision(1)
@@ -866,7 +866,7 @@ eval(:(
                                                     + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
                                                     + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                                     ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .≈ Array(T2_ref))
+                            @test all(Array(T2) .== Array(T2_ref))
                         end
                     end
                 end                
@@ -905,7 +905,7 @@ eval(:(
                                                 - ((.-lam.*(T[3:end  ,2:end-1,1] .- T[2:end-1,2:end-1,1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[1:end-2,2:end-1,1]).*_dx)).*_dx
                                                 - ((.-lam.*(T[2:end-1,3:end  ,1] .- T[2:end-1,2:end-1,1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[2:end-1,1:end-2,1]).*_dy)).*_dy)
                                                 );
-                        @test all(Array(T2) .≈ Array(T2_ref))
+                        @test all(Array(T2) .== Array(T2_ref))
                     end;
             end;
             @reset_parallel_stencil()
@@ -934,7 +934,7 @@ eval(:(
                     return
                 end
                 @parallel write_indices!(A, one);
-                @test all(Array(A) .≈ [(ix-1) for ix=1:size(A,1)])
+                @test all(Array(A) .== [(ix-1) for ix=1:size(A,1)])
                 @reset_parallel_stencil()
             end;
             @testset "@parallel_indices (I...) (2D)" begin
@@ -948,7 +948,7 @@ eval(:(
                     return
                 end
                 @parallel write_indices!(A, one);
-                @test all(Array(A) .≈ [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
+                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 @reset_parallel_stencil()
             end;
             @testset "@parallel_indices (I...) (3D)" begin
@@ -962,7 +962,7 @@ eval(:(
                     return
                 end
                 @parallel write_indices!(A, one);
-                @test all(Array(A) .≈ [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 @reset_parallel_stencil()
             end;
         end;
