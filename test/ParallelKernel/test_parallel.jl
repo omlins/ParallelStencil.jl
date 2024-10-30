@@ -30,7 +30,7 @@ macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1)
 import Enzyme
 
 const TEST_PRECISIONS = [Float32, Float64]
-for package in TEST_PACKAGES
+@static for package in TEST_PACKAGES
 for precision in TEST_PRECISIONS
 (package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
 

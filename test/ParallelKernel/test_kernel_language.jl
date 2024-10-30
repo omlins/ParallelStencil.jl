@@ -24,7 +24,7 @@ end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 const TEST_PRECISIONS = [Float32, Float64]
-for package in TEST_PACKAGES
+@static for package in TEST_PACKAGES
 for precision in TEST_PRECISIONS
 (package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
     
