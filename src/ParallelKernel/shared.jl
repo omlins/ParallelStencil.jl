@@ -238,6 +238,33 @@ function insert_device_types(caller::Module, kernel::Expr)
     return kernel
 end
 
+function find_vars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N; readonly=false)
+    vars         = Dict()
+    writevars    = Dict()
+    postwalk(body) do ex
+        if is_access(ex, indices...)
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a indices array access could not be pattern matched.")
+            if haskey(vars, A) vars[A] += 1
+            else               vars[A]  = 1
+            end
+        end
+        if @capture(ex, (A_[indices_expr__] = rhs_) | (A_[indices_expr__] .= rhs_)) && is_access(:($A[$(indices_expr...)]), indices...)
+            if haskey(writevars, A) writevars[A] += 1
+            else                    writevars[A]  = 1
+            end
+        end
+        return ex
+    end
+    if (readonly) return Dict(A => count for (A, count) in vars if A ∉ keys(writevars))
+    else          return vars
+    end
+end
+
+is_access(ex::Expr, ix::Symbol, iy::Symbol, iz::Symbol) = @capture(ex, A_[x_, y_, z_]) && inexpr_walk(x, ix) && inexpr_walk(y, iy) && inexpr_walk(z, iz)
+is_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_])     && inexpr_walk(x, ix) && inexpr_walk(y, iy)
+is_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
+is_access(ex, indices...)                               = false
+
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
