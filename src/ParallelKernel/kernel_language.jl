@@ -89,12 +89,6 @@ Call a macro analogue to `Base.@println`, compatible with the package for parall
 macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module__, args...)); end
 
 
-## INTERNAL MACROS
-
-##
-macro threads(args...) check_initialized(__module__); esc(threads(__module__, args...)); end
-
-
 ##
 const FORALL_DOC = """
     @∀ x ∈ X statement
@@ -139,6 +133,20 @@ Expand the `statement` for all `x` in `X`.
 macro ∀(args...) check_initialized(__module__); checkforallargs(args...); esc(∀(__module__, args...)); end
 
 
+## INTERNAL MACROS
+
+##
+macro threads(args...) check_initialized(__module__); esc(threads(__module__, args...)); end
+
+
+##
+macro firstindex(args...) check_initialized(__module__); checkargs_begin_end(args...); esc(_firstindex(__module__, args...)); end
+
+
+##
+macro lastindex(args...) check_initialized(__module__); checkargs_begin_end(args...); esc(_lastindex(__module__, args...)); end
+
+
 ##
 macro return_value(args...) check_initialized(__module__); checksinglearg(args...); esc(return_value(args...)); end
 
@@ -164,6 +172,10 @@ end
 function checkforallargs(args...)
     if !(length(args) == 2) @ArgumentError("wrong number of arguments.") end
     if !((args[1].head == :call && args[1].args[1] in [:∈, :in]) || args[1].head == :(=)) @ArgumentError("the first argument must be of the form `x ∈ X, `x in X` or `x = X`.") end
+end
+
+function checkargs_begin_end(args...)
+    if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
 end
 
 
@@ -286,6 +298,20 @@ function threads(caller::Module, args...; package::Symbol=get_package(caller))
     elseif (package == PKG_POLYESTER) return :(Polyester.@batch($(args...)))
     elseif isgpu(package)             return :(begin end)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function _firstindex(caller::Module, A::Expr, dim::Expr, padding::Union{Bool, Symbol, Expr}=false)
+    padding = eval_arg(caller, padding)
+    if (padding) return :($A.indices[$dim][1])
+    else         return :(1)
+    end
+end
+
+function _lastindex(caller::Module, A::Expr, dim::Expr, padding::Union{Bool, Symbol, Expr}=false)
+    padding = eval_arg(caller, padding)
+    if (padding) return :($A.indices[$dim][end])
+    else         return :(size($A, $dim))
     end
 end
 
