@@ -19,12 +19,12 @@ let
     metalqueues          = Array{MTL.MTLCommandQueue}(undef, 0)
 
     function get_priority_metalstream(id::Integer)
-        while (id > length(priority_metalqueues)) push!(priority_metalqueues, MTL.MTLCommandQueue(Metal.current_device())) end # No priority setting available in Metal queues.
+        while (id > length(priority_metalqueues)) push!(priority_metalqueues, MTL.MTLCommandQueue(Metal.device())) end # No priority setting available in Metal queues.
         return priority_metalqueues[id]
     end
 
     function get_metalstream(id::Integer)
-        while (id > length(metalqueues)) push!(metalqueues, MTL.MTLCommandQueue(Metal.current_device())) end
+        while (id > length(metalqueues)) push!(metalqueues, MTL.MTLCommandQueue(Metal.device())) end
         return metalqueues[id]
     end
 end

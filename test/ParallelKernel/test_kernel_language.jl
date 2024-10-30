@@ -60,8 +60,8 @@ eval(:(
                     @test @prettystring(1, @threadIdx()) == "Metal.thread_position_in_threadgroup_3d()"
                     @test @prettystring(1, @sync_threads()) == "Metal.threadgroup_barrier(; flag = Metal.MemoryFlagThreadGroup)"
                     @test @prettystring(1, @sharedMem($precision, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal $(nameof($precision)) (2, 3)"
-                    # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"
-                    # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"
+                    # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"        #TODO: not yet supported for Metal
+                    # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"  #TODO: not yet supported for Metal
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
