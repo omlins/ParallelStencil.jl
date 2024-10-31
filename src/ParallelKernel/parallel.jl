@@ -190,6 +190,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
     body   = handle_padding(body, padding) # TODO: padding can later be made configurable per kernel (to enable working with arrays as before).
+    body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
@@ -361,7 +362,7 @@ function literaltypes(type1::DataType, type2::DataType, expr::Expr)
 end
 
 
-## FUNCTIONS TO HANDLE SIGNATURES AND INDICES
+## FUNCTIONS TO HANDLE SIGNATURES, INDICES, INVERSES AND PADDING
 
 function adjust_signatures(kernel::Expr, package::Symbol)
     int_type = kernel_int_type(package)
@@ -370,6 +371,16 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     return kernel
+end
+
+function handle_inverses(body::Expr)
+    return postwalk(body) do ex
+        if @capture(ex, (1 | 1.0 | 1.0f0) / x_)
+            return :(inv($x))
+        else
+            return ex
+        end
+    end
 end
 
 function handle_padding(body::Expr, padding::Bool)

@@ -288,6 +288,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
+        body   = handle_inverses(body)
         body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end
