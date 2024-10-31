@@ -24,6 +24,7 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
+
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. Reset of ParallelStencil" begin

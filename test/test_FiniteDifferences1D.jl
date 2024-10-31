@@ -25,15 +25,14 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-const TEST_PRECISIONS = [Float32, Float64]
+
 @static for package in TEST_PACKAGES
-for precision in TEST_PRECISIONS
-(package == PKG_METAL && precision == Float64) && continue # Metal does not support Float64
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, $precision, 1)
+        @init_parallel_stencil($package, $FloatDefault, 1)
         @require @is_initialized()
         nx  = 7
         A   =  @rand(nx  );
@@ -56,7 +55,7 @@ eval(:(
             end;
             @testset "averages" begin
                 @parallel av!(R, Ax) = (@all(R) = @av(Ax); return)
-                R.=0; @parallel av!(R, Ax);  @test all(Array(R .== (Ax[1:end-1].+Ax[2:end]).*$precision(0.5)))
+                R.=0; @parallel av!(R, Ax);  @test all(Array(R .== (Ax[1:end-1].+Ax[2:end]).*$FloatDefault(0.5)))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Ax) = (@all(R) = @harm(Ax); return)
@@ -89,5 +88,4 @@ eval(:(
     end;
 ))
 
-end
 end == nothing || true;

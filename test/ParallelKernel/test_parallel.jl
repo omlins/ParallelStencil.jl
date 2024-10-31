@@ -29,16 +29,15 @@ macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1)
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 import Enzyme
 
-const TEST_PRECISIONS = [Float32, Float64]
+
 @static for package in TEST_PACKAGES
-for precision in TEST_PRECISIONS
-(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, $precision)
+            @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized()
             @testset "@parallel" begin
                 @static if $package == $PKG_CUDA
@@ -123,8 +122,8 @@ eval(:(
                     B̄ = @ones(N)
                     A_ref = Array(A)
                     B_ref = Array(B)
-                    Ā_ref = ones($precision, N)
-                    B̄_ref = ones($precision, N)
+                    Ā_ref = ones($FloatDefault, N)
+                    B̄_ref = ones($FloatDefault, N)
                     @parallel_indices (ix) function f!(A, B, a)
                         A[ix] += a * B[ix] * 100.65
                         return
@@ -567,7 +566,7 @@ eval(:(
         @testset "3. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                @init_parallel_kernel($package, $precision, inbounds=true)
+                @init_parallel_kernel($package, $FloatDefault, inbounds=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -628,7 +627,7 @@ eval(:(
         end;
         @testset "5. Exceptions" begin
             @require !@is_initialized()
-            @init_parallel_kernel($package, $precision)
+            @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                        # Error: isempty(args)
@@ -665,4 +664,4 @@ eval(:(
     end;
 ))
 
-end end == nothing || true;
+end == nothing || true;

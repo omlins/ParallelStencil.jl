@@ -264,6 +264,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     is_parallel_kernel = true
     if (ndims < 1 || ndims > 3) @KeywordArgumentError("@parallel: keyword argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+    padding = get_padding(caller)  # TODO: padding can later be made configurable per kernel (to enable working with arrays as before).
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
     body = get_body(kernel)
@@ -274,10 +275,12 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
     check_mask_macro(caller)
     body = apply_masks(body, indices)
+    body = macroexpand(caller, body)
+    body = handle_padding(body, padding)
     if length(onthefly_vars) > 0
-        body = macroexpand(caller, body)
         onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
         onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
+        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,))
         body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
         onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
@@ -285,6 +288,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
+        body   = handle_inverses(body)
         body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end

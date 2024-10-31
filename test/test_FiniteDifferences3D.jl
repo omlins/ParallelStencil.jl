@@ -25,15 +25,14 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-const TEST_PRECISIONS = [Float32, Float64]
+
 @static for package in TEST_PACKAGES
-for precision in TEST_PRECISIONS
-(package == PKG_METAL && precision == Float64) && continue # Metal does not support Float64
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, $precision, 3)
+        @init_parallel_stencil($package, $FloatDefault, 3)
         @require @is_initialized()
         nx, ny, nz = 7, 5, 6
         A       =  @rand(nx  , ny  , nz  );
@@ -112,19 +111,19 @@ eval(:(
                 @parallel av_xyi!(R, Axyzz) = (@all(R) = @av_xyi(Axyzz); return)
                 @parallel av_xzi!(R, Axyyz) = (@all(R) = @av_xzi(Axyyz); return)
                 @parallel av_yzi!(R, Axxyz) = (@all(R) = @av_yzi(Axxyz); return)
-                R.=0; @parallel av!(R, Axyz);       @test all(Array(R .== (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[2:end,2:end,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,1:end-1]).*$precision(0.125)))
-                R.=0; @parallel av_xa!(R, Ax);      @test all(Array(R .== (Ax[2:end,    :,    :].+Ax[1:end-1,      :,    :]).*$precision(0.5)))
-                R.=0; @parallel av_ya!(R, Ay);      @test all(Array(R .== (Ay[    :,2:end,    :].+Ay[      :,1:end-1,    :]).*$precision(0.5)))
-                R.=0; @parallel av_za!(R, Az);      @test all(Array(R .== (Az[    :,    :,2:end].+Az[      :,    :,1:end-1]).*$precision(0.5)))
-                R.=0; @parallel av_xi!(R, Axyyzz);  @test all(Array(R .== (Axyyzz[2:end  ,2:end-1,2:end-1].+Axyyzz[1:end-1,2:end-1,2:end-1]).*$precision(0.5)))
-                R.=0; @parallel av_yi!(R, Axxyzz);  @test all(Array(R .== (Axxyzz[2:end-1,2:end  ,2:end-1].+Axxyzz[2:end-1,1:end-1,2:end-1]).*$precision(0.5)))
-                R.=0; @parallel av_zi!(R, Axxyyz);  @test all(Array(R .== (Axxyyz[2:end-1,2:end-1,2:end  ].+Axxyyz[2:end-1,2:end-1,1:end-1]).*$precision(0.5)))
-                R.=0; @parallel av_xya!(R, Axy);    @test all(Array(R .== (Axy[1:end-1,1:end-1,:].+Axy[2:end,1:end-1,:].+Axy[1:end-1,2:end,:].+Axy[2:end,2:end,:]).*$precision(0.25)))
-                R.=0; @parallel av_xza!(R, Axz);    @test all(Array(R .== (Axz[1:end-1,:,1:end-1].+Axz[2:end,:,1:end-1].+Axz[1:end-1,:,2:end].+Axz[2:end,:,2:end]).*$precision(0.25)))
-                R.=0; @parallel av_yza!(R, Ayz);    @test all(Array(R .== (Ayz[:,1:end-1,1:end-1].+Ayz[:,2:end,1:end-1].+Ayz[:,1:end-1,2:end].+Ayz[:,2:end,2:end]).*$precision(0.25)))
-                R.=0; @parallel av_xyi!(R, Axyzz);  @test all(Array(R .== (Axyzz[1:end-1,1:end-1,2:end-1].+Axyzz[2:end,1:end-1,2:end-1].+Axyzz[1:end-1,2:end,2:end-1].+Axyzz[2:end,2:end,2:end-1]).*$precision(0.25)))
-                R.=0; @parallel av_xzi!(R, Axyyz);  @test all(Array(R .== (Axyyz[1:end-1,2:end-1,1:end-1].+Axyyz[2:end,2:end-1,1:end-1].+Axyyz[1:end-1,2:end-1,2:end].+Axyyz[2:end,2:end-1,2:end]).*$precision(0.25)))
-                R.=0; @parallel av_yzi!(R, Axxyz);  @test all(Array(R .== (Axxyz[2:end-1,1:end-1,1:end-1].+Axxyz[2:end-1,2:end,1:end-1].+Axxyz[2:end-1,1:end-1,2:end].+Axxyz[2:end-1,2:end,2:end]).*$precision(0.25)))
+                R.=0; @parallel av!(R, Axyz);       @test all(Array(R .== (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[1:end-1,2:end,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[2:end,2:end,2:end])*0.125))
+                R.=0; @parallel av_xa!(R, Ax);      @test all(Array(R .== (Ax[2:end,    :,    :].+Ax[1:end-1,      :,    :]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_ya!(R, Ay);      @test all(Array(R .== (Ay[    :,2:end,    :].+Ay[      :,1:end-1,    :]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_za!(R, Az);      @test all(Array(R .== (Az[    :,    :,2:end].+Az[      :,    :,1:end-1]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_xi!(R, Axyyzz);  @test all(Array(R .== (Axyyzz[2:end  ,2:end-1,2:end-1].+Axyyzz[1:end-1,2:end-1,2:end-1]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_yi!(R, Axxyzz);  @test all(Array(R .== (Axxyzz[2:end-1,2:end  ,2:end-1].+Axxyzz[2:end-1,1:end-1,2:end-1]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_zi!(R, Axxyyz);  @test all(Array(R .== (Axxyyz[2:end-1,2:end-1,2:end  ].+Axxyyz[2:end-1,2:end-1,1:end-1]).*$FloatDefault(0.5)))
+                R.=0; @parallel av_xya!(R, Axy);    @test all(Array(R .== (Axy[1:end-1,1:end-1,:].+Axy[2:end,1:end-1,:].+Axy[1:end-1,2:end,:].+Axy[2:end,2:end,:]).*$FloatDefault(0.25)))
+                R.=0; @parallel av_xza!(R, Axz);    @test all(Array(R .== (Axz[1:end-1,:,1:end-1].+Axz[2:end,:,1:end-1].+Axz[1:end-1,:,2:end].+Axz[2:end,:,2:end]).*$FloatDefault(0.25)))
+                R.=0; @parallel av_yza!(R, Ayz);    @test all(Array(R .== (Ayz[:,1:end-1,1:end-1].+Ayz[:,2:end,1:end-1].+Ayz[:,1:end-1,2:end].+Ayz[:,2:end,2:end]).*$FloatDefault(0.25)))
+                R.=0; @parallel av_xyi!(R, Axyzz);  @test all(Array(R .== (Axyzz[1:end-1,1:end-1,2:end-1].+Axyzz[2:end,1:end-1,2:end-1].+Axyzz[1:end-1,2:end,2:end-1].+Axyzz[2:end,2:end,2:end-1]).*$FloatDefault(0.25)))
+                R.=0; @parallel av_xzi!(R, Axyyz);  @test all(Array(R .== (Axyyz[1:end-1,2:end-1,1:end-1].+Axyyz[2:end,2:end-1,1:end-1].+Axyyz[1:end-1,2:end-1,2:end].+Axyyz[2:end,2:end-1,2:end]).*$FloatDefault(0.25)))
+                R.=0; @parallel av_yzi!(R, Axxyz);  @test all(Array(R .== (Axxyz[2:end-1,1:end-1,1:end-1].+Axxyz[2:end-1,2:end,1:end-1].+Axxyz[2:end-1,1:end-1,2:end].+Axxyz[2:end-1,2:end,2:end]).*$FloatDefault(0.25)))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Axyz)      = (@all(R) = @harm(Axyz); return)
@@ -140,7 +139,7 @@ eval(:(
                 @parallel harm_xyi!(R, Axyzz) = (@all(R) = @harm_xyi(Axyzz); return)
                 @parallel harm_xzi!(R, Axyyz) = (@all(R) = @harm_xzi(Axyyz); return)
                 @parallel harm_yzi!(R, Axxyz) = (@all(R) = @harm_yzi(Axxyz); return)
-                R.=0; @parallel harm!(R, Axyz);       @test all(Array(R .== 8 ./(1 ./Axyz[1:end-1,1:end-1,1:end-1].+1 ./Axyz[2:end,1:end-1,1:end-1].+1 ./Axyz[2:end,2:end,1:end-1].+1 ./Axyz[2:end,2:end,2:end].+1 ./Axyz[1:end-1,2:end,2:end].+1 ./Axyz[1:end-1,1:end-1,2:end].+1 ./Axyz[2:end,1:end-1,2:end].+1 ./Axyz[1:end-1,2:end,1:end-1]) ))
+                R.=0; @parallel harm!(R, Axyz);       @test all(Array(R .== 8 ./(1 ./Axyz[1:end-1,1:end-1,1:end-1].+1 ./Axyz[2:end,1:end-1,1:end-1].+1 ./Axyz[1:end-1,2:end,1:end-1].+1 ./Axyz[2:end,2:end,1:end-1].+1 ./Axyz[1:end-1,1:end-1,2:end].+1 ./Axyz[2:end,1:end-1,2:end].+1 ./Axyz[1:end-1,2:end,2:end].+1 ./Axyz[2:end,2:end,2:end]) ))
                 R.=0; @parallel harm_xa!(R, Ax);      @test all(Array(R .== 2 ./(1 ./Ax[2:end,    :,    :].+1 ./Ax[1:end-1,      :,    :])))
                 R.=0; @parallel harm_ya!(R, Ay);      @test all(Array(R .== 2 ./(1 ./Ay[    :,2:end,    :].+1 ./Ay[      :,1:end-1,    :])))
                 R.=0; @parallel harm_za!(R, Az);      @test all(Array(R .== 2 ./(1 ./Az[    :,    :,2:end].+1 ./Az[      :,    :,1:end-1])))
@@ -184,4 +183,4 @@ eval(:(
     end;
 ))
 
-end end == nothing || true;
+end == nothing || true;

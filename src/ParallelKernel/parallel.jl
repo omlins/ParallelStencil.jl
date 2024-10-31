@@ -175,19 +175,22 @@ end
 function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
+    padding = get_padding(caller)
     body = get_body(kernel)
     body = remove_return(body)
+    body = macroexpand(caller, body)
     use_aliases = !all(indices .== INDICES[1:length(indices)])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
         indices = [INDICES[1:length(indices)]...]
-        body = macroexpand(caller, body)
         for i=1:length(indices_aliases)
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
+    body   = handle_padding(body, padding) # TODO: padding can later be made configurable per kernel (to enable working with arrays as before).
+    body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
@@ -359,7 +362,7 @@ function literaltypes(type1::DataType, type2::DataType, expr::Expr)
 end
 
 
-## FUNCTIONS TO HANDLE SIGNATURES AND INDICES
+## FUNCTIONS TO HANDLE SIGNATURES, INDICES, INVERSES AND PADDING
 
 function adjust_signatures(kernel::Expr, package::Symbol)
     int_type = kernel_int_type(package)
@@ -368,6 +371,58 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     return kernel
+end
+
+function handle_inverses(body::Expr)
+    return postwalk(body) do ex
+        if @capture(ex, (1 | 1.0 | 1.0f0) / x_)
+            return :(inv($x))
+        else
+            return ex
+        end
+    end
+end
+
+function handle_padding(body::Expr, padding::Bool)
+    body = substitute_indices_inn(body, padding)
+    if padding
+        body = substitute_firstlastindex(body)
+        body = substitute_view_accesses(body, INDICES)
+    end
+    return body
+end
+
+function substitute_indices_inn(body::Expr, padding::Bool)
+    for i=1:length(INDICES_INN)
+        index_inn = (padding) ? INDICES[i] : :($(INDICES[i]) + 1) # NOTE: expression of ixi with ix, etc.: if padding is not used, they must be shifted by 1.
+        body = substitute(body, INDICES_INN[i], index_inn)
+    end
+    return body
+end
+
+function substitute_firstlastindex(body::Expr)
+    padding = true
+    return postwalk(body) do ex
+        if @capture(ex, f_(args__)) 
+            if     (f == :firstindex) return :(ParallelStencil.ParallelKernel.@firstindex($(args...), $padding))
+            elseif (f == :lastindex)  return :(ParallelStencil.ParallelKernel.@lastindex($(args...), $padding))
+            else return ex
+            end
+        else
+            return ex
+        end
+    end
+end
+
+function substitute_view_accesses(expr::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+    return postwalk(expr) do ex
+        if is_access(ex, indices...)
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            return :($A.parent[$(indices_expr...)])
+        else
+            return ex
+        end
+    end
 end
 
 function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)

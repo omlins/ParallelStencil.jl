@@ -1,7 +1,7 @@
 import MacroTools: @capture, postwalk, splitdef, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
-import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, insert_device_types, is_kernel, is_call, gensym_world, isgpu, iscpu, @isgpu, @iscpu, substitute, substitute_in_kernel, in_signature, inexpr_walk, adjust_signatures, handle_indices_and_literals, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing
-import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_METAL, INT_POLYESTER, INT_THREADS, INDICES, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS
-import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring
+import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, insert_device_types, is_kernel, is_call, gensym_world, isgpu, iscpu, @isgpu, @iscpu, substitute, substitute_in_kernel, in_signature, inexpr_walk, adjust_signatures, handle_indices_and_literals, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing, @firstindex, @lastindex, is_access, find_vars, handle_padding, handle_inverses
+import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_METAL, INT_POLYESTER, INT_THREADS, INDICES, INDICES_INN, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS
+import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring, interpolate
 
 
 ## CONSTANTS
@@ -37,8 +37,9 @@ const META_FUNCTION_PREFIX       = string(gensym_world("META", @__MODULE__))
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS
 
-get_statements(body::Expr)     = (body.head == :block) ? body.args : [body]
-is_array_assignment(statement) = isa(statement, Expr) && (statement.head == :(=)) && isa(statement.args[1], Expr) && (statement.args[1].head == :macrocall)
+get_statements(body::Expr)        = (body.head == :block) ? body.args : [body]
+is_array_assignment(statement)    = isa(statement, Expr) && (statement.head == :(=)) && isa(statement.args[1], Expr) && (statement.args[1].head == :macrocall)
+is_stencil_access(ex, indices...) = is_access(ex, indices...)
 
 function validate_body(body::Expr)
     statements = get_statements(body)
@@ -47,11 +48,6 @@ function validate_body(body::Expr)
         if isa(statement, Expr) && !is_array_assignment(statement)   @ArgumentError(ERRMSG_KERNEL_UNSUPPORTED) end
     end
 end
-
-is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol, iz::Symbol) = @capture(ex, A_[x_, y_, z_]) && inexpr_walk(x, ix) && inexpr_walk(y, iy) && inexpr_walk(z, iz)
-is_stencil_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_])     && inexpr_walk(x, ix) && inexpr_walk(y, iy)
-is_stencil_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
-is_stencil_access(ex, indices...)                               = false
 
 function substitute(expr::Expr, A, m, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     return postwalk(expr) do ex

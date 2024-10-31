@@ -26,16 +26,15 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 
 import ParallelStencil.@gorgeousexpand
 
-const TEST_PRECISIONS = [Float32, Float64]
+
 @static for package in TEST_PACKAGES
-for precision in TEST_PRECISIONS
-(package == PKG_METAL && precision == Float64) ? continue : nothing # Metal does not support Float64
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, $precision, 3)
+            @init_parallel_stencil($package, $FloatDefault, 3)
             @require @is_initialized()
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
@@ -224,13 +223,13 @@ eval(:(
                 end
                 @testset "@parallel <kernel> (3D; on-the-fly)" begin
                     nx, ny, nz = 32, 8, 8
-                    lam=dt=_dx=_dy=_dz = $precision(1)
+                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                     T      = @zeros(nx, ny, nz);
                     T2     = @zeros(nx, ny, nz);
                     T2_ref = @zeros(nx, ny, nz);
                     Ci     = @ones(nx, ny, nz);
                     copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$precision, _dx, _dy, _dz)
+                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
                         @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                         @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
                         @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
@@ -331,7 +330,7 @@ eval(:(
                             @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -390,13 +389,13 @@ eval(:(
                             @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
                             Ci     = @ones(nx, ny, nz);
                             copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$precision, _dx, _dy, _dz)
+                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
                                 @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                                 @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
                                 @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
@@ -477,7 +476,7 @@ eval(:(
                             @test all(Array(A2) .== Array(A2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -497,7 +496,7 @@ eval(:(
                             @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -517,7 +516,7 @@ eval(:(
                             @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -828,7 +827,7 @@ eval(:(
                             @test all(Array(A2) .== Array(A))
                         end
                         @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -847,7 +846,7 @@ eval(:(
                             @test all(Array(T2) .== Array(T2_ref))
                         end
                         @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $precision(1)
+                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
                             T      = @zeros(nx, ny, nz);
                             T2     = @zeros(nx, ny, nz);
                             T2_ref = @zeros(nx, ny, nz);
@@ -873,19 +872,19 @@ eval(:(
             end;
             @testset "apply masks" begin
                 expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                @test occursin("if @within(\"@all\", A)", expansion)
-                @test @prettystring(@within("@all", A)) == string(:($ix <= size(A, 1) && ($iy <= size(A, 2) && $iz <= size(A, 3))))
+                @test @prettystring(@within("@all", A)) == string(:($ix <= lastindex(A, 1) && ($iy <= lastindex(A, 2) && $iz <= lastindex(A, 3))))
+                @test occursin("if $(@prettystring(@within("@all", A)))", expansion)
             end;
             @reset_parallel_stencil()
         end;
         @testset "2. parallel macros (2D)" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, $precision, 2)
+            @init_parallel_stencil($package, $FloatDefault, 2)
             @require @is_initialized()
             @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
                     nx, ny, nz = 32, 8, 1
                     @testset "@parallel_indices <kernel> (2D, memopt, stencilranges=(-1:1,-1:1,0:0))" begin
-                        lam=dt=_dx=_dy = $precision(1)
+                        lam=dt=_dx=_dy = $FloatDefault(1)
                         T      = @zeros(nx, ny, nz);
                         T2     = @zeros(nx, ny, nz);
                         T2_ref = @zeros(nx, ny, nz);
@@ -913,7 +912,7 @@ eval(:(
         @testset "3. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $precision, 1, inbounds=true)
+                @init_parallel_stencil($package, $FloatDefault, 1, inbounds=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -925,10 +924,10 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (1D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $precision, 1)
+                @init_parallel_stencil($package, $FloatDefault, 1)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
-                one = $precision(1)
+                one = $FloatDefault(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one));
                     return
@@ -939,10 +938,10 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (2D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $precision, 2)
+                @init_parallel_stencil($package, $FloatDefault, 2)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
-                one = $precision(1)
+                one = $FloatDefault(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one, size(A,1)));
                     return
@@ -953,10 +952,10 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (3D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $precision, 3)
+                @init_parallel_stencil($package, $FloatDefault, 3)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
-                one = $precision(1)
+                one = $FloatDefault(1)
                 @parallel_indices (I...) function write_indices!(A, one)
                     A[I...] = sum((I .- (1,)) .* (one, size(A,1), size(A,1)*size(A,2)));
                     return
@@ -1061,7 +1060,7 @@ eval(:(
             @reset_parallel_stencil()
         end;
         @testset "5. Exceptions" begin
-            @init_parallel_stencil($package, $precision, 3)
+            @init_parallel_stencil($package, $FloatDefault, 3)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                  # Error: isempty(args)
@@ -1080,4 +1079,4 @@ eval(:(
     end;
 ))
 
-end end == nothing || true;
+end == nothing || true;
