@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
 import ParallelStencil: @require
 using ParallelStencil.FiniteDifferences2D
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -12,12 +12,28 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if PKG_METAL in TEST_PACKAGES
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-@static for package in TEST_PACKAGES  eval(:(
-    @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
+const TEST_PRECISIONS = [Float32, Float64]
+@static for package in TEST_PACKAGES
+for precision in TEST_PRECISIONS
+(package == PKG_METAL && precision == Float64) && continue # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package))) (precision: $(nameof($precision)))" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, Float64, 2)
+        @init_parallel_stencil($package, $precision, 2)
         @require @is_initialized()
         nx, ny = 7, 5
         A      =  @rand(nx,   ny  );
@@ -66,11 +82,11 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @parallel av_ya!(R, Ay)   = (@all(R) = @av_ya(Ay); return)
                 @parallel av_xi!(R, Axyy) = (@all(R) = @av_xi(Axyy); return)
                 @parallel av_yi!(R, Axxy) = (@all(R) = @av_yi(Axxy); return)
-                R.=0; @parallel av!(R, Axy);      @test all(Array(R .== (Axy[1:end-1,1:end-1].+Axy[2:end,1:end-1].+Axy[1:end-1,2:end].+Axy[2:end,2:end])*0.25))
-                R.=0; @parallel av_xa!(R, Ax);    @test all(Array(R .== (Ax[2:end,    :].+Ax[1:end-1,      :]).*0.5))
-                R.=0; @parallel av_ya!(R, Ay);    @test all(Array(R .== (Ay[    :,2:end].+Ay[      :,1:end-1]).*0.5))
-                R.=0; @parallel av_xi!(R, Axyy);  @test all(Array(R .== (Axyy[2:end  ,2:end-1].+Axyy[1:end-1,2:end-1]).*0.5))
-                R.=0; @parallel av_yi!(R, Axxy);  @test all(Array(R .== (Axxy[2:end-1,2:end  ].+Axxy[2:end-1,1:end-1]).*0.5))
+                R.=0; @parallel av!(R, Axy);      @test all(Array(R .== (Axy[1:end-1,1:end-1].+Axy[2:end,1:end-1].+Axy[1:end-1,2:end].+Axy[2:end,2:end]).*$precision(0.25)))
+                R.=0; @parallel av_xa!(R, Ax);    @test all(Array(R .== (Ax[2:end,    :].+Ax[1:end-1,      :]).*$precision(0.5)))
+                R.=0; @parallel av_ya!(R, Ay);    @test all(Array(R .== (Ay[    :,2:end].+Ay[      :,1:end-1]).*$precision(0.5)))
+                R.=0; @parallel av_xi!(R, Axyy);  @test all(Array(R .== (Axyy[2:end  ,2:end-1].+Axyy[1:end-1,2:end-1]).*$precision(0.5)))
+                R.=0; @parallel av_yi!(R, Axxy);  @test all(Array(R .== (Axxy[2:end-1,2:end  ].+Axxy[2:end-1,1:end-1]).*$precision(0.5)))
             end;
             @testset "harmonic averages" begin
                 @parallel harm!(R, Axy)     = (@all(R) = @harm(Axy); return)
@@ -112,4 +128,6 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
         end;
         @reset_parallel_stencil()
     end;
-)) end == nothing || true;
+))
+
+end end == nothing || true;

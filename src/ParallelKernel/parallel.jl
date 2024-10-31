@@ -15,8 +15,8 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 !!! note "Advanced"
@@ -24,7 +24,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads or Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads or Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -90,18 +90,22 @@ macro synchronize(args...) check_initialized(__module__); esc(synchronize(__modu
 
 macro parallel_cuda(args...)              check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
 macro parallel_amdgpu(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_metal(args...)             check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_METAL)); end
 macro parallel_threads(args...)           check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
 macro parallel_polyester(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_POLYESTER)); end
 macro parallel_indices_cuda(args...)      check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
 macro parallel_indices_amdgpu(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_metal(args...)     check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_METAL)); end
 macro parallel_indices_threads(args...)   check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_polyester(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_POLYESTER)); end
 macro parallel_async_cuda(args...)        check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
 macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_metal(args...)       check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_METAL)); end
 macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
 macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_POLYESTER)); end
 macro synchronize_cuda(args...)           check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_CUDA)); end
 macro synchronize_amdgpu(args...)         check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_AMDGPU)); end
+macro synchronize_metal(args...)          check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_METAL)); end
 macro synchronize_threads(args...)        check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_THREADS)); end
 macro synchronize_polyester(args...)      check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_POLYESTER)); end
 
@@ -158,6 +162,7 @@ end
 function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)      synchronize_cuda(args...)
     elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
+    elseif (package == PKG_METAL)     synchronize_metal(args...)
     elseif (package == PKG_THREADS)   synchronize_threads(args...)
     elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -238,6 +243,7 @@ function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Exp
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)  int_type = INT_METAL
     end
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
@@ -306,6 +312,7 @@ end
 
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...); blocking=true))
 synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...); blocking=true))
+synchronize_metal(args::Union{Symbol,Expr}...) = :(Metal.synchronize($(args...)))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
@@ -603,17 +610,22 @@ function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads:
         if !isnothing(shmem)
             if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_AMDGPU) shmem_expr = :(shmem = $shmem)
+            elseif (package == PKG_METAL)  shmem_expr = nothing # No need to pass shared memory to Metal kernels.
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
-            backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+            if package != PKG_METAL
+                backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+            end
         end
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=$nblocks groupsize=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+        elseif (package == PKG_METAL)  return :( Metal.@metal groups=$nblocks threads=$nthreads queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
         if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
+        elseif (package == PKG_METAL)  return :( Metal.@metal launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
@@ -622,6 +634,7 @@ end
 function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     if     (package == PKG_CUDA)   synchronize_cuda(stream)
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
+    elseif (package == PKG_METAL)  synchronize_metal(stream)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -629,6 +642,7 @@ end
 function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
+    elseif (package == PKG_METAL)   return :(Metal.global_queue(Metal.device())) # Use the default queue of the task.
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
