@@ -15,6 +15,9 @@ ENTRY
     chapter
     edition
     editor
+    eprint
+    eprinttype
+    eprintclass
     howpublished
     institution
     journal
@@ -31,6 +34,7 @@ ENTRY
     type
     volume
     year
+    doi
   }
   {}
   { label }
@@ -225,6 +229,33 @@ FUNCTION {format.editors}
       editor num.names$ #1 >
 	{ ", editors" * }
 	{ ", editor" * }
+      if$
+    }
+  if$
+}
+
+FUNCTION {format.eprint}
+{ eprint empty$
+    { "" }
+    { eprinttype empty$
+        { eprintclass empty$
+            { eprint }
+            { eprint " [" * eprintclass * "]" * }
+          if$
+        }
+        { eprinttype "arxiv" =
+            { eprintclass empty$
+                { eprinttype ":" * "\href{http://arxiv.org/abs/" * eprint * "}{" * eprint * "}" * }
+                { eprinttype ":" * "\href{http://arxiv.org/abs/" * eprint * "}{" * eprint * " [" * eprintclass * "]" * "}" * }
+              if$
+            }
+            { eprintclass empty$
+                { eprinttype ":" * eprint * }
+                { eprinttype ":" * eprint * " [" * eprintclass * "]" *}
+              if$
+            }
+            if$
+        }
       if$
     }
   if$
@@ -535,6 +566,17 @@ FUNCTION {format.incoll.inproc.crossref}
   " \cite{" * crossref * "}" *
 }
 
+% based on
+% https://tex.stackexchange.com/a/127819/245
+FUNCTION {output.doi}
+{
+    doi empty$
+        { skip$ }
+        { "\href{http://dx.doi.org/" doi * "}{doi:" * doi * "}" * output }
+    if$
+}
+
+
 FUNCTION {article}
 { output.bibitem
   format.authors "author" output.check
@@ -550,6 +592,10 @@ FUNCTION {article}
       format.pages output
     }
   if$
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -583,6 +629,8 @@ FUNCTION {book}
   format.edition output
   format.date "year" output.check
   new.block
+  output.doi
+  new.block
   note output
   fin.entry
 }
@@ -596,6 +644,10 @@ FUNCTION {booklet}
   howpublished output
   address output
   format.date output
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -631,6 +683,10 @@ FUNCTION {inbook}
   format.edition output
   format.date "year" output.check
   new.block
+  output.doi
+  new.block
+  format.eprint output
+  new.block
   note output
   fin.entry
 }
@@ -656,6 +712,10 @@ FUNCTION {incollection}
       format.chapter.pages output
     }
   if$
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -690,6 +750,10 @@ FUNCTION {inproceedings}
       format.pages output
     }
   if$
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -727,6 +791,10 @@ FUNCTION {manual}
   format.edition output
   format.date output
   new.block
+  output.doi
+  new.block
+  format.eprint output
+  new.block
   note output
   fin.entry
 }
@@ -742,6 +810,10 @@ FUNCTION {mastersthesis}
   address output
   format.date "year" output.check
   new.block
+  output.doi
+  new.block
+  format.eprint output
+  new.block
   note output
   fin.entry
 }
@@ -754,6 +826,10 @@ FUNCTION {misc}
   howpublished new.block.checka
   howpublished output
   format.date output
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -770,6 +846,10 @@ FUNCTION {phdthesis}
   school "school" output.check
   address output
   format.date "year" output.check
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note output
   fin.entry
@@ -806,6 +886,10 @@ FUNCTION {proceedings}
     }
   if$
   new.block
+  output.doi
+  new.block
+  format.eprint output
+  new.block
   note output
   fin.entry
 }
@@ -821,6 +905,10 @@ FUNCTION {techreport}
   address output
   format.date "year" output.check
   new.block
+  output.doi
+  new.block
+  format.eprint output
+  new.block
   note output
   fin.entry
 }
@@ -830,6 +918,10 @@ FUNCTION {unpublished}
   format.authors "author" output.check
   new.block
   format.title "title" output.check
+  new.block
+  output.doi
+  new.block
+  format.eprint output
   new.block
   note "note" output.check
   format.date output

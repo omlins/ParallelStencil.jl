@@ -12,7 +12,7 @@ end
 # ENV variables or default for issue/volume/year
 issue = ENV["JLCON_ISSUE"] === nil ? 1 : ENV["JLCON_ISSUE"]
 volume = ENV["JLCON_VOLUME"] === nil ? 1 : ENV["JLCON_VOLUME"]
-year = ENV["JLCON_YEAR"] === nil ? 2020 : ENV["JLCON_YEAR"]
+year = ENV["JLCON_YEAR"] === nil ? 2022 : ENV["JLCON_YEAR"]
 journal_name = "Proceedings of JuliaCon" # hard-coded for now
 
 open('header.tex', 'w') do |f|
@@ -34,7 +34,7 @@ open('header.tex', 'w') do |f|
 	# hypersetup
 	f << "\\hypersetup{\n"
 	f << "pdftitle = {#{metadata["title"]}},\n"
-	f << "pdfsubject = {JuliaCon 2019 Proceedings},\n"
+	f << "pdfsubject = {JuliaCon #{year} Proceedings},\n"
 	author_list = metadata['authors'].map { |a| a['name'] }.join(', ')
 	f << "pdfauthor = {#{author_list}},\n"
 	keyword_list = metadata['keywords'].join(', ')

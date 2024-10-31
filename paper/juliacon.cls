@@ -939,6 +939,11 @@ to\hsize{\if@nfeven\else\hfil\fi\box\@tempboxa\if@nfeven\hfil\fi}
 
 \usepackage{authblk}
 
+% Fixes issue related to listing captions: https://github.com/JuliaCon/JuliaConSubmission.jl/issues/31
+\usepackage{caption}
+\captionsetup[lstlisting]{singlelinecheck=false, margin=0pt}
+\renewcommand\lstlistingname{Code}
+
 \endinput
 
 % end of juliacon.cls
