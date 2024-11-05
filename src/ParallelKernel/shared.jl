@@ -375,12 +375,16 @@ end
 
 ## FUNCTIONS FOR COMMON MANIPULATIONS ON EXPRESSIONS
 
-function substitute(expr::Expr, old, new; inQuoteNode=false)
+function substitute(expr::Expr, old, new; inQuoteNode=false, inString=false)
+    old_str = string(old)
+    new_str = string(new)
     return postwalk(expr) do x
         if x == old
             return new
         elseif inQuoteNode && isa(x, QuoteNode) && x.value == old
             return QuoteNode(new)
+        elseif inString && isa(x, String) && occursin(old_str, x)
+            return replace(x, old_str => new_str)
         else
             return x;
         end
@@ -521,7 +525,7 @@ end
 
 function interpolate(sym::Symbol, vals::NTuple, block::Expr)
     return quote
-        $((substitute(block, :(_$($sym)), val) for val in vals)...)
+        $((substitute(block, sym, val; inQuoteNode=true, inString=true) for val in vals)...)
     end
 end
 
