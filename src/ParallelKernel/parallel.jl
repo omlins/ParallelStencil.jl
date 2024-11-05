@@ -385,8 +385,8 @@ end
 
 function handle_padding(body::Expr, padding::Bool)
     body = substitute_indices_inn(body, padding)
+    body = substitute_firstlastindex(body, padding)
     if padding
-        body = substitute_firstlastindex(body)
         body = substitute_view_accesses(body, INDICES)
     end
     return body
@@ -400,8 +400,7 @@ function substitute_indices_inn(body::Expr, padding::Bool)
     return body
 end
 
-function substitute_firstlastindex(body::Expr)
-    padding = true
+function substitute_firstlastindex(body::Expr, padding::Bool)
     return postwalk(body) do ex
         if @capture(ex, f_(args__)) 
             if     (f == :firstindex) return :(ParallelStencil.ParallelKernel.@firstindex($(args...), $padding))
