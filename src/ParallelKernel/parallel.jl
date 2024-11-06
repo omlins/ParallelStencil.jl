@@ -373,6 +373,17 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     return kernel
 end
 
+# TODO: the following function is currently not used and of no effect if used (the expression does not appear as such but as part of a whole if statement; furthermore, the first last index macro needs to be expanded first)
+function simplify_conditions(body::Expr)
+    return postwalk(body) do ex
+        if @capture(ex, a_ < x_ + 1 < b_) && isa(a, Integer)
+            return :($(a-1) < $x < $b - 1)
+        else
+            return ex
+        end
+    end
+end
+
 function handle_inverses(body::Expr)
     return postwalk(body) do ex
         if @capture(ex, (1 | 1.0 | 1.0f0) / x_)
