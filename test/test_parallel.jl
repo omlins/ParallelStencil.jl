@@ -1,11 +1,12 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, INDICES_INN, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
+ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -854,10 +855,9 @@ eval(:(
                     end
                 end                
             end;
-            @testset "apply masks" begin
-                expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+            @testset "@within" begin
                 @test @prettystring(@within("@all", A)) == string(:($ix <= lastindex(A, 1) && ($iy <= lastindex(A, 2) && $iz <= lastindex(A, 3))))
-                @test occursin("if var\"$ix\" <= ParallelStencil.ParallelKernel.@lastindex(A, 1, false) && (var\"$iy\" <= ParallelStencil.ParallelKernel.@lastindex(A, 2, false) && var\"$iz\" <= ParallelStencil.ParallelKernel.@lastindex(A, 3, false))", expansion)
+                @test @prettystring(@within("@inn", A)) == string(:(firstindex(A, 1) < $ixi < lastindex(A, 1) && (firstindex(A, 2) < $iyi < lastindex(A, 2) && firstindex(A, 3) < $izi < lastindex(A, 3))))
             end;
             @reset_parallel_stencil()
         end;
@@ -904,6 +904,40 @@ eval(:(
                 @test occursin("Base.@inbounds begin", expansion)
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=false f(A) = (2*A; return))
                 @test !occursin("Base.@inbounds begin", expansion)
+                @reset_parallel_stencil()
+            end;
+            @testset "padding=false" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, padding=false)
+                @require @is_initialized
+                @testset "apply masks | handling padding" begin
+                    expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                    @test occursin("if var\"$ix\" <= ParallelStencil.ParallelKernel.@lastindex(A, 1, false) && (var\"$iy\" <= ParallelStencil.ParallelKernel.@lastindex(A, 2, false) && var\"$iz\" <= ParallelStencil.ParallelKernel.@lastindex(A, 3, false))", expansion)
+                    expansion = @prettystring(@parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                    @test occursin("if var\"$ix\" <= size(A, 1) && (var\"$iy\" <= size(A, 2) && var\"$iz\" <= size(A, 3))", expansion)
+                    expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                    @test occursin("if ParallelStencil.ParallelKernel.@firstindex(A, 1, false) < var\"$ix\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 1, false) && (ParallelStencil.ParallelKernel.@firstindex(A, 2, false) < var\"$iy\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 2, false) && ParallelStencil.ParallelKernel.@firstindex(A, 3, false) < var\"$iz\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 3, false))", expansion)
+                    @test occursin("A[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1] = A[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1] + B[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1]", expansion)
+                    expansion = @prettystring(@parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                    @test occursin("if 1 < var\"$ix\" + 1 < size(A, 1) && (1 < var\"$iy\" + 1 < size(A, 2) && 1 < var\"$iz\" + 1 < size(A, 3))", expansion)
+                end;
+                @reset_parallel_stencil()
+            end;
+            @testset "padding=true" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+                @require @is_initialized
+                @testset "apply masks | handling padding" begin
+                    expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                    @test occursin("if var\"$ix\" <= ParallelStencil.ParallelKernel.@lastindex(A, 1, true) && (var\"$iy\" <= ParallelStencil.ParallelKernel.@lastindex(A, 2, true) && var\"$iz\" <= ParallelStencil.ParallelKernel.@lastindex(A, 3, true))", expansion)
+                    expansion = @prettystring(@parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                    @test occursin("if var\"$ix\" <= (A.indices[1])[end] && (var\"$iy\" <= (A.indices[2])[end] && var\"$iz\" <= (A.indices[3])[end])", expansion)
+                    expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                    @test occursin("if ParallelStencil.ParallelKernel.@firstindex(A, 1, true) < var\"$ix\" < ParallelStencil.ParallelKernel.@lastindex(A, 1, true) && (ParallelStencil.ParallelKernel.@firstindex(A, 2, true) < var\"$iy\" < ParallelStencil.ParallelKernel.@lastindex(A, 2, true) && ParallelStencil.ParallelKernel.@firstindex(A, 3, true) < var\"$iz\" < ParallelStencil.ParallelKernel.@lastindex(A, 3, true))", expansion)
+                    @test occursin("A.parent[var\"$ix\", var\"$iy\", var\"$iz\"] = A.parent[var\"$ix\", var\"$iy\", var\"$iz\"] + B.parent[var\"$ix\", var\"$iy\", var\"$iz\"]", expansion)
+                    expansion = @prettystring(@parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                    @test occursin("if (A.indices[1])[1] < var\"$ix\" < (A.indices[1])[end] && ((A.indices[2])[1] < var\"$iy\" < (A.indices[2])[end] && (A.indices[3])[1] < var\"$iz\" < (A.indices[3])[end])", expansion)
+                end;
                 @reset_parallel_stencil()
             end;
             @testset "@parallel_indices (I...) (1D)" begin
