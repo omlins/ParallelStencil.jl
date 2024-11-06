@@ -154,9 +154,10 @@ end
 function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds,), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds, :padding), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
-    parallel_kernel(caller, package, numbertype, inbounds, posargs..., kernelarg)
+    padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
+    parallel_kernel(caller, package, numbertype, inbounds, padding, posargs..., kernelarg)
 end
 
 function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
@@ -172,10 +173,9 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
+function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, padding::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
-    padding = get_padding(caller)
     body = get_body(kernel)
     body = remove_return(body)
     body = macroexpand(caller, body)
