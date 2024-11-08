@@ -62,8 +62,8 @@ macro minloc(A)  @expandargs(A);  esc(:( min( min($A[$ixi-1], $A[$ixi+1]), $A[$i
 @doc WITHIN_DOC
 macro within(macroname::String, A)
     @expandargs(A)
-    if     macroname == "@all"  esc(  :(                   $ix  <= lastindex($A,1))  )
-    elseif macroname == "@inn"  esc(  :(firstindex($A,1) < $ixi <  lastindex($A,1))  )
+    if     macroname == "@all"  esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1))  )
+    elseif macroname == "@inn"  esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1))  )
     else error("unkown macroname: $macroname. If you want to add your own assignement macros, overwrite the macro 'within(macroname::String, A)'; to still use the exising macro within as well call ParallelStencil.FiniteDifferences{1|2|3}D.@within(macroname, A) at the end.")
     end
 end
@@ -185,10 +185,10 @@ macro   minloc(A)  @expandargs(A);  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$
 @doc WITHIN_DOC
 macro within(macroname::String, A)
     @expandargs(A)
-    if     macroname == "@all"    esc(  :(                 $ix<=lastindex($A,1) &&                  $iy<=lastindex($A,2))  )
-    elseif macroname == "@inn"    esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2))  )
-    elseif macroname == "@inn_x"  esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) &&                  $iy<=lastindex($A,2))  )
-    elseif macroname == "@inn_y"  esc(  :(                 $ix<=lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2))  )
+    if     macroname == "@all"    esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2))  )
+    elseif macroname == "@inn"    esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2))  )
+    elseif macroname == "@inn_x"  esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2))  )
+    elseif macroname == "@inn_y"  esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2))  )
     else error("unkown macroname: $macroname. If you want to add your own assignement macros, overwrite the macro 'within(macroname::String, A)'; to still use the exising macro within as well call ParallelStencil.FiniteDifferences{1|2|3}D.@within(macroname, A) at the end.")
     end
 end
@@ -393,14 +393,14 @@ macro   minloc(A)  @expandargs(A);  esc(:( min( min( min( min($A[$ixi-1,$iyi  ,$
 @doc WITHIN_DOC
 macro within(macroname::String, A)
     @expandargs(A)
-    if     macroname == "@all"    esc(  :(                 $ix<=lastindex($A,1) &&                  $iy<=lastindex($A,2) &&                  $iz<=lastindex($A,3))  )
-    elseif macroname == "@inn"    esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2) && firstindex($A,3)<$izi<lastindex($A,3))  )
-    elseif macroname == "@inn_x"  esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) &&                  $iy<=lastindex($A,2) &&                  $iz<=lastindex($A,3))  )
-    elseif macroname == "@inn_y"  esc(  :(                 $ix<=lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2) &&                  $iz<=lastindex($A,3))  )
-    elseif macroname == "@inn_z"  esc(  :(                 $ix<=lastindex($A,1) &&                  $iy<=lastindex($A,2) && firstindex($A,3)<$izi<lastindex($A,3))  )
-    elseif macroname == "@inn_xy" esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2) &&                  $iz<=lastindex($A,3))  )
-    elseif macroname == "@inn_xz" esc(  :(firstindex($A,1)<$ixi<lastindex($A,1) &&                  $iy<=lastindex($A,2) && firstindex($A,3)<$izi<lastindex($A,3))  )
-    elseif macroname == "@inn_yz" esc(  :(                 $ix<=lastindex($A,1) && firstindex($A,2)<$iyi<lastindex($A,2) && firstindex($A,3)<$izi<lastindex($A,3))  )
+    if     macroname == "@all"    esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2) && firstindex($A,3) <= $iz  <= lastindex($A,3))  )
+    elseif macroname == "@inn"    esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2) && firstindex($A,3) <  $izi <  lastindex($A,3))  )
+    elseif macroname == "@inn_x"  esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2) && firstindex($A,3) <= $iz  <= lastindex($A,3))  )
+    elseif macroname == "@inn_y"  esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2) && firstindex($A,3) <= $iz  <= lastindex($A,3))  )
+    elseif macroname == "@inn_z"  esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2) && firstindex($A,3) <  $izi <  lastindex($A,3))  )
+    elseif macroname == "@inn_xy" esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2) && firstindex($A,3) <= $iz  <= lastindex($A,3))  )
+    elseif macroname == "@inn_xz" esc(  :(firstindex($A,1) <  $ixi <  lastindex($A,1) && firstindex($A,2) <= $iy  <= lastindex($A,2) && firstindex($A,3) <  $izi <  lastindex($A,3))  )
+    elseif macroname == "@inn_yz" esc(  :(firstindex($A,1) <= $ix  <= lastindex($A,1) && firstindex($A,2) <  $iyi <  lastindex($A,2) && firstindex($A,3) <  $izi <  lastindex($A,3))  )
     end
 end
 
