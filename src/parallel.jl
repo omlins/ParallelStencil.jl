@@ -201,8 +201,8 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
                     $metadata_function
                 end
             else
-                kwargs_expr = :(inbounds=$inbounds, padding=$padding)
-                ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr, kernelarg; package=package)
+                kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
+                ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
             end
         end
     end
@@ -273,19 +273,21 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     validate_body(body)
     kernelargs = splitarg.(extract_kernel_args(kernel)[1])
     argvars = (arg[1] for arg in kernelargs)
-    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
     check_mask_macro(caller)
+    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
     body = apply_masks(body, indices)
     body = macroexpand(caller, body)
-    body = handle_padding(body, padding)
+    body = handle_padding(body, padding; handle_firstlastindex=false, handle_view_accesses=false)
     if length(onthefly_vars) > 0
         onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
         onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
-        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,))
-        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
+        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,); handle_firstlastindex=false, handle_view_accesses=false)
         onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
+        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,); handle_indices=false)
+        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
     end
+    body = handle_padding(body, padding; handle_indices=false)
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
