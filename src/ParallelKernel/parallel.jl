@@ -394,12 +394,10 @@ function handle_inverses(body::Expr)
     end
 end
 
-function handle_padding(body::Expr, padding::Bool)
-    body = substitute_indices_inn(body, padding)
-    body = substitute_firstlastindex(body, padding)
-    if padding
-        body = substitute_view_accesses(body, INDICES)
-    end
+function handle_padding(body::Expr, padding::Bool; handle_indices::Bool=true, handle_firstlastindex::Bool=true, handle_view_accesses::Bool=true)
+    if (handle_indices)                  body = substitute_indices_inn(body, padding) end
+    if (handle_firstlastindex)           body = substitute_firstlastindex(body, padding) end
+    if (handle_view_accesses && padding) body = substitute_view_accesses(body, INDICES) end
     return body
 end
 
