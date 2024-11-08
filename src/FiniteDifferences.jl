@@ -46,16 +46,17 @@ export @within
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil
-import ..ParallelStencil: INDICES, INDICES_INN, WITHIN_DOC, @expandargs
+import ..ParallelStencil: INDICES, INDICES_INN, INDICES_DIR, WITHIN_DOC, @expandargs
 const ix  = INDICES[1]
 const ixi = INDICES_INN[1]
+const ixd = INDICES_DIR[1]
 
-macro      d(A)  @expandargs(A);  esc(:( $A[$ixi] - $A[$ixi-1] )) end
+macro      d(A)  @expandargs(A);  esc(:( $A[$ixd] - $A[$ixd-1] )) end
 macro     d2(A)  @expandargs(A);  esc(:( ($A[$ixi+1] - $A[$ixi])  -  ($A[$ixi] - $A[$ixi-1]) )) end
 macro    all(A)  @expandargs(A);  esc(:( $A[$ix  ] )) end
 macro    inn(A)  @expandargs(A);  esc(:( $A[$ixi ] )) end
-macro     av(A)  @expandargs(A);  esc(:(($A[$ixi-1] + $A[$ixi] )*0.5 )) end
-macro   harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1] + 1.0/$A[$ixi])*2.0 )) end
+macro     av(A)  @expandargs(A);  esc(:(($A[$ixd-1] + $A[$ixd] )*0.5 )) end
+macro   harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1] + 1.0/$A[$ixd])*2.0 )) end
 macro maxloc(A)  @expandargs(A);  esc(:( max( max($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 macro minloc(A)  @expandargs(A);  esc(:( min( min($A[$ixi-1], $A[$ixi+1]), $A[$ixi] ) )) end
 
@@ -151,14 +152,15 @@ export @within
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil
-import ..ParallelStencil: INDICES, INDICES_INN, WITHIN_DOC, @expandargs
+import ..ParallelStencil: INDICES, INDICES_INN, INDICES_DIR, WITHIN_DOC, @expandargs
 ix, iy   = INDICES[1], INDICES[2]
 ixi, iyi = INDICES_INN[1], INDICES_INN[2]
+ixd, iyd = INDICES_DIR[1], INDICES_DIR[2]
 
-macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ixi,$iy ] - $A[$ixi-1,$iy   ] )) end
-macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix ,$iyi] - $A[$ix   ,$iyi-1] )) end
-macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi] - $A[$ixi-1,$iyi  ] )) end
-macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi] - $A[$ixi  ,$iyi-1] )) end
+macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ixd,$iy ] - $A[$ixd-1,$iy   ] )) end
+macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix ,$iyd] - $A[$ix   ,$iyd-1] )) end
+macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ixd,$iyi] - $A[$ixd-1,$iyi  ] )) end
+macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyd] - $A[$ixi  ,$iyd-1] )) end
 macro    d2_xa(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iy   ] - $A[$ixi ,$iy ])  -  ($A[$ixi ,$iy ] - $A[$ixi-1,$iy   ]) )) end
 macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ix   ,$iyi+1] - $A[$ix  ,$iyi])  -  ($A[$ix  ,$iyi] - $A[$ix   ,$iyi-1]) )) end
 macro    d2_xi(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi ,$iyi])  -  ($A[$ixi ,$iyi] - $A[$ixi-1,$iyi  ]) )) end
@@ -167,16 +169,16 @@ macro      all(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy  ] )) end
 macro      inn(A)  @expandargs(A);  esc(:( $A[$ixi ,$iyi ] )) end
 macro    inn_x(A)  @expandargs(A);  esc(:( $A[$ixi ,$iy  ] )) end
 macro    inn_y(A)  @expandargs(A);  esc(:( $A[$ix  ,$iyi ] )) end
-macro       av(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi-1] + $A[$ixi,$iyi-1] + $A[$ixi-1,$iyi] + $A[$ixi,$iyi])*0.25 )) end
-macro    av_xa(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iy   ] + $A[$ixi,$iy ] )*0.5 )) end
-macro    av_ya(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyi-1] + $A[$ix ,$iyi] )*0.5 )) end
-macro    av_xi(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi  ] + $A[$ixi,$iyi] )*0.5 )) end
-macro    av_yi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyi-1] + $A[$ixi,$iyi] )*0.5 )) end
-macro     harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi-1] + 1.0/$A[$ixi,$iyi-1] + 1.0/$A[$ixi-1,$iyi] + 1.0/$A[$ixi,$iyi])*4.0 )) end
-macro  harm_xa(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iy   ] + 1.0/$A[$ixi,$iy ] )*2.0 )) end
-macro  harm_ya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyi-1] + 1.0/$A[$ix ,$iyi] )*2.0 )) end
-macro  harm_xi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi  ] + 1.0/$A[$ixi,$iyi] )*2.0 )) end
-macro  harm_yi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyi-1] + 1.0/$A[$ixi,$iyi] )*2.0 )) end
+macro       av(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyd-1] + $A[$ixd,$iyd-1] + $A[$ixd-1,$iyd] + $A[$ixd,$iyd])*0.25 )) end
+macro    av_xa(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iy   ] + $A[$ixd,$iy ] )*0.5 )) end
+macro    av_ya(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyd-1] + $A[$ix ,$iyd] )*0.5 )) end
+macro    av_xi(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyi  ] + $A[$ixd,$iyi] )*0.5 )) end
+macro    av_yi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyd-1] + $A[$ixi,$iyd] )*0.5 )) end
+macro     harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyd-1] + 1.0/$A[$ixd,$iyd-1] + 1.0/$A[$ixd-1,$iyd] + 1.0/$A[$ixd,$iyd])*4.0 )) end
+macro  harm_xa(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iy   ] + 1.0/$A[$ixd,$iy ] )*2.0 )) end
+macro  harm_ya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyd-1] + 1.0/$A[$ix ,$iyd] )*2.0 )) end
+macro  harm_xi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyi  ] + 1.0/$A[$ixd,$iyi] )*2.0 )) end
+macro  harm_yi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyd-1] + 1.0/$A[$ixi,$iyd] )*2.0 )) end
 macro   maxloc(A)  @expandargs(A);  esc(:( max( max( max($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
                                                      max($A[$ixi  ,$iyi-1], $A[$ixi  ,$iyi+1]) ) )) end
 macro   minloc(A)  @expandargs(A);  esc(:( min( min( min($A[$ixi-1,$iyi  ], $A[$ixi+1,$iyi  ])  , $A[$ixi  ,$iyi  ] ),
@@ -318,16 +320,17 @@ export @within
 @doc "`@minloc(A)`: Compute the minimum between 2nd order adjacent elements of `A`, using a moving window of size 3." :(@minloc)
 
 import ..ParallelStencil
-import ..ParallelStencil: INDICES, INDICES_INN, WITHIN_DOC, @expandargs
+import ..ParallelStencil: INDICES, INDICES_INN, INDICES_DIR, WITHIN_DOC, @expandargs
 ix, iy, iz    = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
+ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 
-macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ixi,$iy ,$iz  ] - $A[$ixi-1,$iy   ,$iz  ] )) end
-macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix ,$iyi,$iz  ] - $A[$ix   ,$iyi-1,$iz  ] )) end
-macro     d_za(A)  @expandargs(A);  esc(:( $A[$ix ,$iy ,$izi ] - $A[$ix   ,$iy   ,$izi-1] )) end
-macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi,$izi ] - $A[$ixi-1,$iyi  ,$izi  ] )) end
-macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi,$izi ] - $A[$ixi  ,$iyi-1,$izi  ] )) end
-macro     d_zi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi,$izi ] - $A[$ixi  ,$iyi  ,$izi-1] )) end
+macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ixd,$iy ,$iz  ] - $A[$ixd-1,$iy   ,$iz  ] )) end
+macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ix ,$iyd,$iz  ] - $A[$ix   ,$iyd-1,$iz  ] )) end
+macro     d_za(A)  @expandargs(A);  esc(:( $A[$ix ,$iy ,$izd ] - $A[$ix   ,$iy   ,$izd-1] )) end
+macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ixd,$iyi,$izi ] - $A[$ixd-1,$iyi  ,$izi  ] )) end
+macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyd,$izi ] - $A[$ixi  ,$iyd-1,$izi  ] )) end
+macro     d_zi(A)  @expandargs(A);  esc(:( $A[$ixi,$iyi,$izd ] - $A[$ixi  ,$iyi  ,$izd-1] )) end
 macro    d2_xi(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iyi  ,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi-1,$iyi  ,$izi  ]) )) end
 macro    d2_yi(A)  @expandargs(A);  esc(:( ($A[$ixi  ,$iyi+1,$izi  ] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi-1,$izi  ]) )) end
 macro    d2_zi(A)  @expandargs(A);  esc(:( ($A[$ixi  ,$iyi  ,$izi+1] - $A[$ixi ,$iyi ,$izi ])  -  ($A[$ixi ,$iyi ,$izi ] - $A[$ixi  ,$iyi  ,$izi-1]) )) end
@@ -339,50 +342,50 @@ macro    inn_z(A)  @expandargs(A);  esc(:( $A[$ix  ,$iy  ,$izi ] )) end
 macro   inn_xy(A)  @expandargs(A);  esc(:( $A[$ixi ,$iyi ,$iz  ] )) end
 macro   inn_xz(A)  @expandargs(A);  esc(:( $A[$ixi ,$iy  ,$izi ] )) end
 macro   inn_yz(A)  @expandargs(A);  esc(:( $A[$ix  ,$iyi ,$izi ] )) end
-macro       av(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi-1,$izi-1] + $A[$ixi  ,$iyi-1,$izi-1] + 
-                                           $A[$ixi-1,$iyi  ,$izi-1] + $A[$ixi  ,$iyi  ,$izi-1] + 
-                                           $A[$ixi-1,$iyi-1,$izi  ] + $A[$ixi  ,$iyi-1,$izi  ] + 
-                                           $A[$ixi-1,$iyi  ,$izi  ] + $A[$ixi  ,$iyi  ,$izi  ])*0.125)) end
-macro    av_xa(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iy   ,$iz   ] + $A[$ixi,$iy ,$iz ] )*0.5 )) end
-macro    av_ya(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyi-1,$iz   ] + $A[$ix ,$iyi,$iz ] )*0.5 )) end
-macro    av_za(A)  @expandargs(A);  esc(:(($A[$ix   ,$iy   ,$izi-1] + $A[$ix ,$iy ,$izi] )*0.5 )) end
-macro    av_xi(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi  ,$izi  ] + $A[$ixi,$iyi,$izi] )*0.5 )) end
-macro    av_yi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyi-1,$izi  ] + $A[$ixi,$iyi,$izi] )*0.5 )) end
-macro    av_zi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyi  ,$izi-1] + $A[$ixi,$iyi,$izi] )*0.5 )) end
-macro   av_xya(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi-1,$iz   ] + $A[$ixi  ,$iyi-1,$iz   ] +
-                                           $A[$ixi-1,$iyi  ,$iz   ] + $A[$ixi  ,$iyi  ,$iz   ])*0.25 )) end
-macro   av_xza(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iy   ,$izi-1] + $A[$ixi  ,$iy   ,$izi-1] +
-                                           $A[$ixi-1,$iy   ,$izi  ] + $A[$ixi  ,$iy   ,$izi  ])*0.25 )) end
-macro   av_yza(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyi-1,$izi-1] + $A[$ix   ,$iyi  ,$izi-1] +
-                                           $A[$ix   ,$iyi-1,$izi  ] + $A[$ix   ,$iyi  ,$izi  ])*0.25 )) end
-macro   av_xyi(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi-1,$izi  ] + $A[$ixi  ,$iyi-1,$izi  ] +
-                                           $A[$ixi-1,$iyi  ,$izi  ] + $A[$ixi  ,$iyi  ,$izi  ])*0.25 )) end
-macro   av_xzi(A)  @expandargs(A);  esc(:(($A[$ixi-1,$iyi  ,$izi-1] + $A[$ixi  ,$iyi  ,$izi-1] +
-                                           $A[$ixi-1,$iyi  ,$izi  ] + $A[$ixi  ,$iyi  ,$izi  ])*0.25 )) end
-macro   av_yzi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyi-1,$izi-1] + $A[$ixi  ,$iyi  ,$izi-1] +
-                                           $A[$ixi  ,$iyi-1,$izi  ] + $A[$ixi  ,$iyi  ,$izi  ])*0.25 )) end
-macro     harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi-1,$izi-1] + 1.0/$A[$ixi  ,$iyi-1,$izi-1] +
-                                               1.0/$A[$ixi-1,$iyi  ,$izi-1] + 1.0/$A[$ixi  ,$iyi  ,$izi-1] +
-                                               1.0/$A[$ixi-1,$iyi-1,$izi  ] + 1.0/$A[$ixi  ,$iyi-1,$izi  ] +
-                                               1.0/$A[$ixi-1,$iyi  ,$izi  ] + 1.0/$A[$ixi  ,$iyi  ,$izi  ] )*8.0)) end
-macro  harm_xa(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iy   ,$iz   ] + 1.0/$A[$ixi,$iy ,$iz ] )*2.0 )) end
-macro  harm_ya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyi-1,$iz   ] + 1.0/$A[$ix ,$iyi,$iz ] )*2.0 )) end
-macro  harm_za(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iy   ,$izi-1] + 1.0/$A[$ix ,$iy ,$izi] )*2.0 )) end
-macro  harm_xi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi  ,$izi  ] + 1.0/$A[$ixi,$iyi,$izi] )*2.0 )) end
-macro  harm_yi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyi-1,$izi  ] + 1.0/$A[$ixi,$iyi,$izi] )*2.0 )) end
-macro  harm_zi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyi  ,$izi-1] + 1.0/$A[$ixi,$iyi,$izi] )*2.0 )) end
-macro harm_xya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi-1,$iz   ] + 1.0/$A[$ixi  ,$iyi-1,$iz   ] +
-                                               1.0/$A[$ixi-1,$iyi  ,$iz   ] + 1.0/$A[$ixi  ,$iyi  ,$iz   ])*4.0 )) end
-macro harm_xza(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iy   ,$izi-1] + 1.0/$A[$ixi  ,$iy   ,$izi-1] +
-                                               1.0/$A[$ixi-1,$iy   ,$izi  ] + 1.0/$A[$ixi  ,$iy   ,$izi  ])*4.0 )) end
-macro harm_yza(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyi-1,$izi-1] + 1.0/$A[$ix   ,$iyi  ,$izi-1] +
-                                               1.0/$A[$ix   ,$iyi-1,$izi  ] + 1.0/$A[$ix   ,$iyi  ,$izi  ])*4.0 )) end
-macro harm_xyi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi-1,$izi  ] + 1.0/$A[$ixi  ,$iyi-1,$izi  ] +
-                                               1.0/$A[$ixi-1,$iyi  ,$izi  ] + 1.0/$A[$ixi  ,$iyi  ,$izi  ])*4.0 )) end
-macro harm_xzi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi-1,$iyi  ,$izi-1] + 1.0/$A[$ixi  ,$iyi  ,$izi-1] +
-                                               1.0/$A[$ixi-1,$iyi  ,$izi  ] + 1.0/$A[$ixi  ,$iyi  ,$izi  ])*4.0 )) end
-macro harm_yzi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyi-1,$izi-1] + 1.0/$A[$ixi  ,$iyi  ,$izi-1] +
-                                               1.0/$A[$ixi  ,$iyi-1,$izi  ] + 1.0/$A[$ixi  ,$iyi  ,$izi  ])*4.0 )) end
+macro       av(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyd-1,$izd-1] + $A[$ixd  ,$iyd-1,$izd-1] + 
+                                           $A[$ixd-1,$iyd  ,$izd-1] + $A[$ixd  ,$iyd  ,$izd-1] + 
+                                           $A[$ixd-1,$iyd-1,$izd  ] + $A[$ixd  ,$iyd-1,$izd  ] + 
+                                           $A[$ixd-1,$iyd  ,$izd  ] + $A[$ixd  ,$iyd  ,$izd  ])*0.125)) end
+macro    av_xa(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iy   ,$iz   ] + $A[$ixd,$iy ,$iz ] )*0.5 )) end
+macro    av_ya(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyd-1,$iz   ] + $A[$ix ,$iyd,$iz ] )*0.5 )) end
+macro    av_za(A)  @expandargs(A);  esc(:(($A[$ix   ,$iy   ,$izd-1] + $A[$ix ,$iy ,$izd] )*0.5 )) end
+macro    av_xi(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyi  ,$izi  ] + $A[$ixd,$iyi,$izi] )*0.5 )) end
+macro    av_yi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyd-1,$izi  ] + $A[$ixi,$iyd,$izi] )*0.5 )) end
+macro    av_zi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyi  ,$izd-1] + $A[$ixi,$iyi,$izd] )*0.5 )) end
+macro   av_xya(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyd-1,$iz   ] + $A[$ixd  ,$iyd-1,$iz   ] +
+                                           $A[$ixd-1,$iyd  ,$iz   ] + $A[$ixd  ,$iyd  ,$iz   ])*0.25 )) end
+macro   av_xza(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iy   ,$izd-1] + $A[$ixd  ,$iy   ,$izd-1] +
+                                           $A[$ixd-1,$iy   ,$izd  ] + $A[$ixd  ,$iy   ,$izd  ])*0.25 )) end
+macro   av_yza(A)  @expandargs(A);  esc(:(($A[$ix   ,$iyd-1,$izd-1] + $A[$ix   ,$iyd  ,$izd-1] +
+                                           $A[$ix   ,$iyd-1,$izd  ] + $A[$ix   ,$iyd  ,$izd  ])*0.25 )) end
+macro   av_xyi(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyd-1,$izi  ] + $A[$ixd  ,$iyd-1,$izi  ] +
+                                           $A[$ixd-1,$iyd  ,$izi  ] + $A[$ixd  ,$iyd  ,$izi  ])*0.25 )) end
+macro   av_xzi(A)  @expandargs(A);  esc(:(($A[$ixd-1,$iyi  ,$izd-1] + $A[$ixd  ,$iyi  ,$izd-1] +
+                                           $A[$ixd-1,$iyi  ,$izd  ] + $A[$ixd  ,$iyi  ,$izd  ])*0.25 )) end
+macro   av_yzi(A)  @expandargs(A);  esc(:(($A[$ixi  ,$iyd-1,$izd-1] + $A[$ixi  ,$iyd  ,$izd-1] +
+                                           $A[$ixi  ,$iyd-1,$izd  ] + $A[$ixi  ,$iyd  ,$izd  ])*0.25 )) end
+macro     harm(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyd-1,$izd-1] + 1.0/$A[$ixd  ,$iyd-1,$izd-1] +
+                                               1.0/$A[$ixd-1,$iyd  ,$izd-1] + 1.0/$A[$ixd  ,$iyd  ,$izd-1] +
+                                               1.0/$A[$ixd-1,$iyd-1,$izd  ] + 1.0/$A[$ixd  ,$iyd-1,$izd  ] +
+                                               1.0/$A[$ixd-1,$iyd  ,$izd  ] + 1.0/$A[$ixd  ,$iyd  ,$izd  ] )*8.0)) end
+macro  harm_xa(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iy   ,$iz   ] + 1.0/$A[$ixd,$iy ,$iz ] )*2.0 )) end
+macro  harm_ya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyd-1,$iz   ] + 1.0/$A[$ix ,$iyd,$iz ] )*2.0 )) end
+macro  harm_za(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iy   ,$izd-1] + 1.0/$A[$ix ,$iy ,$izd] )*2.0 )) end
+macro  harm_xi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyi  ,$izi  ] + 1.0/$A[$ixd,$iyi,$izi] )*2.0 )) end
+macro  harm_yi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyd-1,$izi  ] + 1.0/$A[$ixi,$iyd,$izi] )*2.0 )) end
+macro  harm_zi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyi  ,$izd-1] + 1.0/$A[$ixi,$iyi,$izd] )*2.0 )) end
+macro harm_xya(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyd-1,$iz   ] + 1.0/$A[$ixd  ,$iyd-1,$iz   ] +
+                                               1.0/$A[$ixd-1,$iyd  ,$iz   ] + 1.0/$A[$ixd  ,$iyd  ,$iz   ])*4.0 )) end
+macro harm_xza(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iy   ,$izd-1] + 1.0/$A[$ixd  ,$iy   ,$izd-1] +
+                                               1.0/$A[$ixd-1,$iy   ,$izd  ] + 1.0/$A[$ixd  ,$iy   ,$izd  ])*4.0 )) end
+macro harm_yza(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ix   ,$iyd-1,$izd-1] + 1.0/$A[$ix   ,$iyd  ,$izd-1] +
+                                               1.0/$A[$ix   ,$iyd-1,$izd  ] + 1.0/$A[$ix   ,$iyd  ,$izd  ])*4.0 )) end
+macro harm_xyi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyd-1,$izi  ] + 1.0/$A[$ixd  ,$iyd-1,$izi  ] +
+                                               1.0/$A[$ixd-1,$iyd  ,$izi  ] + 1.0/$A[$ixd  ,$iyd  ,$izi  ])*4.0 )) end
+macro harm_xzi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixd-1,$iyi  ,$izd-1] + 1.0/$A[$ixd  ,$iyi  ,$izd-1] +
+                                               1.0/$A[$ixd-1,$iyi  ,$izd  ] + 1.0/$A[$ixd  ,$iyi  ,$izd  ])*4.0 )) end
+macro harm_yzi(A)  @expandargs(A);  esc(:(1.0/(1.0/$A[$ixi  ,$iyd-1,$izd-1] + 1.0/$A[$ixi  ,$iyd  ,$izd-1] +
+                                               1.0/$A[$ixi  ,$iyd-1,$izd  ] + 1.0/$A[$ixi  ,$iyd  ,$izd  ])*4.0 )) end
 macro   maxloc(A)  @expandargs(A);  esc(:( max( max( max( max($A[$ixi-1,$iyi  ,$izi  ], $A[$ixi+1,$iyi  ,$izi  ])  , $A[$ixi  ,$iyi  ,$izi  ] ),
                                                           max($A[$ixi  ,$iyi-1,$izi  ], $A[$ixi  ,$iyi+1,$izi  ]) ),
                                                           max($A[$ixi  ,$iyi  ,$izi-1], $A[$ixi  ,$iyi  ,$izi+1]) ) )) end
