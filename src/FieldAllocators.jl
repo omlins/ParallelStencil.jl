@@ -28,6 +28,7 @@ To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FieldAllocators
     import ..ParallelKernel
+    import ..ParallelStencil: check_initialized
     @doc replace(ParallelKernel.FieldAllocators.ALLOCATE_DOC,          "@init_parallel_kernel" => "@init_parallel_stencil") macro allocate(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@allocate($(args...)))); end
     @doc replace(ParallelKernel.FieldAllocators.FIELD_DOC,             "@init_parallel_kernel" => "@init_parallel_stencil") macro Field(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@Field($(args...)))); end
     @doc replace(ParallelKernel.FieldAllocators.VECTORFIELD_DOC,       "@init_parallel_kernel" => "@init_parallel_stencil") macro VectorField(args...)  check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@VectorField($(args...)))); end
