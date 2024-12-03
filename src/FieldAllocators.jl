@@ -47,5 +47,19 @@ module FieldAllocators
     @doc replace(ParallelKernel.FieldAllocators.TENSORFIELD_COMP_DOC,  "@init_parallel_kernel" => "@init_parallel_stencil") macro XZField(args...)      check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XZField($(args...)))); end
     @doc replace(ParallelKernel.FieldAllocators.TENSORFIELD_COMP_DOC,  "@init_parallel_kernel" => "@init_parallel_stencil") macro YZField(args...)      check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@YZField($(args...)))); end
 
+    macro IField(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@IField($(args...)))); end
+    macro XXYField(args...)      check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXYField($(args...)))); end
+    macro XYYField(args...)      check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XYYField($(args...)))); end
+    macro XYZField(args...)      check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XYZField($(args...)))); end
+    macro XXYZField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXYZField($(args...)))); end
+    macro XYYZField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XYYZField($(args...)))); end
+    macro XYZZField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XYZZField($(args...)))); end
+    macro XXYYField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXYYField($(args...)))); end
+    macro XXZZField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXZZField($(args...)))); end
+    macro YYZZField(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@YYZZField($(args...)))); end
+    macro XXYYZField(args...)    check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXYYZField($(args...)))); end
+    macro XYYZZField(args...)    check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XYYZZField($(args...)))); end
+    macro XXYZZField(args...)    check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.FieldAllocators.@XXYZZField($(args...)))); end
+
     export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField
 end
