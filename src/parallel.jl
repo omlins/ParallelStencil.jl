@@ -268,6 +268,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
+    indices_dir = get_indices_dir_expr(ndims).args
     body = get_body(kernel)
     body = remove_return(body)
     validate_body(body)
@@ -275,19 +276,20 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     argvars = (arg[1] for arg in kernelargs)
     check_mask_macro(caller)
     onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
+    has_onthefly = !isempty(onthefly_vars)
     body = apply_masks(body, indices)
     body = macroexpand(caller, body)
-    body = handle_padding(body, padding; handle_firstlastindex=false, handle_view_accesses=false)
-    if length(onthefly_vars) > 0
+    body = handle_padding(caller, body, padding, indices; handle_view_accesses=false, delay_dir_handling=has_onthefly && padding) # NOTE: delay_dir_handling is mandatory in case of on-the-fly with padding, because the macros (missing dir_handling) created will only be available in the next world age.
+    if has_onthefly
         onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
         onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
-        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,); handle_firstlastindex=false, handle_view_accesses=false)
-        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
-        onthefly_exprs = handle_padding.(onthefly_exprs, (padding,); handle_indices=false)
-        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
-        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
+        onthefly_exprs = handle_padding.((caller,), onthefly_exprs, (padding,), (indices,); handle_view_accesses=false, dir_handling=!padding) # NOTE: dir_handling is done after macro expansion with the delayed handling.
+        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,), (indices_dir,))
+        onthefly_exprs = handle_padding.((caller,), onthefly_exprs, (padding,), (indices,); handle_indexing=false)
+        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices, indices_dir)
+        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,), (indices_dir,))
     end
-    body = handle_padding(body, padding; handle_indices=false)
+    body = handle_padding(caller, body, padding, indices; handle_indexing=false)
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
@@ -443,6 +445,18 @@ function get_indices_expr(ndims::Integer)
     end
 end
 
+function get_indices_dir_expr(ndims::Integer)
+    if ndims == 1
+        return :($(INDICES_DIR[1]),)
+    elseif ndims == 2
+        return :($(INDICES_DIR[1]), $(INDICES_DIR[2]))
+    elseif ndims == 3
+        return :($(INDICES_DIR[1]), $(INDICES_DIR[2]), $(INDICES_DIR[3]))
+    else
+        @ModuleInternalError("argument 'ndims' must be 1, 2 or 3.")
+    end
+end
+
 
 ## FUNCTIONS TO CREATE METADATA STORAGE
 
@@ -517,23 +531,40 @@ function extract_onthefly_arrays!(body, argvars)
     return onthefly_vars, onthefly_exprs, write_vars, body
 end
 
-function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array)
+function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array, indices_dir::Array)
     indices = (indices...,)
+    indices_dir = (indices_dir...,)
     for (A, m) in zip(onthefly_vars, onthefly_syms)
-        expr = substitute(expr, A, m, indices)
+        expr = substitute(expr, A, m, indices, indices_dir)
     end
     return expr
 end
 
-function create_onthefly_macro(caller, m, expr, var, indices)
-    ndims         = length(indices)
-    ix, iy, iz    =  gensym_world.(("ix","iy","iz"), (@__MODULE__,))
-    local_indices = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+function determine_local_index_dir(local_index, dim)
+    id_l = local_index
+    id_l = increment_arg(id_l, INDICES_DIR_FUNCTIONS_SYMS[dim])
+    id_l = substitute(id_l, INDICES_DIR[dim], :($(INDICES_DIR_FUNCTIONS_SYMS[dim])(2)))
+    id_l = substitute(id_l, INDICES[dim], INDICES_DIR[dim])
+    return id_l
+end
+
+function create_onthefly_macro(caller, m, expr, var, indices, indices_dir)
+    ndims                 = length(indices)
+    ix, iy, iz            = gensym_world.(("ix","iy","iz"), (@__MODULE__,))
+    ixd, iyd, izd         = gensym_world.(("ixd","iyd","izd"), (@__MODULE__,))
+    local_indices         = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+    local_indices_dir     = (ndims==3) ? (ixd, iyd, izd) : (ndims==2) ? (ixd, iyd) : (ixd,)
     for (index, local_index) in zip(indices, local_indices)
         expr = substitute(expr, index, Expr(:$, local_index))
     end
-    quote_expr = :($(Expr(:quote, expr)))
-    m_function = :($m($(local_indices...)) = $quote_expr)
+    for (index, local_index) in zip(indices_dir, local_indices_dir)
+        expr = substitute(expr, index, Expr(:$, local_index))
+    end
+    local_assign = quote
+        $((:($(local_indices_dir[i]) = ParallelStencil.determine_local_index_dir($(local_indices[i]), $i)) for i=1:ndims)...)
+    end
+    expr_quoted = :($(Expr(:quote, expr)))
+    m_function = :($m($(local_indices...)) = ($local_assign; $expr_quoted))
     m_macro = :(macro $m(args...) if (length(args)!=$ndims) ParallelStencil.@ArgumentError("unsupported kernel statements in @parallel kernel definition: wrong number of indices in $var (expected $ndims indices).") end; esc($m(args...)) end)
     @eval(caller, $m_function)
     @eval(caller, $m_macro)
