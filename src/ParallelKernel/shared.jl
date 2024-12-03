@@ -9,6 +9,10 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
+ixd(count) = @ModuleInternalError("function ixd had not be evaluated at parse time")
+iyd(count) = @ModuleInternalError("function iyd had not be evaluated at parse time")
+izd(count) = @ModuleInternalError("function izd had not be evaluated at parse time")
+
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_METAL                    = :Metal
@@ -27,6 +31,7 @@ const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
 const INDICES_INN                  = (gensym_world("ixi", @__MODULE__), gensym_world("iyi", @__MODULE__), gensym_world("izi", @__MODULE__)) # ( :($(INDICES[1])+1), :($(INDICES[2])+1), :($(INDICES[3])+1) )
 const INDICES_DIR                  = (gensym_world("ixd", @__MODULE__), gensym_world("iyd", @__MODULE__), gensym_world("izd", @__MODULE__))
+const INDICES_DIR_FUNCTIONS_SYMS   = (:(ParallelStencil.ParallelKernel.ixd), :(ParallelStencil.ParallelKernel.iyd), :(ParallelStencil.ParallelKernel.izd))
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
 const RANGELENGTHS_VARNAMES        = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
 const THREADIDS_VARNAMES           = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
@@ -270,6 +275,10 @@ is_access(ex::Expr, ix::Symbol, iy::Symbol)             = @capture(ex, A_[x_, y_
 is_access(ex::Expr, ix::Symbol)                         = @capture(ex, A_[x_])         && inexpr_walk(x, ix)
 is_access(ex, indices...)                               = false
 
+function is_access(ex::Expr, indices::NTuple{N,<:Union{Symbol,Expr}}, indices_dir::NTuple{N,<:Union{Symbol,Expr}}) where N
+    return @capture(ex, A_[ind__]) && length(ind) == N && all(inexpr_walk.(ind, indices) .⊻ inexpr_walk.(ind, indices_dir))
+end
+
 
 ## FUNCTIONS TO DEAL WITH KERNEL/MACRO CALLS: CHECK IF DEFINITION/CALL, EXTRACT, SPLIT AND EVALUATE ARGUMENTS
 
@@ -366,10 +375,14 @@ function eval_arg(caller::Module, arg)
 end
 
 function eval_try(caller::Module, expr)
-    try
-        return @eval(caller, $expr)
-    catch e
+    if isinteractive() # NOTE: this is required to avoid that this function returns non-constant values in interactive sessions.
         return nothing
+    else
+        try
+            return @eval(caller, $expr)
+        catch e
+            return nothing
+        end
     end
 end
 
@@ -392,7 +405,7 @@ function substitute(expr::Expr, old, new; inQuoteNode=false, inString=false)
     end
 end
 
-function substitute(expr::Expr, rules::NamedTuple; inQuoteNode=false)
+function substitute(expr::Union{Symbol,Expr}, rules::NamedTuple; inQuoteNode=false)
     return postwalk(expr) do x
         if isa(x, Symbol) && haskey(rules, x)
             return rules[x]
@@ -402,9 +415,30 @@ function substitute(expr::Expr, rules::NamedTuple; inQuoteNode=false)
             return x
         end
     end
-end    
+end
 
-substitute(expr, old, new) = (old == expr) ? new : expr
+substitute(expr, old, new; inQuoteNode=false, inString=false) = (old == expr) ? new : expr
+
+function increment_arg(expr::Union{Symbol,Expr}, f::Union{Symbol,Expr}; increment::Integer=1)
+    return postwalk(expr) do x
+        if @capture(x, $f(arg_)) && isa(arg, Integer)
+            return :($f($(arg + increment)))
+        else
+            return x
+        end
+        # if isa(x, Expr) && (x.head == :call) && length(x.args==2) && (x.args[1] == f) && isa(x.args[2], Integer)
+        #     return :($f($(x.args[2] + increment)))
+        # else
+        #     return x
+        # end
+    end
+end
+
+function promote_to_parent(expr::Union{Symbol,Expr})
+    if !@capture(expr, ex_.parent) return :($(expr).parent)
+    else                           return expr
+    end
+end
 
 function cast(expr::Expr, f::Symbol, type::DataType)
     return postwalk(expr) do ex
