@@ -949,7 +949,6 @@ eval(:(
                         T2_ref = @Field(nxyz);
                         Ci     = @Field(nxyz, @ones);
                         copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                        # ParallelStencil.ParallelKernel.@gorgeousexpand 
                         @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
                             @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
                             @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
@@ -984,24 +983,26 @@ eval(:(
                 @reset_parallel_stencil()
             end;
             @testset "padding=true" begin
-                @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
-                @require @is_initialized
-                @testset "apply masks | handling padding (padding=true (globally))" begin
-                    expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
-                    expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
-                    @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
-                end;
-                @testset "apply masks | handling padding (padding=false)" begin
-                    expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if $ix_s <= size(A, 1) && ($iy_s <= size(A, 2) && $iz_s <= size(A, 3))", expansion)
-                    expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if $ix_s < size(A, 1) - 1 && ($iy_s < size(A, 2) - 1 && $iz_s < size(A, 3) - 1)", expansion)
-                    @test occursin("A[$ix_s + 1, $iy_s + 1, $iz_s + 1] = A[$ix_s + 1, $iy_s + 1, $iz_s + 1] + B[$ix_s + 1, $iy_s + 1, $iz_s + 1]", expansion)
-                end;
-                @reset_parallel_stencil()
+                @static if $package != $PKG_POLYESTER # TODO: this needs to be removed once Polyester supports padding
+                    @require !@is_initialized()
+                    @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+                    @require @is_initialized
+                    @testset "apply masks | handling padding (padding=true (globally))" begin
+                        expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                        expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                        @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
+                    end;
+                    @testset "apply masks | handling padding (padding=false)" begin
+                        expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                        @test occursin("if $ix_s <= size(A, 1) && ($iy_s <= size(A, 2) && $iz_s <= size(A, 3))", expansion)
+                        expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                        @test occursin("if $ix_s < size(A, 1) - 1 && ($iy_s < size(A, 2) - 1 && $iz_s < size(A, 3) - 1)", expansion)
+                        @test occursin("A[$ix_s + 1, $iy_s + 1, $iz_s + 1] = A[$ix_s + 1, $iy_s + 1, $iz_s + 1] + B[$ix_s + 1, $iy_s + 1, $iz_s + 1]", expansion)
+                    end;
+                    @reset_parallel_stencil()
+                end
             end;
             @testset "@parallel_indices (I...) (1D)" begin
                 @require !@is_initialized()
