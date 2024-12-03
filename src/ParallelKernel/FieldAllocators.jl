@@ -620,14 +620,15 @@ function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, siz
     end
 
     if padding
-        if     (sizetemplate in (:X, :Y, :Z, :XY, :XZ, :YZ, :I, :XYZ)) return :(view($arrayalloc, (:).(2, $arraysize.-1)...))
-        elseif (sizetemplate in (:XX, :XXY, :XXYZ)) return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,2)), map(+, $arraysize, ( 0,-1,-1)))...))
-        elseif (sizetemplate in (:YY, :XYY, :XYYZ)) return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,2)), map(+, $arraysize, (-1, 0,-1)))...))
-        elseif (sizetemplate in (:ZZ, :XYZZ))       return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (2,2,1)), map(+, $arraysize, (-1,-1, 0)))...))
-        elseif (sizetemplate in (:XXYY, :XXYYZ))    return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (1,1,2)), map(+, $arraysize, ( 0, 0,-1)))...))
-        elseif (sizetemplate in (:XXZZ, :XXYZZ))    return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,1)), map(+, $arraysize, ( 0,-1, 0)))...))
-        elseif (sizetemplate in (:YYZZ, :XYYZZ))    return :(view($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,1)), map(+, $arraysize, (-1, 0, 0)))...))
-        elseif (isnothing(sizetemplate) || sizetemplate in (:BX, :BY, :BZ)) return :(view($arrayalloc, (:).(1, $arraysize)...))
+        subarray = :(ParallelStencil.ParallelKernel.FieldAllocators.subarray)
+        if     (sizetemplate in (:X, :Y, :Z, :XY, :XZ, :YZ, :I, :XYZ)) return :($subarray($arrayalloc, (:).(2, $arraysize.-1)...))
+        elseif (sizetemplate in (:XX, :XXY, :XXYZ)) return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,2)), map(+, $arraysize, ( 0,-1,-1)))...))
+        elseif (sizetemplate in (:YY, :XYY, :XYYZ)) return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,2)), map(+, $arraysize, (-1, 0,-1)))...))
+        elseif (sizetemplate in (:ZZ, :XYZZ))       return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,2,1)), map(+, $arraysize, (-1,-1, 0)))...))
+        elseif (sizetemplate in (:XXYY, :XXYYZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,1,2)), map(+, $arraysize, ( 0, 0,-1)))...))
+        elseif (sizetemplate in (:XXZZ, :XXYZZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,1)), map(+, $arraysize, ( 0,-1, 0)))...))
+        elseif (sizetemplate in (:YYZZ, :XYYZZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,1)), map(+, $arraysize, (-1, 0, 0)))...))
+        elseif (isnothing(sizetemplate) || sizetemplate in (:BX, :BY, :BZ)) return :($subarray($arrayalloc, (:).(1, $arraysize)...))
         else @ModuleInternalError("unexpected sizetemplate.")
         end
     else
@@ -676,6 +677,14 @@ function determine_eltype(caller::Module, eltype)
     return eltype
 end
 
+function subarray(A, indices...)
+    B = view(A, indices...)
+    if B isa SubArray
+        return B
+    else
+        return SubArray(A, indices)
+    end
+end
 
 ## Exports
 
