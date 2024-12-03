@@ -237,7 +237,7 @@ eval(:(
                     @test all(Array(T2) .== Array(T2_ref))
                 end
                 @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
-                    $(interpolate(:__padding__, (false, true), :(
+                    $(interpolate(:__padding__, (false, package!=PKG_POLYESTER), :( #TODO: this needs to be restored to (false, true) when Polyester supports padding.
                         @testset "(padding=$__padding__)" begin
                             @testset "@parallel memopt <kernel> (nx, ny, nz = x .* threads)" begin # NOTE: the following does not work for some reason: (nx, ny, nz = ($nx, $ny, $nz))" for (nx, ny, nz) in ((32, 8, 9), (32, 8, 8), (31, 7, 9), (33, 9, 9), (33, 7, 8))
                                 nxyz = (32, 8, 8)
@@ -919,7 +919,7 @@ eval(:(
         end;
         @testset "3. parallel <kernel> (with Fields)" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+            @init_parallel_stencil($package, $FloatDefault, 3, padding=(package!=PKG_POLYESTER)) #TODO: this needs to be restored to padding=true when Polyester supports padding.
             @require @is_initialized()
             @testset "padding" begin
                 @testset "@parallel <kernel> (3D, @all)" begin
