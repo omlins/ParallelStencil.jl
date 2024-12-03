@@ -44,13 +44,13 @@ macro init_parallel_stencil(args...)
     if (length(posargs) == 3) package, numbertype_val, ndims_val = extract_posargs_init(__module__, posargs...)
     else                      package, numbertype_val, ndims_val = extract_kwargs_init(__module__, kwargs)
     end
-    inbounds_val, padding_val, memopt_val = extract_kwargs_nopos(__module__, kwargs)
+    inbounds_val, padding_val, memopt_val, nonconst_metadata_val = extract_kwargs_nopos(__module__, kwargs)
     if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
-    check_already_initialized(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val)
-    esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val))
+    check_already_initialized(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val, nonconst_metadata_val)
+    esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val, nonconst_metadata_val))
 end
 
-function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool)
+function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool, nonconst_metadata::Bool)
     if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     end
@@ -61,6 +61,7 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     set_inbounds(caller, inbounds)
     set_padding(caller, padding)
     set_memopt(caller, memopt)
+    set_nonconst_metadata(caller, nonconst_metadata)
     set_initialized(caller, true)
     return return_expr
 end
@@ -73,34 +74,38 @@ macro get_ndims() get_ndims(__module__) end
 macro get_inbounds() get_inbounds(__module__) end
 macro get_padding() get_padding(__module__) end
 macro get_memopt() get_memopt(__module__) end
+macro get_nonconst_metadata() get_nonconst_metadata(__module__) end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_inbounds, get_inbounds, set_padding, get_padding, set_memopt, get_memopt, check_initialized, check_already_initialized
-    _is_initialized::Dict{Module, Bool}         = Dict{Module, Bool}()
-    package::Dict{Module, Symbol}               = Dict{Module, Symbol}()
-    numbertype::Dict{Module, DataType}          = Dict{Module, DataType}()
-    ndims::Dict{Module, Integer}                = Dict{Module, Integer}()
-    inbounds::Dict{Module, Bool}                = Dict{Module, Bool}()
-    padding::Dict{Module, Bool}                 = Dict{Module, Bool}()
-    memopt::Dict{Module, Bool}                  = Dict{Module, Bool}()
-    set_initialized(caller::Module, flag::Bool) = (_is_initialized[caller] = flag)
-    is_initialized(caller::Module)              = haskey(_is_initialized, caller) && _is_initialized[caller]
-    set_package(caller::Module, pkg::Symbol)    = (package[caller] = pkg)
-    get_package(caller::Module)                 =  package[caller]
-    set_numbertype(caller::Module, T::DataType) = (numbertype[caller] = T)
-    get_numbertype(caller::Module)              =  numbertype[caller]
-    set_ndims(caller::Module, n::Integer)       = (ndims[caller] = n)
-    get_ndims(caller::Module)                   =  ndims[caller]
-    set_inbounds(caller::Module, flag::Bool)    = (inbounds[caller] = flag)
-    get_inbounds(caller::Module)                =  inbounds[caller]
-    set_padding(caller::Module, flag::Bool)     = (padding[caller] = flag)
-    get_padding(caller::Module)                 =  padding[caller]
-    set_memopt(caller::Module, flag::Bool)      = (memopt[caller] = flag)
-    get_memopt(caller::Module)                  =  memopt[caller]
-    check_initialized(caller::Module)           = if !is_initialized(caller) @NotInitializedError("no ParallelStencil macro or function can be called before @init_parallel_stencil in each module (missing call in $caller).") end
+    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_inbounds, get_inbounds, set_padding, get_padding, set_memopt, get_memopt, set_nonconst_metadata, get_nonconst_metadata, check_initialized, check_already_initialized
+    _is_initialized::Dict{Module, Bool}               = Dict{Module, Bool}()
+    package::Dict{Module, Symbol}                     = Dict{Module, Symbol}()
+    numbertype::Dict{Module, DataType}                = Dict{Module, DataType}()
+    ndims::Dict{Module, Integer}                      = Dict{Module, Integer}()
+    inbounds::Dict{Module, Bool}                      = Dict{Module, Bool}()
+    padding::Dict{Module, Bool}                       = Dict{Module, Bool}()
+    memopt::Dict{Module, Bool}                        = Dict{Module, Bool}()
+    nonconst_metadata::Dict{Module, Bool}             = Dict{Module, Bool}()
+    set_initialized(caller::Module, flag::Bool)       = (_is_initialized[caller] = flag)
+    is_initialized(caller::Module)                    = haskey(_is_initialized, caller) && _is_initialized[caller]
+    set_package(caller::Module, pkg::Symbol)          = (package[caller] = pkg)
+    get_package(caller::Module)                       =  package[caller]
+    set_numbertype(caller::Module, T::DataType)       = (numbertype[caller] = T)
+    get_numbertype(caller::Module)                    =  numbertype[caller]
+    set_ndims(caller::Module, n::Integer)             = (ndims[caller] = n)
+    get_ndims(caller::Module)                         =  ndims[caller]
+    set_inbounds(caller::Module, flag::Bool)          = (inbounds[caller] = flag)
+    get_inbounds(caller::Module)                      =  inbounds[caller]
+    set_padding(caller::Module, flag::Bool)           = (padding[caller] = flag)
+    get_padding(caller::Module)                       =  padding[caller]
+    set_memopt(caller::Module, flag::Bool)            = (memopt[caller] = flag)
+    get_memopt(caller::Module)                        =  memopt[caller]
+    set_nonconst_metadata(caller::Module, flag::Bool) = (nonconst_metadata[caller] = flag)
+    get_nonconst_metadata(caller::Module)             =  nonconst_metadata[caller]
+    check_initialized(caller::Module)                 = if !is_initialized(caller) @NotInitializedError("no ParallelStencil macro or function can be called before @init_parallel_stencil in each module (missing call in $caller).") end
 
-    function check_already_initialized(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool)
+    function check_already_initialized(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool, nonconst_metadata::Bool)
         if is_initialized(caller)
-            if package==get_package(caller) && numbertype==get_numbertype(caller) && ndims==get_ndims(caller) && inbounds==get_inbounds(caller) && padding==get_padding(caller) && memopt==get_memopt(caller)
+            if package==get_package(caller) && numbertype==get_numbertype(caller) && ndims==get_ndims(caller) && inbounds==get_inbounds(caller) && padding==get_padding(caller) && memopt==get_memopt(caller) && nonconst_metadata==get_nonconst_metadata(caller)
                 if !isinteractive() @warn "ParallelStencil has already been initialized for the module $caller, with the same arguments. You are likely using ParallelStencil in an inconsistent way: @init_parallel_stencil should only be called once at the beginning of each module, right after 'using ParallelStencil'. Note: this warning is only shown in non-interactive mode." end
             else
                 @IncoherentCallError("ParallelStencil has already been initialized for the module $caller, with different arguments. If you are using ParallelStencil interactively in the REPL and want to avoid restarting Julia, then you can call ParallelStencil.@reset_parallel_stencil() and rerun all parts of your code (in module $caller) that use ParallelStencil features (including kernel definitions and array allocations). If you are using ParallelStencil non-interactively, then you are using ParallelStencil in an invalid way: @init_parallel_stencil should only be called once at the beginning of each module, right after 'using ParallelStencil'.")
@@ -129,5 +134,8 @@ function extract_kwargs_nopos(caller::Module, kwargs::Dict)
     if (:memopt in keys(kwargs)) memopt_val = eval_arg(caller, kwargs[:memopt]); check_memopt(memopt_val)
     else                         memopt_val = false
     end
-    return inbounds_val, padding_val, memopt_val
+    if (:nonconst_metadata in keys(kwargs)) nonconst_metadata_val = eval_arg(caller, kwargs[:nonconst_metadata]); check_nonconst_metadata(nonconst_metadata_val)
+    else                                    nonconst_metadata_val = false
+    end
+    return inbounds_val, padding_val, memopt_val, nonconst_metadata_val
 end
