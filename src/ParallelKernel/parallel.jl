@@ -176,20 +176,21 @@ end
 function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, padding::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
+    ndims = length(indices)
     body = get_body(kernel)
     body = remove_return(body)
     body = macroexpand(caller, body)
-    use_aliases = !all(indices .== INDICES[1:length(indices)])
+    use_aliases = !all(indices .== INDICES[1:ndims])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
-        indices = [INDICES[1:length(indices)]...]
+        indices = [INDICES[1:ndims]...]
         for i=1:length(indices_aliases)
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
-    body   = handle_padding(body, padding) # TODO: padding can later be made configurable per kernel (to enable working with arrays as before).
+    body   = handle_padding(caller, body, padding, indices)
     body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
@@ -362,7 +363,7 @@ function literaltypes(type1::DataType, type2::DataType, expr::Expr)
 end
 
 
-## FUNCTIONS TO HANDLE SIGNATURES, INDICES, INVERSES AND PADDING
+## FUNCTIONS AND MACROS TO HANDLE SIGNATURES, INDICES, INVERSES AND PADDING
 
 function adjust_signatures(kernel::Expr, package::Symbol)
     int_type = kernel_int_type(package)
@@ -373,15 +374,42 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     return kernel
 end
 
-# TODO: the following function is currently not used and of no effect if used (the expression does not appear as such but as part of a whole if statement; furthermore, the first last index macro needs to be expanded first)
-function simplify_conditions(body::Expr)
-    return postwalk(body) do ex
-        if @capture(ex, a_ < x_ + 1 < b_) && isa(a, Integer)
-            return :($(a-1) < $x < $b - 1)
+function simplify_conditions(caller::Module, expr::Expr)
+    expr = postwalk(expr) do ex
+        if @capture(ex, if condition_ body_ end)
+            condition = postwalk(condition) do cond
+                if     (@capture(cond, a_ <  ixyz_ + c_ <  b_) && ixyz in INDICES) cond = :($a - $c <  $ixyz <  $b - $c)
+                elseif (@capture(cond, a_ <= ixyz_ + c_ <  b_) && ixyz in INDICES) cond = :($a - $c <= $ixyz <  $b - $c)
+                elseif (@capture(cond, a_ <  ixyz_ + c_ <= b_) && ixyz in INDICES) cond = :($a - $c <  $ixyz <= $b - $c)
+                elseif (@capture(cond, a_ <= ixyz_ + c_ <= b_) && ixyz in INDICES) cond = :($a - $c <= $ixyz <= $b - $c)
+                elseif (@capture(cond, a_ <  ixyz_ - c_ <  b_) && ixyz in INDICES) cond = :($a + $c <  $ixyz <  $b + $c)
+                elseif (@capture(cond, a_ <= ixyz_ - c_ <  b_) && ixyz in INDICES) cond = :($a + $c <= $ixyz <  $b + $c)
+                elseif (@capture(cond, a_ <  ixyz_ - c_ <= b_) && ixyz in INDICES) cond = :($a + $c <  $ixyz <= $b + $c)
+                elseif (@capture(cond, a_ <= ixyz_ - c_ <= b_) && ixyz in INDICES) cond = :($a + $c <= $ixyz <= $b + $c)
+                end
+                if @capture(cond, a_ < x_ < b_) || @capture(cond, a_ < x_ <= b_) || @capture(cond, a_ <= x_ < b_) || @capture(cond, a_ <= x_ <= b_)
+                    a_val = eval_try(caller, a)
+                    b_val = eval_try(caller, b)
+                    if !isnothing(a_val) cond = substitute(cond, a, :($a_val), inQuoteNode=true) end
+                    if !isnothing(b_val) cond = substitute(cond, b, :($b_val), inQuoteNode=true) end
+                end
+                if     (@capture(cond, a_ <  ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==0 && b==2) cond = :($x == 1) # NOTE: a check that there is no second assignment to the parallel indices could be added.
+                elseif (@capture(cond, a_ <  ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==0)         cond = :($x < $b)
+                elseif (@capture(cond, a_ <= ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==1 && b==2) cond = :($x == 1)
+                elseif (@capture(cond, a_ <= ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==1)         cond = :($x < $b)
+                elseif (@capture(cond, a_ <  ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==0 && b==1) cond = :($x == 1)
+                elseif (@capture(cond, a_ <  ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==0)         cond = :($x <= $b)
+                elseif (@capture(cond, a_ <= ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==1 && b==1) cond = :($x == 1)
+                elseif (@capture(cond, a_ <= ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==1)         cond = :($x <= $b)
+                end
+                return cond
+            end
+            return :(if ($condition); $body end)
         else
             return ex
         end
     end
+    return expr
 end
 
 function handle_inverses(body::Expr)
@@ -394,10 +422,14 @@ function handle_inverses(body::Expr)
     end
 end
 
-function handle_padding(body::Expr, padding::Bool; handle_indices::Bool=true, handle_firstlastindex::Bool=true, handle_view_accesses::Bool=true)
-    if (handle_indices)                  body = substitute_indices_inn(body, padding) end
-    if (handle_firstlastindex)           body = substitute_firstlastindex(body, padding) end
-    if (handle_view_accesses && padding) body = substitute_view_accesses(body, INDICES) end
+function handle_padding(caller::Module, body::Expr, padding::Bool, indices; handle_view_accesses::Bool=true, handle_indexing::Bool=true, dir_handling::Bool=true, delay_dir_handling::Bool=false)
+    if (handle_indexing) 
+        body = substitute_indices_inn(body, padding)
+        if (dir_handling) body = substitute_indices_dir(caller, body, padding; delay_handling=delay_dir_handling) end
+        body = substitute_firstlastindex(caller, body, padding)
+        body = simplify_conditions(caller, body)
+    end
+    if (handle_view_accesses && padding) body = substitute_view_accesses(body, (indices...,), (INDICES_DIR[1:length(indices)]...,)) end
     return body
 end
 
@@ -409,11 +441,64 @@ function substitute_indices_inn(body::Expr, padding::Bool)
     return body
 end
 
-function substitute_firstlastindex(body::Expr, padding::Bool)
+macro handle_indices_dir(expr::Expr, padding::Bool) expr = macroexpand(__module__, expr); esc(substitute_indices_dir(__module__, expr, padding)) end
+
+function substitute_indices_dir(caller::Module, expr::Expr, padding::Bool; delay_handling::Bool=false)
+    ix, iy, iz          = INDICES
+    ixd_f, iyd_f, izd_f = INDICES_DIR_FUNCTIONS_SYMS
+    if delay_handling
+        expr = :(ParallelStencil.ParallelKernel.@handle_indices_dir($expr, $padding))
+    else
+        if padding
+            expr = postwalk(expr) do exp
+                if @capture(exp, (B_[ixyz_expr__] = rhs_) | (B_[ixyz_expr__] .= rhs_)) && any(map(inexpr_walk, ixyz_expr, INDICES))
+                    B_parent = promote_to_parent(B)
+                    rhs = postwalk(rhs) do ex
+                        if @capture(ex, A_[indices_expr__]) && any(map(inexpr_walk, indices_expr, INDICES_DIR))
+                            A_parent = promote_to_parent(A)
+                            ex = substitute(ex, NamedTuple{INDICES_DIR}(
+                                ((A_parent==B_parent) ? ix : :($ix - (size($B_parent, 1) > size($A_parent, 1))), 
+                                 (A_parent==B_parent) ? iy : :($iy - (size($B_parent, 2) > size($A_parent, 2))),
+                                 (A_parent==B_parent) ? iz : :($iz - (size($B_parent, 3) > size($A_parent, 3))))
+                                ); inQuoteNode=true)
+                        elseif @capture(ex, A_[indices_expr__]) && any(map(inexpr_walk, indices_expr, INDICES_DIR_FUNCTIONS_SYMS))
+                            A_parent = promote_to_parent(A)
+                            ex = postwalk(ex) do e
+                                if @capture(e, f_(arg_)) && (f in INDICES_DIR_FUNCTIONS_SYMS)
+                                    if !isa(arg, Integer) @ModuleInternalError("invalid argument in function $f found (expected: Integer): $arg.") end
+                                    offset_base = arg ÷ 2
+                                    if     (f == ixd_f) e = :($ix - $offset_base)
+                                    elseif (f == iyd_f) e = :($iy - $offset_base)
+                                    elseif (f == izd_f) e = :($iz - $offset_base)
+                                    end
+                                    if     (f == ixd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 1) > size($A_parent, 1)))
+                                    elseif (f == iyd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 2) > size($A_parent, 2)))
+                                    elseif (f == izd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 3) > size($A_parent, 3)))
+                                    end
+                                end
+                                return e
+                            end
+                        end
+                        return ex
+                    end
+                    exp = :($B[$(ixyz_expr...)] = $rhs)
+                end
+                return exp
+            end
+        else
+            for i=1:length(INDICES_DIR)
+                expr = substitute(expr, INDICES_DIR[i], INDICES[i], inQuoteNode=true)
+            end
+        end
+    end
+    return expr
+end
+
+function substitute_firstlastindex(caller::Module, body::Expr, padding::Bool)
     return postwalk(body) do ex
         if @capture(ex, f_(args__)) 
-            if     (f == :firstindex) return :(ParallelStencil.ParallelKernel.@firstindex($(args...), $padding))
-            elseif (f == :lastindex)  return :(ParallelStencil.ParallelKernel.@lastindex($(args...), $padding))
+            if     (f == :firstindex) return _firstindex(caller, args..., padding)
+            elseif (f == :lastindex)  return _lastindex(caller, args..., padding)
             else return ex
             end
         else
@@ -422,11 +507,12 @@ function substitute_firstlastindex(body::Expr, padding::Bool)
     end
 end
 
-function substitute_view_accesses(expr::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+function substitute_view_accesses(expr::Expr, indices::NTuple{N,<:Union{Symbol,Expr}}, indices_dir::NTuple{N,<:Union{Symbol,Expr}}) where N
     return postwalk(expr) do ex
-        if is_access(ex, indices...)
+        if is_access(ex, indices, indices_dir)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
-            return :($A.parent[$(indices_expr...)])
+            A_parent = promote_to_parent(A)
+            return :($A_parent[$(indices_expr...)])
         else
             return ex
         end
@@ -586,6 +672,7 @@ promote_maxsize(maxsize)                        = @ArgumentError("maxsize must b
 
 maxsize(t::T) where T<:Union{Tuple, NamedTuple} = maxsize(t...)
 maxsize(A::T) where T<:AbstractArray            = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
+maxsize(A::T) where T<:SubArray                 = (size(A.parent,1),size(A.parent,2),size(A.parent,3))
 maxsize(a::T) where T<:Number                   = (1, 1, 1)
 maxsize(x)                                      = _maxsize(Val{isbitstype(typeof(x))})
 _maxsize(::Type{Val{true}})                     = (1, 1, 1)
