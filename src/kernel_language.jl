@@ -460,7 +460,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     else
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, loopdim, loopsize, optranges, use_shmemhalos)
+    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, loopdim, loopsize, optranges, use_shmemhalos)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
@@ -1009,17 +1009,36 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
-    storeexpr = quote
-        const is_parallel_kernel = $is_parallel_kernel
-        const memopt            = true
-        const stencilranges      = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
-        const offsets            = $offsets
-        const optvars            = $optvars
-        const loopdim             = $loopdim
-        const loopsize           = $loopsize
-        const optranges          = $optranges
-        const use_shmemhalos     = $use_shmemhalos
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+    memopt            = true
+    nonconst_metadata = get_nonconst_metadata(caller)
+    stencilranges     = NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars)
+    if nonconst_metadata
+        storeexpr = quote
+            is_parallel_kernel = $is_parallel_kernel
+            memopt             = $memopt
+            nonconst_metadata  = $nonconst_metadata
+            stencilranges      = $stencilranges
+            offsets            = $offsets
+            optvars            = $optvars
+            loopdim            = $loopdim
+            loopsize           = $loopsize
+            optranges          = $optranges
+            use_shmemhalos     = $use_shmemhalos
+        end
+    else
+        storeexpr = quote
+            const is_parallel_kernel = $is_parallel_kernel
+            const memopt             = $memopt
+            const nonconst_metadata  = $nonconst_metadata
+            const stencilranges      = $stencilranges
+            const offsets            = $offsets
+            const optvars            = $optvars
+            const loopdim            = $loopdim
+            const loopsize           = $loopsize
+            const optranges          = $optranges
+            const use_shmemhalos     = $use_shmemhalos
+        end
     end
     @eval(metadata_module, $storeexpr)
 end
