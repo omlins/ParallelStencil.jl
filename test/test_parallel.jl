@@ -1,12 +1,16 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, INDICES_INN, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
+using ParallelStencil.FieldAllocators
+import ParallelStencil.FieldAllocators: @XXYYZField, @XYYZZField
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
+ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
+ix_s, iy_s, iz_s = "var\"$ix\"", "var\"$iy\"", "var\"$iz\""
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -17,15 +21,17 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
-
-import ParallelStencil.@gorgeousexpand
 
 
 @static for package in TEST_PACKAGES
@@ -35,7 +41,7 @@ eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "1. parallel macros" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, $FloatDefault, 3)
+            @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
             @require @is_initialized()
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
@@ -229,650 +235,668 @@ eval(:(
                                             + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
                                             );
                     @test all(Array(T2) .== Array(T2_ref))
-                end                
+                end
                 @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
-                    @testset "@parallel memopt <kernel> (nx, ny, nz = x .* threads)" begin # NOTE: the following does not work for some reason: (nx, ny, nz = ($nx, $ny, $nz))" for (nx, ny, nz) in ((32, 8, 9), (32, 8, 8), (31, 7, 9), (33, 9, 9), (33, 7, 8))
-                        nx, ny, nz = 32, 8, 8
-                        # threads      = (8, 4, 1)
-                        # blocks       = ceil.(Int, (nx/threads[1], ny/threads[2], nz/LOOPSIZE))
-                        # shmem        = (threads[1]+2)*(threads[2]+2)*sizeof(Float64)
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=0:0)" begin
-                            A  = @zeros(nx, ny, nz);
-                            A2 = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
-                                A2[ix,iy,iz] = A[ix,iy,iz]
-                                return
+                    $(interpolate(:__padding__, (false, true), :(
+                        @testset "(padding=$__padding__)" begin
+                            @testset "@parallel memopt <kernel> (nx, ny, nz = x .* threads)" begin # NOTE: the following does not work for some reason: (nx, ny, nz = ($nx, $ny, $nz))" for (nx, ny, nz) in ((32, 8, 9), (32, 8, 8), (31, 7, 9), (33, 9, 9), (33, 7, 8))
+                                nxyz = (32, 8, 8)
+                                # threads      = (8, 4, 1)
+                                # blocks       = ceil.(Int, (nx/threads[1], ny/threads[2], nz/LOOPSIZE))
+                                # shmem        = (threads[1]+2)*(threads[2]+2)*sizeof(Float64)
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=0:0)" begin
+                                    A  = @Field(nxyz);
+                                    A2 = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
+                                        A2[ix,iy,iz] = A[ix,iy,iz]
+                                        return
+                                    end
+                                    @parallel memopt=true copy_memopt!(A2, A);
+                                    @test all(Array(A2) .== Array(A))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
+                                    A  = @Field(nxyz);
+                                    A2 = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
+                                        @all(A2) = @all(A)
+                                        return
+                                    end
+                                    @parallel memopt=true copy_memopt!(A2, A);
+                                    @test all(Array(A2) .== Array(A))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, 0:0, -1:1); z-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A)
+                                        if (iz>1 && iz<size(A2,3))
+                                            A2[ix,iy,iz] = A[ix,iy,iz+1] - 2*A[ix,iy,iz] + A[ix,iy,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A);
+                                    A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, -1:1, 0:0); y-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true function d2_memopt!(A2, A)
+                                        if (iy>1 && iy<size(A2,2))
+                                            A2[ix,iy,iz] = A[ix,iy+1,iz] - 2*A[ix,iy,iz] + A[ix,iy-1,iz]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A);
+                                    A2_ref[:,2:end-1,:] .= A[:,3:end,:] .- 2*A[:,2:end-1,:] .+ A[:,1:end-2,:];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 1:1, 0:2); z-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel memopt=true loopsize=3 function d2_memopt!(A2, A)
+                                        @inn(A2) = @d2_zi(A)
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A);
+                                    A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,2:end-1,3:end] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,2:end-1,1:end-2]);
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 0:2, 1:1); y-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel memopt=true loopsize=3 function d2_memopt!(A2, A)
+                                        @inn(A2) = @d2_yi(A)
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A);
+                                    A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,3:end,2:end-1] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,1:end-2,2:end-1]);
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @Field(nxyz, @ones);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                        if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2) && iz>1 && iz<size(T2,3))
+                                            T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
+                                                            - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
+                                                            - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy
+                                                            - ((-lam*(T[ix,iy,iz+1] - T[ix,iy,iz])*_dz) - (-lam*(T[ix,iy,iz] - T[ix,iy,iz-1])*_dz))*_dz)
+                                                            );
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(Ci[2:end-1,2:end-1,2:end-1].*(
+                                                            - ((.-lam.*(T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1]).*_dx)).*_dx
+                                                            - ((.-lam.*(T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1]).*_dy)).*_dy
+                                                            - ((.-lam.*(T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]).*_dz) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2]).*_dz)).*_dz)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
+                                    lam=dt=_dx=_dy=_dz = 1
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @Field(nxyz, @ones);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, A)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, A);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @Field(nxyz, @ones);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
+                                        @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
+                                        @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
+                                        @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
+                                        @all(dTdt) = @inn(Ci)*(-@d_xa(qx)*_dx - @d_ya(qy)*_dy - @d_za(qz)*_dz)  # Conservation of energy
+                                        @inn(T2)   = @inn(T) + dt*@all(dTdt)                                    # Update of temperature
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0; 2 arrays)" begin
+                                    A  = @Field(nxyz);
+                                    A2 = @Field(nxyz);
+                                    B  = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel memopt=true loopsize=3 optvars=(A, B) optranges=(A=(0:0,0:0,0:0), B=(0:0,0:0,0:0)) function copy_memopt!(A2, A, B)
+                                        @all(A2) = @all(A) + @all(B)
+                                        return
+                                    end
+                                    @parallel memopt=true copy_memopt!(A2, A, B);
+                                    @test all(Array(A2) .== Array(A) .+ Array(B))
+                                end                        
+                                @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, z-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @XXYYZField(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A, B)
+                                        if (iz>1 && iz<size(A2,3))
+                                            A2[ix,iy,iz] = A[ix,iy,iz+1] - 2*A[ix,iy,iz] + A[ix,iy,iz-1] + B[ix,iy,iz] - B[ix,iy,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A, B);
+                                    A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2] .+ B[:,:,2:end] .- B[:,:,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, y-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A, B)
+                                        if (iy>1 && iy<size(A2,2))
+                                            A2[ix,iy,iz] = A[ix,iy+1,iz] - 2*A[ix,iy,iz] + A[ix,iy-1,iz] + B[ix,iy+1,iz] - 2*B[ix,iy,iz] + B[ix,iy-1,iz]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A, B);
+                                    A2_ref[:,2:end-1,:] .= (((A[:,3:end,:] .- 2*A[:,2:end-1,:]) .+ A[:,1:end-2,:] .+ B[:,3:end,:]) .- 2*B[:,2:end-1,:]) .+ B[:,1:end-2,:];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, x-stencil)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @XYYZZField(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true function d2_memopt!(A2, A, B)
+                                        if (ix>1 && ix<size(A2,1))
+                                            A2[ix,iy,iz] = A[ix+1,iy,iz] - 2*A[ix,iy,iz] + A[ix-1,iy,iz] + B[ix,iy,iz] - B[ix-1,iy,iz]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true d2_memopt!(A2, A, B);
+                                    A2_ref[2:end-1,:,:] .= A[3:end,:,:] .- 2*A[2:end-1,:,:] .+ A[1:end-2,:,:] .+ B[2:end,:,:] .- B[1:end-1,:,:];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @XXYYZField(nxyz);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@d_zi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end-1,2:end-1,2:end] .- Ci[2:end-1,2:end-1,1:end-1]).*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @XYYZZField(nxyz);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @XYYZZField(nxyz);
+                                    B      = @Field(nxyz);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
+                                    copy!(B,  3 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2)) + @d2_yi(B)
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix-1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz-2>=1 && iz+3<=size(B2,3))
+                                            B2[ix-1,iy+2,iz] = B[ix-1,iy+2,iz+3] - 2*B[ix-3,iy+2,iz] + B[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-2>=1 && iz+3<=size(C2,3))
+                                            C2[ix-1,iy+2,iz] = C[ix-1,iy+2,iz+3] - 2*C[ix-3,iy+2,iz] + C[ix-4,iy+2,iz-2]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[5:end-1,3:end,3:end-3] .= B[5:end-1,3:end,6:end] .- 2*B[3:end-3,3:end,3:end-3] .+ B[2:end-4,3:end,1:end-5];
+                                    C2_ref[5:end-1,3:end,3:end-3] .= C[5:end-1,3:end,6:end] .- 2*C[3:end-3,3:end,3:end-3] .+ C[2:end-4,3:end,1:end-5];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:-1, 2:2, 1:2), C=(-4:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix-1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix-1,iy+2,iz+1] = B[ix-1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-4>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-3,iy+2,iz-1] + C[ix-4,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[5:end-1,3:end,2:end-1] .= B[5:end-1,3:end,3:end] .- 2*B[3:end-3,3:end,2:end-1] .+ B[2:end-4,3:end,2:end-1];
+                                    C2_ref[5:end-1,3:end,1:end-1] .= C[5:end-1,3:end,2:end] .- 2*C[3:end-3,3:end,1:end-1] .+ C[2:end-4,3:end,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                                    C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @static if $package == $PKG_CUDA
+                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                    elseif $package == $PKG_AMDGPU
+                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                    elseif $package == $PKG_METAL
+                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                    end
+                                    @test occursin("for i = -4:3", kernel)
+                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
+                                    @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
+                                    @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
+                                    @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                                    C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @static if $package == $PKG_CUDA
+                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                    elseif $package == $PKG_AMDGPU
+                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                    elseif $package == $PKG_METAL
+                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                    end
+                                    @test occursin("for i = -4:3", kernel)
+                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
+                                    @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
+                                    @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
+                                    @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                                    C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
+                                @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, B), loopdim=3, loopsize=3, optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:1)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
+                                    A      = @Field(nxyz);
+                                    A2     = @Field(nxyz);
+                                    A2_ref = @Field(nxyz);
+                                    B      = @Field(nxyz);
+                                    B2     = @Field(nxyz);
+                                    B2_ref = @Field(nxyz);
+                                    C      = @Field(nxyz);
+                                    C2     = @Field(nxyz);
+                                    C2_ref = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, B) loopdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2 * A[ix - 3, iy + 2, iz]) + A[ix - 4, iy + 2, iz - 2]", kernel)
+                                    @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2B_ixm3_iyp2_izp1) + B_ixm4_iyp2_izp1", kernel) # NOTE: when z is restricted to 1:1 then x cannot include +1, as else the x-y range does not include any z (result: IncoherentArgumentError: incoherent argument in memopt: optranges in z dimension do not include any array access.).
+                                    @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C[ix - 1, iy + 2, iz] - 2 * C[ix - 1, iy + 2, iz - 1]) + C[ix - 1, iy + 2, iz - 1]", kernel)
+                                    @parallel_indices (ix,iy,iz) memopt=true optvars=(A, B) loopdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_memopt!(A2, B2, C2, A, B, C)
+                                        if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
+                                            A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
+                                        end
+                                        if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
+                                            B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
+                                        end
+                                        if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
+                                            C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
+                                        end
+                                        return
+                                    end
+                                    @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
+                                    A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
+                                    B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
+                                    C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
+                                    @test all(Array(A2) .== Array(A2_ref))
+                                    @test all(Array(B2) .== Array(B2_ref))
+                                    @test all(Array(C2) .== Array(C2_ref))
+                                end
                             end
-                            @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
+                            @testset "@parallel memopt <kernel> (nx, ny, nz != x .* threads)" begin
+                                nxyz = (33, 7, 8)
+                                @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=0:0)" begin
+                                    A  = @Field(nxyz);
+                                    A2 = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel_indices (ix,iy,iz) memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
+                                        if ix>0 && ix<=size(A2,1) && iy>0 && iy<=size(A2,2) # TODO: needed when ranges is bigger than array
+                                            A2[ix,iy,iz] = A[ix,iy,iz]
+                                        end
+                                        return
+                                    end
+                                    ranges = (1:64,1:64,1:8) # TODO: must be a multiple of the number of threads
+                                    @parallel ranges memopt=true copy_memopt!(A2, A);
+                                    @test all(Array(A2) .== Array(A))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
+                                    A  = @Field(nxyz);
+                                    A2 = @Field(nxyz);
+                                    copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
+                                    @parallel memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
+                                        @all(A2) = @all(A)
+                                        return
+                                    end
+                                    @parallel memopt=true copy_memopt!(A2, A);
+                                    @test all(Array(A2) .== Array(A))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @Field(nxyz, @ones);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            );
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                                @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
+                                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                                    T      = @Field(nxyz);
+                                    T2     = @Field(nxyz);
+                                    T2_ref = @Field(nxyz);
+                                    Ci     = @XYYZZField(nxyz);
+                                    B      = @Field(nxyz);
+                                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                                    copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
+                                    copy!(B,  3 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
+                                    @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz)
+                                        @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2)) + @d2_yi(B)
+                                        return
+                                    end
+                                    @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz);
+                                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
+                                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                            ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
+                                    @test all(Array(T2) .== Array(T2_ref))
+                                end
+                            end
                         end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
-                            A  = @zeros(nx, ny, nz);
-                            A2 = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
-                                @all(A2) = @all(A)
-                                return
-                            end
-                            @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, 0:0, -1:1); z-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A)
-                                if (iz>1 && iz<size(A2,3))
-                                    A2[ix,iy,iz] = A[ix,iy,iz+1] - 2*A[ix,iy,iz] + A[ix,iy,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(0:0, -1:1, 0:0); y-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true function d2_memopt!(A2, A)
-                                if (iy>1 && iy<size(A2,2))
-                                    A2[ix,iy,iz] = A[ix,iy+1,iz] - 2*A[ix,iy,iz] + A[ix,iy-1,iz]
-                                end
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[:,2:end-1,:] .= A[:,3:end,:] .- 2*A[:,2:end-1,:] .+ A[:,1:end-2,:];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 1:1, 0:2); z-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel memopt=true loopsize=3 function d2_memopt!(A2, A)
-                                @inn(A2) = @d2_zi(A)
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,2:end-1,3:end] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,2:end-1,1:end-2]);
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=(1:1, 0:2, 1:1); y-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel memopt=true loopsize=3 function d2_memopt!(A2, A)
-                                @inn(A2) = @d2_yi(A)
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A);
-                            A2_ref[2:end-1,2:end-1,2:end-1] .= (A[2:end-1,3:end,2:end-1] .- A[2:end-1,2:end-1,2:end-1]) .- (A[2:end-1,2:end-1,2:end-1] .- A[2:end-1,1:end-2,2:end-1]);
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=-1:1)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @ones(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2) && iz>1 && iz<size(T2,3))
-                                    T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
-                                                    - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
-                                                    - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy
-                                                    - ((-lam*(T[ix,iy,iz+1] - T[ix,iy,iz])*_dz) - (-lam*(T[ix,iy,iz] - T[ix,iy,iz-1])*_dz))*_dz)
-                                                    );
-                                end
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(Ci[2:end-1,2:end-1,2:end-1].*(
-                                                    - ((.-lam.*(T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1]).*_dx)).*_dx
-                                                    - ((.-lam.*(T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1]).*_dy)).*_dy
-                                                    - ((.-lam.*(T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]).*_dz) .- (.-lam.*(T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2]).*_dz)).*_dz)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
-                            lam=dt=_dx=_dy=_dz = 1
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @ones(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, A)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, A);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2; on-the-fly)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @ones(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
-                                @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
-                                @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
-                                @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
-                                @all(dTdt) = @inn(Ci)*(-@d_xa(qx)*_dx - @d_ya(qy)*_dy - @d_za(qz)*_dz)  # Conservation of energy
-                                @inn(T2)   = @inn(T) + dt*@all(dTdt)                                    # Update of temperature
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0; 2 arrays)" begin
-                            A  = @zeros(nx, ny, nz);
-                            A2 = @zeros(nx, ny, nz);
-                            B  = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel memopt=true loopsize=3 optvars=(A, B) optranges=(A=(0:0,0:0,0:0), B=(0:0,0:0,0:0)) function copy_memopt!(A2, A, B)
-                                @all(A2) = @all(A) + @all(B)
-                                return
-                            end
-                            @parallel memopt=true copy_memopt!(A2, A, B);
-                            @test all(Array(A2) .== Array(A) .+ Array(B))
-                        end                        
-                        @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, z-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz-1);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A, B)
-                                if (iz>1 && iz<size(A2,3))
-                                    A2[ix,iy,iz] = A[ix,iy,iz+1] - 2*A[ix,iy,iz] + A[ix,iy,iz-1] + B[ix,iy,iz] - B[ix,iy,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A, B);
-                            A2_ref[:,:,2:end-1] .= A[:,:,3:end] .- 2*A[:,:,2:end-1] .+ A[:,:,1:end-2] .+ B[:,:,2:end] .- B[:,:,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, y-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function d2_memopt!(A2, A, B)
-                                if (iy>1 && iy<size(A2,2))
-                                    A2[ix,iy,iz] = A[ix,iy+1,iz] - 2*A[ix,iy,iz] + A[ix,iy-1,iz] + B[ix,iy+1,iz] - 2*B[ix,iy,iz] + B[ix,iy-1,iz]
-                                end
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A, B);
-                            A2_ref[:,2:end-1,:] .= (((A[:,3:end,:] .- 2*A[:,2:end-1,:]) .+ A[:,1:end-2,:] .+ B[:,3:end,:]) .- 2*B[:,2:end-1,:]) .+ B[:,1:end-2,:];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt; 2 arrays, x-stencil)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx-1, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true function d2_memopt!(A2, A, B)
-                                if (ix>1 && ix<size(A2,1))
-                                    A2[ix,iy,iz] = A[ix+1,iy,iz] - 2*A[ix,iy,iz] + A[ix-1,iy,iz] + B[ix,iy,iz] - B[ix-1,iy,iz]
-                                end
-                                return
-                            end
-                            @parallel memopt=true d2_memopt!(A2, A, B);
-                            A2_ref[2:end-1,:,:] .= A[3:end,:,:] .- 2*A[2:end-1,:,:] .+ A[1:end-2,:,:] .+ B[2:end,:,:] .- B[1:end-1,:,:];
-                            @test all(Array(A2) .== Array(A2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + z-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @zeros(nx, ny, nz-1);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@d_zi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end-1,2:end-1,2:end] .- Ci[2:end-1,2:end-1,1:end-1]).*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt; 2 arrays, x-y-z- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @zeros(nx-1, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @zeros(nx-1, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
-                            copy!(B,  3 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2)) + @d2_yi(B)
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(-4:-1, 2:2, -2:3); 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix-1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz-2>=1 && iz+3<=size(B2,3))
-                                    B2[ix-1,iy+2,iz] = B[ix-1,iy+2,iz+3] - 2*B[ix-3,iy+2,iz] + B[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-2>=1 && iz+3<=size(C2,3))
-                                    C2[ix-1,iy+2,iz] = C[ix-1,iy+2,iz+3] - 2*C[ix-3,iy+2,iz] + C[ix-4,iy+2,iz-2]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[5:end-1,3:end,3:end-3] .= B[5:end-1,3:end,6:end] .- 2*B[3:end-3,3:end,3:end-3] .+ B[2:end-4,3:end,1:end-5];
-                            C2_ref[5:end-1,3:end,3:end-3] .= C[5:end-1,3:end,6:end] .- 2*C[3:end-3,3:end,3:end-3] .+ C[2:end-4,3:end,1:end-5];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:-1, 2:2, 1:2), C=(-4:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix-1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix-1,iy+2,iz+1] = B[ix-1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-4>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-3,iy+2,iz-1] + C[ix-4,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[5:end-1,3:end,2:end-1] .= B[5:end-1,3:end,3:end] .- 2*B[3:end-3,3:end,2:end-1] .+ B[2:end-4,3:end,2:end-1];
-                            C2_ref[5:end-1,3:end,1:end-1] .= C[5:end-1,3:end,2:end] .- 2*C[3:end-3,3:end,1:end-1] .+ C[2:end-4,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
-                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @static if $package == $PKG_CUDA
-                                @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
-                            elseif $package == $PKG_AMDGPU
-                                @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
-                            elseif $package == $PKG_METAL
-                                @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
-                            end
-                            @test occursin("for i = -4:3", kernel)
-                            @test occursin("tz = i + loopoffset", kernel)
-                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
-                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
-                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
-                            @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
-                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, C), loopdim=3, loopsize=3, optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @static if $package == $PKG_CUDA
-                                @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
-                            elseif $package == $PKG_AMDGPU
-                                @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
-                            elseif $package == $PKG_METAL
-                                @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
-                            end
-                            @test occursin("for i = -4:3", kernel)
-                            @test occursin("tz = i + loopoffset", kernel)
-                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
-                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
-                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
-                            @parallel_indices (ix,iy,iz) memopt=true optvars=(A, C) loopdim=3 loopsize=3 optranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
-                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                        @testset "@parallel_indices <kernel> (3D, memopt, optvars=(A, B), loopdim=3, loopsize=3, optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:1)); stencilranges=(A=(-4:-1, 2:2, -2:3), B=(-4:1, 2:2, 1:2), C=(-1:-1, 2:2, -1:0)), 3 arrays, x-z-stencil, y-shift)" begin
-                            A      = @zeros(nx, ny, nz);
-                            A2     = @zeros(nx, ny, nz);
-                            A2_ref = @zeros(nx, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            B2     = @zeros(nx, ny, nz);
-                            B2_ref = @zeros(nx, ny, nz);
-                            C      = @zeros(nx, ny, nz);
-                            C2     = @zeros(nx, ny, nz);
-                            C2_ref = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(B, 2 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            copy!(C, 3 .* [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            kernel = @gorgeousstring @parallel_indices (ix,iy,iz) memopt=true optvars=(A, B) loopdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2 * A[ix - 3, iy + 2, iz]) + A[ix - 4, iy + 2, iz - 2]", kernel)
-                            @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2B_ixm3_iyp2_izp1) + B_ixm4_iyp2_izp1", kernel) # NOTE: when z is restricted to 1:1 then x cannot include +1, as else the x-y range does not include any z (result: IncoherentArgumentError: incoherent argument in memopt: optranges in z dimension do not include any array access.).
-                            @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C[ix - 1, iy + 2, iz] - 2 * C[ix - 1, iy + 2, iz - 1]) + C[ix - 1, iy + 2, iz - 1]", kernel)
-                            @parallel_indices (ix,iy,iz) memopt=true optvars=(A, B) loopdim=3 loopsize=3 optranges=(A=(-1:-1, 2:2, -2:3), B=(-4:-3, 2:2, 1:1)) function higher_order_memopt!(A2, B2, C2, A, B, C)
-                                if (ix-4>1 && ix-1<size(A2,1) && iy+2>1 && iy+2<=size(A2,2) && iz-2>=1 && iz+3<=size(A2,3))
-                                    A2[ix-1,iy+2,iz] = A[ix-1,iy+2,iz+3] - 2*A[ix-3,iy+2,iz] + A[ix-4,iy+2,iz-2]
-                                end
-                                if (ix-4>1 && ix+1<size(B2,1) && iy+2>1 && iy+2<=size(B2,2) && iz+1>=1 && iz+2<=size(B2,3))
-                                    B2[ix+1,iy+2,iz+1] = B[ix+1,iy+2,iz+2] - 2*B[ix-3,iy+2,iz+1] + B[ix-4,iy+2,iz+1]
-                                end
-                                if (ix-1>1 && ix-1<size(C2,1) && iy+2>1 && iy+2<=size(C2,2) && iz-1>=1 && iz<=size(C2,3))
-                                    C2[ix-1,iy+2,iz-1] = C[ix-1,iy+2,iz] - 2*C[ix-1,iy+2,iz-1] + C[ix-1,iy+2,iz-1]
-                                end
-                                return
-                            end
-                            @parallel memopt=true higher_order_memopt!(A2, B2, C2, A, B, C);
-                            A2_ref[5:end-1,3:end,3:end-3] .= A[5:end-1,3:end,6:end] .- 2*A[3:end-3,3:end,3:end-3] .+ A[2:end-4,3:end,1:end-5];
-                            B2_ref[7:end-1,3:end,2:end-1] .= B[7:end-1,3:end,3:end] .- 2*B[3:end-5,3:end,2:end-1] .+ B[2:end-6,3:end,2:end-1];
-                            C2_ref[2:end-1,3:end,1:end-1] .= C[2:end-1,3:end,2:end] .- 2*C[2:end-1,3:end,1:end-1] .+ C[2:end-1,3:end,1:end-1];
-                            @test all(Array(A2) .== Array(A2_ref))
-                            @test all(Array(B2) .== Array(B2_ref))
-                            @test all(Array(C2) .== Array(C2_ref))
-                        end
-                    end
-                    @testset "@parallel memopt <kernel> (nx, ny, nz != x .* threads)" begin
-                        nx, ny, nz = 33, 7, 8
-                        @testset "@parallel_indices <kernel> (3D, memopt, stencilranges=0:0)" begin
-                            A  = @zeros(nx, ny, nz);
-                            A2 = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel_indices (ix,iy,iz) memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
-                                if ix>0 && ix<=size(A2,1) && iy>0 && iy<=size(A2,2) # TODO: needed when ranges is bigger than array
-                                    A2[ix,iy,iz] = A[ix,iy,iz]
-                                end
-                                return
-                            end
-                            ranges = (1:64,1:64,1:8) # TODO: must be a multiple of the number of threads
-                            @parallel ranges memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:0)" begin
-                            A  = @zeros(nx, ny, nz);
-                            A2 = @zeros(nx, ny, nz);
-                            copy!(A, [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)].^3);
-                            @parallel memopt=true loopsize=3 optvars=A optranges=(A=(0:0,0:0,0:0),) function copy_memopt!(A2, A)
-                                @all(A2) = @all(A)
-                                return
-                            end
-                            @parallel memopt=true copy_memopt!(A2, A);
-                            @test all(Array(A2) .== Array(A))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt, stencilranges=0:2)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @ones(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@inn(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2))
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    );
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                        @testset "@parallel <kernel> (3D, memopt; 3 arrays, x-y-z- + y- + x-stencil)" begin
-                            lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                            T      = @zeros(nx, ny, nz);
-                            T2     = @zeros(nx, ny, nz);
-                            T2_ref = @zeros(nx, ny, nz);
-                            Ci     = @zeros(nx-1, ny, nz);
-                            B      = @zeros(nx, ny, nz);
-                            copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                            copy!(Ci, 2 .* [ix + (iy-1)*size(Ci,1) + (iz-1)*size(Ci,1)*size(Ci,2) for ix=1:size(Ci,1), iy=1:size(Ci,2), iz=1:size(Ci,3)].^3);
-                            copy!(B,  3 .* [ix + (iy-1)*size(B,1) + (iz-1)*size(B,1)*size(B,2) for ix=1:size(B,1), iy=1:size(B,2), iz=1:size(B,3)].^3);
-                            @parallel memopt=true loopsize=3 function diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz)
-                                @inn(T2) = @inn(T) + dt*(lam*@d_xi(Ci)*(@d2_xi(T)*_dx^2 + @d2_yi(T)*_dy^2 + @d2_zi(T)*_dz^2)) + @d2_yi(B)
-                                return
-                            end
-                            @parallel memopt=true diffusion3D_step_modified!(T2, T, Ci, B, lam, dt, _dx, _dy, _dz);
-                            T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*(Ci[2:end,2:end-1,2:end-1] .- Ci[1:end-1,2:end-1,2:end-1]).*(
-                                                      ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                                    + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                                    + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                                    ) + ((B[2:end-1,3:end  ,2:end-1] .- B[2:end-1,2:end-1,2:end-1]) .- (B[2:end-1,2:end-1,2:end-1] .- B[2:end-1,1:end-2,2:end-1]));
-                            @test all(Array(T2) .== Array(T2_ref))
-                        end
-                    end
+                    )))
                 end                
             end;
             @testset "@within" begin
-                @test @prettystring(@within("@all", A)) == string(:($ix <= lastindex(A, 1) && ($iy <= lastindex(A, 2) && $iz <= lastindex(A, 3))))
-                @test @prettystring(@within("@inn", A)) == string(:(firstindex(A, 1) < $ixi < lastindex(A, 1) && (firstindex(A, 2) < $iyi < lastindex(A, 2) && firstindex(A, 3) < $izi < lastindex(A, 3))))
+                @test @prettystring(@within("@all", A)) == string(:(firstindex(A, 1) <= $ix  <= lastindex(A, 1) && (firstindex(A, 2) <= $iy  <= lastindex(A, 2) && firstindex(A, 3) <= $iz  <= lastindex(A, 3))))
+                @test @prettystring(@within("@inn", A)) == string(:(firstindex(A, 1) <  $ixi <  lastindex(A, 1) && (firstindex(A, 2) <  $iyi <  lastindex(A, 2) && firstindex(A, 3) <  $izi <  lastindex(A, 3))))
+            end;
+            @testset "apply masks | handling padding (padding=false (default))" begin
+                expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                @test occursin("if $ix_s <= size(A, 1) && ($iy_s <= size(A, 2) && $iz_s <= size(A, 3))", expansion)
+                expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                @test occursin("if $ix_s < size(A, 1) - 1 && ($iy_s < size(A, 2) - 1 && $iz_s < size(A, 3) - 1)", expansion)
+                @test occursin("A[$ix_s + 1, $iy_s + 1, $iz_s + 1] = A[$ix_s + 1, $iy_s + 1, $iz_s + 1] + B[$ix_s + 1, $iy_s + 1, $iz_s + 1]", expansion)
+            end;
+            @testset "apply masks | handling padding (padding=true)" begin
+                expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
             end;
             @reset_parallel_stencil()
         end;
         @testset "2. parallel macros (2D)" begin
             @require !@is_initialized()
-            @init_parallel_stencil($package, $FloatDefault, 2)
+            @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
             @require @is_initialized()
             @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
-                    nx, ny, nz = 32, 8, 1
+                    nxyz = (32, 8, 1)
                     @testset "@parallel_indices <kernel> (2D, memopt, stencilranges=(-1:1,-1:1,0:0))" begin
                         lam=dt=_dx=_dy = $FloatDefault(1)
-                        T      = @zeros(nx, ny, nz);
-                        T2     = @zeros(nx, ny, nz);
-                        T2_ref = @zeros(nx, ny, nz);
-                        Ci     =  @ones(nx, ny, nz);
+                        T      = @Field(nxyz);
+                        T2     = @Field(nxyz);
+                        T2_ref = @Field(nxyz);
+                        Ci     = @Field(nxyz, @ones);
                         copy!(T, [ix + (iy-1)*size(T,1) for ix=1:size(T,1), iy=1:size(T,2), iz=1:1]);
                         @parallel_indices (ix,iy,iz) memopt=true function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy)
                             if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2))
@@ -893,7 +917,58 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
-        @testset "3. global defaults" begin
+        @testset "3. parallel <kernel> (with Fields)" begin
+            @require !@is_initialized()
+            @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+            @require @is_initialized()
+            @testset "padding" begin
+                @testset "@parallel <kernel> (3D, @all)" begin
+                    A = @Field((4, 5, 6));
+                    @parallel function write_indices!(A)
+                        @all(A) = $ix + ($iy-1)*size(A,1) + ($iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
+                        return
+                    end
+                    @parallel write_indices!(A);
+                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
+                end
+                @testset "@parallel <kernel> (3D, @inn)" begin
+                    A = @Field((4, 5, 6));
+                    @parallel function write_indices!(A)
+                        @inn(A) = $ixi + ($iyi-1)*size(A,1) + ($izi-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
+                        return
+                    end
+                    @parallel write_indices!(A);
+                    @test all(Array(A)[2:end-1,2:end-1,2:end-1] .== ([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])[2:end-1,2:end-1,2:end-1])
+                end
+                @testset "@parallel <kernel> (3D; on-the-fly)" begin
+                    nxyz   = (32, 8, 8)
+                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                    T      = @Field(nxyz);
+                    T2     = @Field(nxyz);
+                    T2_ref = @Field(nxyz);
+                    Ci     = @Field(nxyz, @ones);
+                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                    # ParallelStencil.ParallelKernel.@gorgeousexpand 
+                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
+                        @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
+                        @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
+                        @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
+                        @all(dTdt) = @inn(Ci)*(-@d_xa(qx)*_dx - @d_ya(qy)*_dy - @d_za(qz)*_dz)  # Conservation of energy
+                        @inn(T2)   = @inn(T) + dt*@all(dTdt)                                    # Update of temperature
+                        return
+                    end
+                    @parallel diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                            );
+                    @test all(Array(T2) .== Array(T2_ref))
+                end
+            end;
+            @reset_parallel_stencil()
+        end;
+        @testset "4. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
                 @init_parallel_stencil($package, $FloatDefault, 1, inbounds=true)
@@ -906,37 +981,23 @@ eval(:(
                 @test !occursin("Base.@inbounds begin", expansion)
                 @reset_parallel_stencil()
             end;
-            @testset "padding=false" begin
-                @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 3, padding=false)
-                @require @is_initialized
-                @testset "apply masks | handling padding" begin
-                    expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if var\"$ix\" <= ParallelStencil.ParallelKernel.@lastindex(A, 1, false) && (var\"$iy\" <= ParallelStencil.ParallelKernel.@lastindex(A, 2, false) && var\"$iz\" <= ParallelStencil.ParallelKernel.@lastindex(A, 3, false))", expansion)
-                    expansion = @prettystring(@parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if var\"$ix\" <= size(A, 1) && (var\"$iy\" <= size(A, 2) && var\"$iz\" <= size(A, 3))", expansion)
-                    expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if ParallelStencil.ParallelKernel.@firstindex(A, 1, false) < var\"$ix\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 1, false) && (ParallelStencil.ParallelKernel.@firstindex(A, 2, false) < var\"$iy\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 2, false) && ParallelStencil.ParallelKernel.@firstindex(A, 3, false) < var\"$iz\" + 1 < ParallelStencil.ParallelKernel.@lastindex(A, 3, false))", expansion)
-                    @test occursin("A[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1] = A[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1] + B[var\"$ix\" + 1, var\"$iy\" + 1, var\"$iz\" + 1]", expansion)
-                    expansion = @prettystring(@parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if 1 < var\"$ix\" + 1 < size(A, 1) && (1 < var\"$iy\" + 1 < size(A, 2) && 1 < var\"$iz\" + 1 < size(A, 3))", expansion)
-                end;
-                @reset_parallel_stencil()
-            end;
             @testset "padding=true" begin
                 @require !@is_initialized()
                 @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
                 @require @is_initialized
-                @testset "apply masks | handling padding" begin
+                @testset "apply masks | handling padding (padding=true (globally))" begin
                     expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if var\"$ix\" <= ParallelStencil.ParallelKernel.@lastindex(A, 1, true) && (var\"$iy\" <= ParallelStencil.ParallelKernel.@lastindex(A, 2, true) && var\"$iz\" <= ParallelStencil.ParallelKernel.@lastindex(A, 3, true))", expansion)
-                    expansion = @prettystring(@parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                    @test occursin("if var\"$ix\" <= (A.indices[1])[end] && (var\"$iy\" <= (A.indices[2])[end] && var\"$iz\" <= (A.indices[3])[end])", expansion)
+                    @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
                     expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if ParallelStencil.ParallelKernel.@firstindex(A, 1, true) < var\"$ix\" < ParallelStencil.ParallelKernel.@lastindex(A, 1, true) && (ParallelStencil.ParallelKernel.@firstindex(A, 2, true) < var\"$iy\" < ParallelStencil.ParallelKernel.@lastindex(A, 2, true) && ParallelStencil.ParallelKernel.@firstindex(A, 3, true) < var\"$iz\" < ParallelStencil.ParallelKernel.@lastindex(A, 3, true))", expansion)
-                    @test occursin("A.parent[var\"$ix\", var\"$iy\", var\"$iz\"] = A.parent[var\"$ix\", var\"$iy\", var\"$iz\"] + B.parent[var\"$ix\", var\"$iy\", var\"$iz\"]", expansion)
-                    expansion = @prettystring(@parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                    @test occursin("if (A.indices[1])[1] < var\"$ix\" < (A.indices[1])[end] && ((A.indices[2])[1] < var\"$iy\" < (A.indices[2])[end] && (A.indices[3])[1] < var\"$iz\" < (A.indices[3])[end])", expansion)
+                    @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                    @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
+                end;
+                @testset "apply masks | handling padding (padding=false)" begin
+                    expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
+                    @test occursin("if $ix_s <= size(A, 1) && ($iy_s <= size(A, 2) && $iz_s <= size(A, 3))", expansion)
+                    expansion = @prettystring(1, @parallel padding=false sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
+                    @test occursin("if $ix_s < size(A, 1) - 1 && ($iy_s < size(A, 2) - 1 && $iz_s < size(A, 3) - 1)", expansion)
+                    @test occursin("A[$ix_s + 1, $iy_s + 1, $iz_s + 1] = A[$ix_s + 1, $iy_s + 1, $iz_s + 1] + B[$ix_s + 1, $iy_s + 1, $iz_s + 1]", expansion)
                 end;
                 @reset_parallel_stencil()
             end;
@@ -983,7 +1044,7 @@ eval(:(
                 @reset_parallel_stencil()
             end;
         end;
-        @testset "4. parallel macros (numbertype and ndims ommited)" begin
+        @testset "5. parallel macros (numbertype and ndims ommited)" begin
             @require !@is_initialized()
             @init_parallel_stencil(package = $package)
             @require @is_initialized
@@ -1075,7 +1136,7 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
-        @testset "5. Exceptions" begin
+        @testset "6. Exceptions" begin
             @init_parallel_stencil($package, $FloatDefault, 3)
             @require @is_initialized
             @testset "arguments @parallel" begin
