@@ -33,7 +33,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
-        $(interpolate(:__padding__, (false,), :( #TODO: change later to (false, true), when issue with CUDA not returning SubArray is fixed.
+        $(interpolate(:__padding__, (false, true), :(
             @testset "(padding=$__padding__)" begin
                 @require !@is_initialized()
                 @init_parallel_stencil($package, $FloatDefault, 1, padding=__padding__)
