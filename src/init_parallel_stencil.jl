@@ -46,6 +46,7 @@ macro init_parallel_stencil(args...)
     end
     inbounds_val, padding_val, memopt_val, nonconst_metadata_val = extract_kwargs_nopos(__module__, kwargs)
     if (package == PKG_NONE) @ArgumentError("the package argument cannot be ommited.") end #TODO: this error message will disappear, once the package can be defined at runtime.
+    if (package == PKG_POLYESTER && padding_val) @ArgumentError("padding is not yet supported for Polyester.") end
     check_already_initialized(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val, nonconst_metadata_val)
     esc(init_parallel_stencil(__module__, package, numbertype_val, ndims_val, inbounds_val, padding_val, memopt_val, nonconst_metadata_val))
 end
