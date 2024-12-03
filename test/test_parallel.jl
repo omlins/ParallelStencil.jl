@@ -918,55 +918,57 @@ eval(:(
             @reset_parallel_stencil()
         end;
         @testset "3. parallel <kernel> (with Fields)" begin
-            @require !@is_initialized()
-            @init_parallel_stencil($package, $FloatDefault, 3, padding=(package!=PKG_POLYESTER)) #TODO: this needs to be restored to padding=true when Polyester supports padding.
-            @require @is_initialized()
-            @testset "padding" begin
-                @testset "@parallel <kernel> (3D, @all)" begin
-                    A = @Field((4, 5, 6));
-                    @parallel function write_indices!(A)
-                        @all(A) = $ix + ($iy-1)*size(A,1) + ($iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
-                        return
+            @static if $package != $PKG_POLYESTER # TODO: this needs to be removed once Polyester supports padding
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+                @require @is_initialized()
+                @testset "padding" begin
+                    @testset "@parallel <kernel> (3D, @all)" begin
+                        A = @Field((4, 5, 6));
+                        @parallel function write_indices!(A)
+                            @all(A) = $ix + ($iy-1)*size(A,1) + ($iz-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
+                            return
+                        end
+                        @parallel write_indices!(A);
+                        @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                     end
-                    @parallel write_indices!(A);
-                    @test all(Array(A) .== [ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
-                end
-                @testset "@parallel <kernel> (3D, @inn)" begin
-                    A = @Field((4, 5, 6));
-                    @parallel function write_indices!(A)
-                        @inn(A) = $ixi + ($iyi-1)*size(A,1) + ($izi-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
-                        return
+                    @testset "@parallel <kernel> (3D, @inn)" begin
+                        A = @Field((4, 5, 6));
+                        @parallel function write_indices!(A)
+                            @inn(A) = $ixi + ($iyi-1)*size(A,1) + ($izi-1)*size(A,1)*size(A,2); # NOTE: $ix, $iy, $iz come from ParallelStencil.INDICES.
+                            return
+                        end
+                        @parallel write_indices!(A);
+                        @test all(Array(A)[2:end-1,2:end-1,2:end-1] .== ([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])[2:end-1,2:end-1,2:end-1])
                     end
-                    @parallel write_indices!(A);
-                    @test all(Array(A)[2:end-1,2:end-1,2:end-1] .== ([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])[2:end-1,2:end-1,2:end-1])
-                end
-                @testset "@parallel <kernel> (3D; on-the-fly)" begin
-                    nxyz   = (32, 8, 8)
-                    lam=dt=_dx=_dy=_dz = $FloatDefault(1)
-                    T      = @Field(nxyz);
-                    T2     = @Field(nxyz);
-                    T2_ref = @Field(nxyz);
-                    Ci     = @Field(nxyz, @ones);
-                    copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
-                    # ParallelStencil.ParallelKernel.@gorgeousexpand 
-                    @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
-                        @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
-                        @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
-                        @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
-                        @all(dTdt) = @inn(Ci)*(-@d_xa(qx)*_dx - @d_ya(qy)*_dy - @d_za(qz)*_dz)  # Conservation of energy
-                        @inn(T2)   = @inn(T) + dt*@all(dTdt)                                    # Update of temperature
-                        return
+                    @testset "@parallel <kernel> (3D; on-the-fly)" begin
+                        nxyz   = (32, 8, 8)
+                        lam=dt=_dx=_dy=_dz = $FloatDefault(1)
+                        T      = @Field(nxyz);
+                        T2     = @Field(nxyz);
+                        T2_ref = @Field(nxyz);
+                        Ci     = @Field(nxyz, @ones);
+                        copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
+                        # ParallelStencil.ParallelKernel.@gorgeousexpand 
+                        @parallel function diffusion3D_step!(T2, T, Ci, lam::Data.Number, dt::$FloatDefault, _dx, _dy, _dz)
+                            @all(qx)   = -lam*@d_xi(T)*_dx                                          # Fourier's law of heat conduction
+                            @all(qy)   = -lam*@d_yi(T)*_dy                                          # ...
+                            @all(qz)   = -lam*@d_zi(T)*_dz                                          # ...
+                            @all(dTdt) = @inn(Ci)*(-@d_xa(qx)*_dx - @d_ya(qy)*_dy - @d_za(qz)*_dz)  # Conservation of energy
+                            @inn(T2)   = @inn(T) + dt*@all(dTdt)                                    # Update of temperature
+                            return
+                        end
+                        @parallel diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
+                        T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
+                                                ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
+                                                + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
+                                                + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
+                                                );
+                        @test all(Array(T2) .== Array(T2_ref))
                     end
-                    @parallel diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
-                    T2_ref[2:end-1,2:end-1,2:end-1] .= T[2:end-1,2:end-1,2:end-1] .+ dt.*(lam.*Ci[2:end-1,2:end-1,2:end-1].*(
-                                            ((T[3:end  ,2:end-1,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[1:end-2,2:end-1,2:end-1])).*_dx^2
-                                            + ((T[2:end-1,3:end  ,2:end-1] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,1:end-2,2:end-1])).*_dy^2
-                                            + ((T[2:end-1,2:end-1,3:end  ] .- T[2:end-1,2:end-1,2:end-1]) .- (T[2:end-1,2:end-1,2:end-1] .- T[2:end-1,2:end-1,1:end-2])).*_dz^2)
-                                            );
-                    @test all(Array(T2) .== Array(T2_ref))
-                end
-            end;
-            @reset_parallel_stencil()
+                end;
+                @reset_parallel_stencil()
+            end
         end;
         @testset "4. global defaults" begin
             @testset "inbounds=true" begin
