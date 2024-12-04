@@ -29,7 +29,7 @@ To see a description of a macro type `?<macroname>` (including the `@`).
 module FieldAllocators
 
 using ..Exceptions
-import ..ParallelKernel: check_initialized, get_numbertype, extract_kwargvalues, split_args, clean_args, is_same, extract_tuple, extract_kwargs
+import ..ParallelKernel: check_initialized, get_numbertype, get_padding, extract_kwargvalues, split_args, clean_args, is_same, extract_tuple, extract_kwargs
 import ..ParallelKernel: NUMBERTYPE_NONE, FIELDTYPES
 
 
@@ -389,6 +389,126 @@ macro YZField(args...)
 end
 
 
+## FIELDS FOR UNIT TESTS
+
+macro IField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@IField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:I))
+end
+
+macro XXYField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXYField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXY))
+end
+
+macro XYYField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYYField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XYY))
+end
+
+macro XYZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XYZ))
+end
+
+macro XXYZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXYZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXYZ))
+end
+
+macro XYYZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYYZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XYYZ))
+end
+
+macro XYZZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYZZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XYZZ))
+end
+
+macro XXYYField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXYYField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXYY))
+end
+
+macro XXZZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXZZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXZZ))
+end
+
+macro YYZZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@YYZZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:YYZZ))
+end
+
+macro XXYYZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXYYZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXYYZ))
+end
+
+macro XXYZZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXYZZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XXYZZ))
+end
+
+macro XYYZZField(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYYZZField")
+    posargs = clean_args(posargs)
+    esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:XYYZZ))
+end
+
+
 ## ARGUMENT CHECKS
 
 function checkargs_allocate(args...)
@@ -447,27 +567,72 @@ function _allocate(caller::Module; gridsize=nothing, fields=nothing, allocator=n
 end
 
 function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
-    eltype   = determine_eltype(caller, eltype)
-    if     (sizetemplate == :X)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-2) : (length($gridsize)==2) ? (-1,-2) : -1))
-    elseif (sizetemplate == :Y)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-2) : (length($gridsize)==2) ? (-2,-1) : -2))
-    elseif (sizetemplate == :Z)   arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2,-1) : (length($gridsize)==2) ? (-2,-2) : -2))
-    elseif (sizetemplate == :BX)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (+1, 0, 0) : (length($gridsize)==2) ? (+1, 0) : +1))
-    elseif (sizetemplate == :BY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,+1, 0) : (length($gridsize)==2) ? ( 0,+1) :  0))
-    elseif (sizetemplate == :BZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0, 0,+1) : (length($gridsize)==2) ? ( 0, 0) :  0))
-    elseif (sizetemplate == :XX)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? ( 0,-2,-2) : (length($gridsize)==2) ? ( 0,-2) :  0))
-    elseif (sizetemplate == :YY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2, 0,-2) : (length($gridsize)==2) ? (-2, 0) : -2))
-    elseif (sizetemplate == :ZZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-2, 0) : (length($gridsize)==2) ? (-2,-2) : -2))
-    elseif (sizetemplate == :XY)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-1,-2) : (length($gridsize)==2) ? (-1,-1) : -1))
-    elseif (sizetemplate == :XZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-1,-2,-1) : (length($gridsize)==2) ? (-1,-2) : -1))
-    elseif (sizetemplate == :YZ)  arraysize = :($gridsize .+ ((length($gridsize)==3) ? (-2,-1,-1) : (length($gridsize)==2) ? (-2,-1) : -2))
-    else                          arraysize = gridsize
+    padding = get_padding(caller)
+    eltype  = determine_eltype(caller, eltype)
+    if padding
+        if     (sizetemplate in (:X, :BX, :XYY, :XYYZZ))  arraysize = :(map(+, $gridsize, (+1, 0, 0)))
+        elseif (sizetemplate in (:Y, :BY, :XXY, :XXYZZ))  arraysize = :(map(+, $gridsize, ( 0,+1, 0)))
+        elseif (sizetemplate in (:Z, :BZ, :XXYYZ))        arraysize = :(map(+, $gridsize, ( 0, 0,+1)))
+        elseif (sizetemplate in (:XY, :XYZZ))             arraysize = :(map(+, $gridsize, (+1,+1, 0)))
+        elseif (sizetemplate in (:XZ, :XYYZ))             arraysize = :(map(+, $gridsize, (+1, 0,+1)))
+        elseif (sizetemplate in (:YZ, :XXYZ))             arraysize = :(map(+, $gridsize, ( 0,+1,+1)))
+        elseif (sizetemplate == :XYZ)                     arraysize = :(map(+, $gridsize, (+1,+1,+1)))
+        elseif (isnothing(sizetemplate) || sizetemplate in (:XX, :YY, :ZZ, :I, :XXYY, :XXZZ, :YYZZ))  arraysize = gridsize
+        else @ModuleInternalError("unexpected sizetemplate.")
+        end
+    else
+        if     (sizetemplate == :X)     arraysize = :(map(+, $gridsize, (-1,-2,-2)))
+        elseif (sizetemplate == :Y)     arraysize = :(map(+, $gridsize, (-2,-1,-2)))
+        elseif (sizetemplate == :Z)     arraysize = :(map(+, $gridsize, (-2,-2,-1)))
+        elseif (sizetemplate == :BX)    arraysize = :(map(+, $gridsize, (+1, 0, 0)))
+        elseif (sizetemplate == :BY)    arraysize = :(map(+, $gridsize, ( 0,+1, 0)))
+        elseif (sizetemplate == :BZ)    arraysize = :(map(+, $gridsize, ( 0, 0,+1)))
+        elseif (sizetemplate == :XX)    arraysize = :(map(+, $gridsize, ( 0,-2,-2)))
+        elseif (sizetemplate == :YY)    arraysize = :(map(+, $gridsize, (-2, 0,-2)))
+        elseif (sizetemplate == :ZZ)    arraysize = :(map(+, $gridsize, (-2,-2, 0)))
+        elseif (sizetemplate == :XY)    arraysize = :(map(+, $gridsize, (-1,-1,-2)))
+        elseif (sizetemplate == :XZ)    arraysize = :(map(+, $gridsize, (-1,-2,-1)))
+        elseif (sizetemplate == :YZ)    arraysize = :(map(+, $gridsize, (-2,-1,-1)))
+        elseif (sizetemplate == :I)     arraysize = :(map(+, $gridsize, (-2,-2,-2)))
+        elseif (sizetemplate == :XXY)   arraysize = :(map(+, $gridsize, ( 0,-1,-2)))
+        elseif (sizetemplate == :XYY)   arraysize = :(map(+, $gridsize, (-1, 0,-2)))
+        elseif (sizetemplate == :XYZ)   arraysize = :(map(+, $gridsize, (-1,-1,-1)))
+        elseif (sizetemplate == :XXYZ)  arraysize = :(map(+, $gridsize, ( 0,-1,-1)))
+        elseif (sizetemplate == :XYYZ)  arraysize = :(map(+, $gridsize, (-1, 0,-1)))
+        elseif (sizetemplate == :XYZZ)  arraysize = :(map(+, $gridsize, (-1,-1, 0)))
+        elseif (sizetemplate == :XXYY)  arraysize = :(map(+, $gridsize, ( 0, 0,-2)))
+        elseif (sizetemplate == :XXZZ)  arraysize = :(map(+, $gridsize, ( 0,-2, 0)))
+        elseif (sizetemplate == :YYZZ)  arraysize = :(map(+, $gridsize, (-2, 0, 0)))
+        elseif (sizetemplate == :XXYYZ) arraysize = :(map(+, $gridsize, ( 0, 0,-1)))
+        elseif (sizetemplate == :XXYZZ) arraysize = :(map(+, $gridsize, ( 0,-1, 0)))
+        elseif (sizetemplate == :XYYZZ) arraysize = :(map(+, $gridsize, (-1, 0, 0)))
+        elseif isnothing(sizetemplate)  arraysize = gridsize
+        else @ModuleInternalError("unexpected sizetemplate.")
+        end
     end
-    if     is_same(allocator, :@zeros)  return :(ParallelStencil.ParallelKernel.@zeros($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@ones)   return :(ParallelStencil.ParallelKernel.@ones($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@rand)   return :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@falses) return :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
-    elseif is_same(allocator, :@trues)  return :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
+
+    if     is_same(allocator, :@zeros)   arrayalloc = :(ParallelStencil.ParallelKernel.@zeros($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@ones)    arrayalloc = :(ParallelStencil.ParallelKernel.@ones($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@rand)    arrayalloc = :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@falses)  arrayalloc = :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@trues)   arrayalloc = :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
     else @ModuleInternalError("unexpected allocator macro.")
+    end
+
+    if padding
+        subarray = :(ParallelStencil.ParallelKernel.FieldAllocators.subarray)
+        if     (sizetemplate in (:X, :Y, :Z, :XY, :XZ, :YZ, :I, :XYZ)) return :($subarray($arrayalloc, (:).(2, $arraysize.-1)...))
+        elseif (sizetemplate in (:XX, :XXY, :XXYZ)) return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,2)), map(+, $arraysize, ( 0,-1,-1)))...))
+        elseif (sizetemplate in (:YY, :XYY, :XYYZ)) return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,2)), map(+, $arraysize, (-1, 0,-1)))...))
+        elseif (sizetemplate in (:ZZ, :XYZZ))       return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,2,1)), map(+, $arraysize, (-1,-1, 0)))...))
+        elseif (sizetemplate in (:XXYY, :XXYYZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,1,2)), map(+, $arraysize, ( 0, 0,-1)))...))
+        elseif (sizetemplate in (:XXZZ, :XXYZZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (1,2,1)), map(+, $arraysize, ( 0,-1, 0)))...))
+        elseif (sizetemplate in (:YYZZ, :XYYZZ))    return :($subarray($arrayalloc, (:).(map(+, $gridsize.*0, (2,1,1)), map(+, $arraysize, (-1, 0, 0)))...))
+        elseif (isnothing(sizetemplate) || sizetemplate in (:BX, :BY, :BZ)) return :($subarray($arrayalloc, (:).(1, $arraysize)...))
+        else @ModuleInternalError("unexpected sizetemplate.")
+        end
+    else
+        return arrayalloc
     end
 end
 
@@ -512,10 +677,18 @@ function determine_eltype(caller::Module, eltype)
     return eltype
 end
 
+function subarray(A, indices...)
+    B = view(A, indices...)
+    if B isa SubArray
+        return B
+    else
+        return SubArray(A, indices)
+    end
+end
 
 ## Exports
 
-export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField
+export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField, @IField, @XXYField, @XYYField
 
 
 end # Module FieldAllocators

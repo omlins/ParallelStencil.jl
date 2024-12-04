@@ -34,8 +34,8 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 - `memopt::Bool=false`: whether the kernel to be launched was generated with `memopt=true` (meaning the keyword was set in the kernel declaration).
@@ -44,7 +44,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads and Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads and Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -86,14 +86,17 @@ macro parallel_async(args...) check_initialized(__module__); checkargs_parallel(
 
 macro parallel_cuda(args...)              check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_CUDA)); end
 macro parallel_amdgpu(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_metal(args...)             check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_METAL)); end
 macro parallel_threads(args...)           check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_polyester(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...; package=PKG_POLYESTER)); end
 macro parallel_indices_cuda(args...)      check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_CUDA)); end
 macro parallel_indices_amdgpu(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_metal(args...)     check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_METAL)); end
 macro parallel_indices_threads(args...)   check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_polyester(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__source__, __module__, args...; package=PKG_POLYESTER)); end
 macro parallel_async_cuda(args...)        check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_CUDA)); end
 macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_metal(args...)       check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_METAL)); end
 macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_POLYESTER)); end
 
@@ -129,7 +132,7 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
         is_parallel_kernel = true
         if typeof(ndims) <: Tuple
@@ -172,7 +175,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     is_parallel_kernel = false
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
     indices_expr = posargs[1]
     ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if typeof(ndims) <: Tuple
@@ -190,6 +193,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
                 metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
             end
             inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+            padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
             memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
             if memopt
                 quote
@@ -197,8 +201,8 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
                     $metadata_function
                 end
             else
-                kwargs_expr = :(inbounds=$inbounds)
-                ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr, kernelarg; package=package)
+                kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
+                ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
             end
         end
     end
@@ -244,7 +248,7 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     return :(@parallel_indices $indices_expr $(kwargs_expr...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
@@ -254,34 +258,42 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     body = add_return(body)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
-    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) ndims=$ndims inbounds=$inbounds memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
+    return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) ndims=$ndims inbounds=$inbounds padding=$padding memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
 function parallel_kernel(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, ndims::Integer, numbertype::DataType, kernel::Expr; kwargs::NamedTuple)
     is_parallel_kernel = true
     if (ndims < 1 || ndims > 3) @KeywordArgumentError("@parallel: keyword argument 'ndims' is invalid or missing (valid values are 1, 2 or 3; 'ndims' an be set globally in @init_parallel_stencil and overwritten per kernel if needed).") end
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
+    padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     indices = get_indices_expr(ndims).args
+    indices_dir = get_indices_dir_expr(ndims).args
     body = get_body(kernel)
     body = remove_return(body)
     validate_body(body)
     kernelargs = splitarg.(extract_kernel_args(kernel)[1])
     argvars = (arg[1] for arg in kernelargs)
-    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
     check_mask_macro(caller)
+    onthefly_vars, onthefly_exprs, write_vars, body = extract_onthefly_arrays!(body, argvars)
+    has_onthefly = !isempty(onthefly_vars)
     body = apply_masks(body, indices)
-    if length(onthefly_vars) > 0
-        body = macroexpand(caller, body)
+    body = macroexpand(caller, body)
+    body = handle_padding(caller, body, padding, indices; handle_view_accesses=false, delay_dir_handling=has_onthefly && padding) # NOTE: delay_dir_handling is mandatory in case of on-the-fly with padding, because the macros (missing dir_handling) created will only be available in the next world age.
+    if has_onthefly
         onthefly_syms  = gensym_world.(onthefly_vars, (@__MODULE__,))
         onthefly_exprs = macroexpand.((caller,), onthefly_exprs)
-        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices)
-        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,))
-        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,))
+        onthefly_exprs = handle_padding.((caller,), onthefly_exprs, (padding,), (indices,); handle_view_accesses=false, dir_handling=!padding) # NOTE: dir_handling is done after macro expansion with the delayed handling.
+        onthefly_exprs = insert_onthefly!.(onthefly_exprs, (onthefly_vars,), (onthefly_syms,), (indices,), (indices_dir,))
+        onthefly_exprs = handle_padding.((caller,), onthefly_exprs, (padding,), (indices,); handle_indexing=false)
+        body           = insert_onthefly!(body, onthefly_vars, onthefly_syms, indices, indices_dir)
+        create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,), (indices_dir,))
     end
+    body = handle_padding(caller, body, padding, indices; handle_indexing=false)
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     if !memopt
         kernel = adjust_signatures(kernel, package)
+        body   = handle_inverses(body)
         body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end
@@ -350,7 +362,7 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : NTHREADS_MAX_MEMOPT_CUDA
+determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : NTHREADS_MAX_MEMOPT_METAL)
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
 compute_loopsize()                             = LOOPSIZE
 
@@ -433,6 +445,18 @@ function get_indices_expr(ndims::Integer)
     end
 end
 
+function get_indices_dir_expr(ndims::Integer)
+    if ndims == 1
+        return :($(INDICES_DIR[1]),)
+    elseif ndims == 2
+        return :($(INDICES_DIR[1]), $(INDICES_DIR[2]))
+    elseif ndims == 3
+        return :($(INDICES_DIR[1]), $(INDICES_DIR[2]), $(INDICES_DIR[3]))
+    else
+        @ModuleInternalError("argument 'ndims' must be 1, 2 or 3.")
+    end
+end
+
 
 ## FUNCTIONS TO CREATE METADATA STORAGE
 
@@ -507,23 +531,40 @@ function extract_onthefly_arrays!(body, argvars)
     return onthefly_vars, onthefly_exprs, write_vars, body
 end
 
-function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array)
+function insert_onthefly!(expr, onthefly_vars, onthefly_syms, indices::Array, indices_dir::Array)
     indices = (indices...,)
+    indices_dir = (indices_dir...,)
     for (A, m) in zip(onthefly_vars, onthefly_syms)
-        expr = substitute(expr, A, m, indices)
+        expr = substitute(expr, A, m, indices, indices_dir)
     end
     return expr
 end
 
-function create_onthefly_macro(caller, m, expr, var, indices)
-    ndims         = length(indices)
-    ix, iy, iz    =  gensym_world.(("ix","iy","iz"), (@__MODULE__,))
-    local_indices = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+function determine_local_index_dir(local_index, dim)
+    id_l = local_index
+    id_l = increment_arg(id_l, INDICES_DIR_FUNCTIONS_SYMS[dim])
+    id_l = substitute(id_l, INDICES_DIR[dim], :($(INDICES_DIR_FUNCTIONS_SYMS[dim])(2)))
+    id_l = substitute(id_l, INDICES[dim], INDICES_DIR[dim])
+    return id_l
+end
+
+function create_onthefly_macro(caller, m, expr, var, indices, indices_dir)
+    ndims                 = length(indices)
+    ix, iy, iz            = gensym_world.(("ix","iy","iz"), (@__MODULE__,))
+    ixd, iyd, izd         = gensym_world.(("ixd","iyd","izd"), (@__MODULE__,))
+    local_indices         = (ndims==3) ? (ix, iy, iz) : (ndims==2) ? (ix, iy) : (ix,)
+    local_indices_dir     = (ndims==3) ? (ixd, iyd, izd) : (ndims==2) ? (ixd, iyd) : (ixd,)
     for (index, local_index) in zip(indices, local_indices)
         expr = substitute(expr, index, Expr(:$, local_index))
     end
-    quote_expr = :($(Expr(:quote, expr)))
-    m_function = :($m($(local_indices...)) = $quote_expr)
+    for (index, local_index) in zip(indices_dir, local_indices_dir)
+        expr = substitute(expr, index, Expr(:$, local_index))
+    end
+    local_assign = quote
+        $((:($(local_indices_dir[i]) = ParallelStencil.determine_local_index_dir($(local_indices[i]), $i)) for i=1:ndims)...)
+    end
+    expr_quoted = :($(Expr(:quote, expr)))
+    m_function = :($m($(local_indices...)) = ($local_assign; $expr_quoted))
     m_macro = :(macro $m(args...) if (length(args)!=$ndims) ParallelStencil.@ArgumentError("unsupported kernel statements in @parallel kernel definition: wrong number of indices in $var (expected $ndims indices).") end; esc($m(args...)) end)
     @eval(caller, $m_function)
     @eval(caller, $m_macro)

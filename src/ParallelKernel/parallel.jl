@@ -15,8 +15,8 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA or AMDGPU was selected with [`@init_parallel_kernel`](@ref).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 !!! note "Advanced"
@@ -24,7 +24,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA or AMDGPU (ignored for Threads or Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads or Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -90,18 +90,22 @@ macro synchronize(args...) check_initialized(__module__); esc(synchronize(__modu
 
 macro parallel_cuda(args...)              check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_CUDA)); end
 macro parallel_amdgpu(args...)            check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_metal(args...)             check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_METAL)); end
 macro parallel_threads(args...)           check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_THREADS)); end
 macro parallel_polyester(args...)         check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__module__, args...; package=PKG_POLYESTER)); end
 macro parallel_indices_cuda(args...)      check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_CUDA)); end
 macro parallel_indices_amdgpu(args...)    check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_indices_metal(args...)     check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_METAL)); end
 macro parallel_indices_threads(args...)   check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_THREADS)); end
 macro parallel_indices_polyester(args...) check_initialized(__module__); checkargs_parallel_indices(args...); esc(parallel_indices(__module__, args...; package=PKG_POLYESTER)); end
 macro parallel_async_cuda(args...)        check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_CUDA)); end
 macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_AMDGPU)); end
+macro parallel_async_metal(args...)       check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_METAL)); end
 macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_THREADS)); end
 macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__module__, args...; package=PKG_POLYESTER)); end
 macro synchronize_cuda(args...)           check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_CUDA)); end
 macro synchronize_amdgpu(args...)         check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_AMDGPU)); end
+macro synchronize_metal(args...)          check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_METAL)); end
 macro synchronize_threads(args...)        check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_THREADS)); end
 macro synchronize_polyester(args...)      check_initialized(__module__); esc(synchronize(__module__, args...; package=PKG_POLYESTER)); end
 
@@ -150,14 +154,16 @@ end
 function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds,), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
+    kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds, :padding), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
-    parallel_kernel(caller, package, numbertype, inbounds, posargs..., kernelarg)
+    padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
+    parallel_kernel(caller, package, numbertype, inbounds, padding, posargs..., kernelarg)
 end
 
 function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)      synchronize_cuda(args...)
     elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
+    elseif (package == PKG_METAL)     synchronize_metal(args...)
     elseif (package == PKG_THREADS)   synchronize_threads(args...)
     elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -167,22 +173,25 @@ end
 
 ## @PARALLEL KERNEL FUNCTIONS
 
-function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
+function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, padding::Bool, indices::Union{Symbol,Expr}, kernel::Expr)
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices or a single index (e.g. (ix, iy, iz) or (ix, iy) or ix ).") end
     indices = extract_tuple(indices)
+    ndims = length(indices)
     body = get_body(kernel)
     body = remove_return(body)
-    use_aliases = !all(indices .== INDICES[1:length(indices)])
+    body = macroexpand(caller, body)
+    use_aliases = !all(indices .== INDICES[1:ndims])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
         indices_aliases = indices
-        indices = [INDICES[1:length(indices)]...]
-        body = macroexpand(caller, body)
+        indices = [INDICES[1:ndims]...]
         for i=1:length(indices_aliases)
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
     if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
+    body   = handle_padding(caller, body, padding, indices)
+    body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
     body = add_return(body)
@@ -236,6 +245,7 @@ function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Exp
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)  int_type = INT_METAL
     end
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
@@ -304,6 +314,7 @@ end
 
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...); blocking=true))
 synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...); blocking=true))
+synchronize_metal(args::Union{Symbol,Expr}...) = :(Metal.synchronize($(args...)))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
@@ -352,7 +363,7 @@ function literaltypes(type1::DataType, type2::DataType, expr::Expr)
 end
 
 
-## FUNCTIONS TO HANDLE SIGNATURES AND INDICES
+## FUNCTIONS AND MACROS TO HANDLE SIGNATURES, INDICES, INVERSES AND PADDING
 
 function adjust_signatures(kernel::Expr, package::Symbol)
     int_type = kernel_int_type(package)
@@ -361,6 +372,151 @@ function adjust_signatures(kernel::Expr, package::Symbol)
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[2])::$int_type))
     kernel = push_to_signature!(kernel, :($(RANGELENGTHS_VARNAMES[3])::$int_type))
     return kernel
+end
+
+function simplify_conditions(caller::Module, expr::Expr)
+    expr = postwalk(expr) do ex
+        if @capture(ex, if condition_ body_ end)
+            condition = postwalk(condition) do cond
+                if     (@capture(cond, a_ <  ixyz_ + c_ <  b_) && ixyz in INDICES) cond = :($a - $c <  $ixyz <  $b - $c)
+                elseif (@capture(cond, a_ <= ixyz_ + c_ <  b_) && ixyz in INDICES) cond = :($a - $c <= $ixyz <  $b - $c)
+                elseif (@capture(cond, a_ <  ixyz_ + c_ <= b_) && ixyz in INDICES) cond = :($a - $c <  $ixyz <= $b - $c)
+                elseif (@capture(cond, a_ <= ixyz_ + c_ <= b_) && ixyz in INDICES) cond = :($a - $c <= $ixyz <= $b - $c)
+                elseif (@capture(cond, a_ <  ixyz_ - c_ <  b_) && ixyz in INDICES) cond = :($a + $c <  $ixyz <  $b + $c)
+                elseif (@capture(cond, a_ <= ixyz_ - c_ <  b_) && ixyz in INDICES) cond = :($a + $c <= $ixyz <  $b + $c)
+                elseif (@capture(cond, a_ <  ixyz_ - c_ <= b_) && ixyz in INDICES) cond = :($a + $c <  $ixyz <= $b + $c)
+                elseif (@capture(cond, a_ <= ixyz_ - c_ <= b_) && ixyz in INDICES) cond = :($a + $c <= $ixyz <= $b + $c)
+                end
+                if @capture(cond, a_ < x_ < b_) || @capture(cond, a_ < x_ <= b_) || @capture(cond, a_ <= x_ < b_) || @capture(cond, a_ <= x_ <= b_)
+                    a_val = eval_try(caller, a)
+                    b_val = eval_try(caller, b)
+                    if !isnothing(a_val) cond = substitute(cond, a, :($a_val), inQuoteNode=true) end
+                    if !isnothing(b_val) cond = substitute(cond, b, :($b_val), inQuoteNode=true) end
+                end
+                if     (@capture(cond, a_ <  ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==0 && b==2) cond = :($x == 1) # NOTE: a check that there is no second assignment to the parallel indices could be added.
+                elseif (@capture(cond, a_ <  ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==0)         cond = :($x < $b)
+                elseif (@capture(cond, a_ <= ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==1 && b==2) cond = :($x == 1)
+                elseif (@capture(cond, a_ <= ixyz_ <  b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==1)         cond = :($x < $b)
+                elseif (@capture(cond, a_ <  ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==0 && b==1) cond = :($x == 1)
+                elseif (@capture(cond, a_ <  ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==0)         cond = :($x <= $b)
+                elseif (@capture(cond, a_ <= ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer) && isa(b, Integer) && a==1 && b==1) cond = :($x == 1)
+                elseif (@capture(cond, a_ <= ixyz_ <= b_) && (ixyz in INDICES) && isa(a, Integer)                    && a==1)         cond = :($x <= $b)
+                end
+                return cond
+            end
+            return :(if ($condition); $body end)
+        else
+            return ex
+        end
+    end
+    return expr
+end
+
+function handle_inverses(body::Expr)
+    return postwalk(body) do ex
+        if @capture(ex, (1 | 1.0 | 1.0f0) / x_)
+            return :(inv($x))
+        else
+            return ex
+        end
+    end
+end
+
+function handle_padding(caller::Module, body::Expr, padding::Bool, indices; handle_view_accesses::Bool=true, handle_indexing::Bool=true, dir_handling::Bool=true, delay_dir_handling::Bool=false)
+    if (handle_indexing) 
+        body = substitute_indices_inn(body, padding)
+        if (dir_handling) body = substitute_indices_dir(caller, body, padding; delay_handling=delay_dir_handling) end
+        body = substitute_firstlastindex(caller, body, padding)
+        body = simplify_conditions(caller, body)
+    end
+    if (handle_view_accesses && padding) body = substitute_view_accesses(body, (indices...,), (INDICES_DIR[1:length(indices)]...,)) end
+    return body
+end
+
+function substitute_indices_inn(body::Expr, padding::Bool)
+    for i=1:length(INDICES_INN)
+        index_inn = (padding) ? INDICES[i] : :($(INDICES[i]) + 1) # NOTE: expression of ixi with ix, etc.: if padding is not used, they must be shifted by 1.
+        body = substitute(body, INDICES_INN[i], index_inn)
+    end
+    return body
+end
+
+macro handle_indices_dir(expr::Expr, padding::Bool) expr = macroexpand(__module__, expr); esc(substitute_indices_dir(__module__, expr, padding)) end
+
+function substitute_indices_dir(caller::Module, expr::Expr, padding::Bool; delay_handling::Bool=false)
+    ix, iy, iz          = INDICES
+    ixd_f, iyd_f, izd_f = INDICES_DIR_FUNCTIONS_SYMS
+    if delay_handling
+        expr = :(ParallelStencil.ParallelKernel.@handle_indices_dir($expr, $padding))
+    else
+        if padding
+            expr = postwalk(expr) do exp
+                if @capture(exp, (B_[ixyz_expr__] = rhs_) | (B_[ixyz_expr__] .= rhs_)) && any(map(inexpr_walk, ixyz_expr, INDICES))
+                    B_parent = promote_to_parent(B)
+                    rhs = postwalk(rhs) do ex
+                        if @capture(ex, A_[indices_expr__]) && any(map(inexpr_walk, indices_expr, INDICES_DIR))
+                            A_parent = promote_to_parent(A)
+                            ex = substitute(ex, NamedTuple{INDICES_DIR}(
+                                ((A_parent==B_parent) ? ix : :($ix - (size($B_parent, 1) > size($A_parent, 1))), 
+                                 (A_parent==B_parent) ? iy : :($iy - (size($B_parent, 2) > size($A_parent, 2))),
+                                 (A_parent==B_parent) ? iz : :($iz - (size($B_parent, 3) > size($A_parent, 3))))
+                                ); inQuoteNode=true)
+                        elseif @capture(ex, A_[indices_expr__]) && any(map(inexpr_walk, indices_expr, INDICES_DIR_FUNCTIONS_SYMS))
+                            A_parent = promote_to_parent(A)
+                            ex = postwalk(ex) do e
+                                if @capture(e, f_(arg_)) && (f in INDICES_DIR_FUNCTIONS_SYMS)
+                                    if !isa(arg, Integer) @ModuleInternalError("invalid argument in function $f found (expected: Integer): $arg.") end
+                                    offset_base = arg ÷ 2
+                                    if     (f == ixd_f) e = :($ix - $offset_base)
+                                    elseif (f == iyd_f) e = :($iy - $offset_base)
+                                    elseif (f == izd_f) e = :($iz - $offset_base)
+                                    end
+                                    if     (f == ixd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 1) > size($A_parent, 1)))
+                                    elseif (f == iyd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 2) > size($A_parent, 2)))
+                                    elseif (f == izd_f && (A_parent!=B_parent)) e = :($e - (size($B_parent, 3) > size($A_parent, 3)))
+                                    end
+                                end
+                                return e
+                            end
+                        end
+                        return ex
+                    end
+                    exp = :($B[$(ixyz_expr...)] = $rhs)
+                end
+                return exp
+            end
+        else
+            for i=1:length(INDICES_DIR)
+                expr = substitute(expr, INDICES_DIR[i], INDICES[i], inQuoteNode=true)
+            end
+        end
+    end
+    return expr
+end
+
+function substitute_firstlastindex(caller::Module, body::Expr, padding::Bool)
+    return postwalk(body) do ex
+        if @capture(ex, f_(args__)) 
+            if     (f == :firstindex) return _firstindex(caller, args..., padding)
+            elseif (f == :lastindex)  return _lastindex(caller, args..., padding)
+            else return ex
+            end
+        else
+            return ex
+        end
+    end
+end
+
+function substitute_view_accesses(expr::Expr, indices::NTuple{N,<:Union{Symbol,Expr}}, indices_dir::NTuple{N,<:Union{Symbol,Expr}}) where N
+    return postwalk(expr) do ex
+        if is_access(ex, indices, indices_dir)
+            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            A_parent = promote_to_parent(A)
+            return :($A_parent[$(indices_expr...)])
+        else
+            return ex
+        end
+    end
 end
 
 function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)
@@ -516,6 +672,7 @@ promote_maxsize(maxsize)                        = @ArgumentError("maxsize must b
 
 maxsize(t::T) where T<:Union{Tuple, NamedTuple} = maxsize(t...)
 maxsize(A::T) where T<:AbstractArray            = (size(A,1),size(A,2),size(A,3))          # NOTE: using size(A,dim) three times instead of size(A) ensures to have a tuple of length 3.
+maxsize(A::T) where T<:SubArray                 = (size(A.parent,1),size(A.parent,2),size(A.parent,3))
 maxsize(a::T) where T<:Number                   = (1, 1, 1)
 maxsize(x)                                      = _maxsize(Val{isbitstype(typeof(x))})
 _maxsize(::Type{Val{true}})                     = (1, 1, 1)
@@ -559,17 +716,22 @@ function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads:
         if !isnothing(shmem)
             if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_AMDGPU) shmem_expr = :(shmem = $shmem)
+            elseif (package == PKG_METAL)  shmem_expr = nothing # No need to pass shared memory to Metal kernels.
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
-            backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+            if package != PKG_METAL
+                backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+            end
         end
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=$nblocks groupsize=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+        elseif (package == PKG_METAL)  return :( Metal.@metal groups=$nblocks threads=$nthreads queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
         if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
+        elseif (package == PKG_METAL)  return :( Metal.@metal launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
@@ -578,6 +740,7 @@ end
 function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     if     (package == PKG_CUDA)   synchronize_cuda(stream)
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
+    elseif (package == PKG_METAL)  synchronize_metal(stream)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -585,6 +748,7 @@ end
 function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
+    elseif (package == PKG_METAL)   return :(Metal.global_queue(Metal.device())) # Use the default queue of the task.
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end

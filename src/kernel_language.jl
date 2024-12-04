@@ -59,7 +59,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     indices        = Tuple(extract_tuple(indices))
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     optranges      = isnothing(optranges) ? optranges : eval_arg(caller, optranges)
-    readonlyvars   = find_readonlyvars(body, indices)
+    readonlyvars   = find_vars(body, indices; readonly=true)
     if length(indices) != 3 @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: optimization can only be applied in 3-D @parallel kernels and @parallel_indices kernels with three indices.") end
     if optvars == (Symbol(""),)
         optvars = Tuple(keys(readonlyvars))
@@ -71,6 +71,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
     if     (package == PKG_CUDA)    int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
+    elseif (package == PKG_METAL)   int_type = INT_METAL
     elseif (package == PKG_THREADS) int_type = INT_THREADS
     end
     body                  = eval_offsets(caller, body, indices, int_type)
@@ -459,7 +460,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     else
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, offset_mins, offset_maxs, offsets, optvars, loopdim, loopsize, optranges, use_shmemhalos)
+    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, loopdim, loopsize, optranges, use_shmemhalos)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
@@ -487,27 +488,6 @@ end
 
 
 ## HELPER FUNCTIONS
-
-function find_readonlyvars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
-    vars         = Dict()
-    writevars    = Dict()
-    postwalk(body) do ex
-        if is_stencil_access(ex, indices...)
-            @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
-            if haskey(vars, A) vars[A] += 1
-            else               vars[A]  = 1
-            end
-        end
-        if @capture(ex, (A_[indices_expr__] = rhs_) | (A_[indices_expr__] .= rhs_)) && is_stencil_access(:($A[$(indices_expr...)]), indices...)
-            if haskey(writevars, A) writevars[A] += 1
-            else                    writevars[A]  = 1
-            end
-        end
-        return ex
-    end
-    readonlyvars = Dict(A => count for (A, count) in vars if A ∉ keys(writevars))
-    return readonlyvars
-end
 
 function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer})
     return postwalk(body) do ex
@@ -1029,17 +1009,36 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
-    storeexpr = quote
-        const is_parallel_kernel = $is_parallel_kernel
-        const memopt            = true
-        const stencilranges      = $(NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars))
-        const offsets            = $offsets
-        const optvars            = $optvars
-        const loopdim             = $loopdim
-        const loopsize           = $loopsize
-        const optranges          = $optranges
-        const use_shmemhalos     = $use_shmemhalos
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+    memopt            = true
+    nonconst_metadata = get_nonconst_metadata(caller)
+    stencilranges     = NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars)
+    if nonconst_metadata
+        storeexpr = quote
+            is_parallel_kernel = $is_parallel_kernel
+            memopt             = $memopt
+            nonconst_metadata  = $nonconst_metadata
+            stencilranges      = $stencilranges
+            offsets            = $offsets
+            optvars            = $optvars
+            loopdim            = $loopdim
+            loopsize           = $loopsize
+            optranges          = $optranges
+            use_shmemhalos     = $use_shmemhalos
+        end
+    else
+        storeexpr = quote
+            const is_parallel_kernel = $is_parallel_kernel
+            const memopt             = $memopt
+            const nonconst_metadata  = $nonconst_metadata
+            const stencilranges      = $stencilranges
+            const offsets            = $offsets
+            const optvars            = $optvars
+            const loopdim            = $loopdim
+            const loopsize           = $loopsize
+            const optranges          = $optranges
+            const use_shmemhalos     = $use_shmemhalos
+        end
     end
     @eval(metadata_module, $storeexpr)
 end

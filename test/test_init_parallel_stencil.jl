@@ -1,8 +1,8 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_memopt, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
-import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_memopt
+import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_padding, set_memopt, set_nonconst_metadata
 using ParallelStencil.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -13,7 +13,19 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
+@static if PKG_METAL in TEST_PACKAGES
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
+end
+@static if PKG_POLYESTER in TEST_PACKAGES
+    import Polyester
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+
 
 @static for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
@@ -26,7 +38,9 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_numbertype() == ComplexF32
                 @test @get_ndims() == 3
                 @test @get_memopt() == false
+                @test @get_nonconst_metadata() == false
                 @test @get_inbounds() == false
+                @test @get_padding() == false
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -56,16 +70,18 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @reset_parallel_stencil()
         end;
-        @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, with inbounds" begin
+        @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, inbounds and padding (and nonconst_metadata)" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package, inbounds = true, memopt = true)
+            @init_parallel_stencil(package = $package, inbounds = true, padding = false, memopt = true, nonconst_metadata = true)
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
                 @test @get_numbertype() == NUMBERTYPE_NONE
                 @test @get_ndims() == NDIMS_NONE
                 @test @get_memopt() == true
+                @test @get_nonconst_metadata() == true
                 @test @get_inbounds() == true
+                @test @get_padding() == false   #TODO: this needs to be restored to true when Polyester supports padding.
             end;
             @testset "Data" begin
                 @test @isdefined(Data)
@@ -90,13 +106,16 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 set_ndims(@__MODULE__, 3)
                 set_memopt(@__MODULE__, false)
                 set_inbounds(@__MODULE__, false)
+                set_padding(@__MODULE__, false)
+                set_nonconst_metadata(@__MODULE__, false)
                 @require is_initialized(@__MODULE__)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :Threads, Float64, 3, false, false)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float32, 3, false, false)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 2, false, false)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, true, false)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, false, true)
-                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :AMDGPU, Float16, 1, true, true)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :Threads, Float64, 3, false, false, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float32, 3, false, false, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 2, false, false, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, true, false, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, false, true, false, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :CUDA, Float64, 3, false, false, true, false)
+                @test_throws IncoherentCallError check_already_initialized(@__MODULE__, :AMDGPU, Float16, 1, true, false, true, false)
                 set_initialized(@__MODULE__, false)
                 set_package(@__MODULE__, PKG_NONE)
                 set_numbertype(@__MODULE__, NUMBERTYPE_NONE)

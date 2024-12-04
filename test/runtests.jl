@@ -2,9 +2,10 @@
 push!(LOAD_PATH, "../src")
 
 import ParallelStencil # Precompile it.
-import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU
+import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL
 @static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
 @static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
+@static if (PKG_METAL in SUPPORTED_PACKAGES && Sys.isapple()) import Metal end
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
@@ -23,6 +24,10 @@ function runtests()
 
     if (PKG_AMDGPU in SUPPORTED_PACKAGES && !AMDGPU.functional())
         @warn "Test Skip: All AMDGPU tests will be skipped because AMDGPU is not functional (if this is unexpected type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation)."
+    end
+
+    if (PKG_METAL in SUPPORTED_PACKAGES && (!Sys.isapple() || !Metal.functional()))
+        @warn "Test Skip: All Metal tests will be skipped because Metal is not functional (if this is unexpected type `import Metal; Metal.functional()` to debug your Metal installation)."
     end
 
     for f in testfiles
