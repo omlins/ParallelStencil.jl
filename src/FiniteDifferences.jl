@@ -153,16 +153,16 @@ export @within
 
 import ..ParallelStencil
 import ..ParallelStencil: INDICES, INDICES_INN, INDICES_DIR, WITHIN_DOC, @expandargs
-ixa, iya  = INDICES[1], INDICES[2]
+ixa, iya = INDICES[1], INDICES[2]
 ixi, iyi = INDICES_INN[1], INDICES_INN[2]
-ix, iy  = INDICES_DIR[1], INDICES_DIR[2]
+ix , iy  = INDICES_DIR[1], INDICES_DIR[2]
 
 macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ix+1,$iya ] - $A[$ix  ,$iya ] )) end
 macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ixa ,$iy+1] - $A[$ixa ,$iy  ] )) end
 macro     d_xi(A)  @expandargs(A);  esc(:( $A[$ix+1,$iyi ] - $A[$ix  ,$iyi ] )) end
 macro     d_yi(A)  @expandargs(A);  esc(:( $A[$ixi ,$iy+1] - $A[$ixi ,$iy  ] )) end
 macro    d2_xa(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iya  ] - $A[$ixi  ,$iya  ])  -  ($A[$ixi  ,$iya  ] - $A[$ixi-1,$iya  ]) )) end
-macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ixa ,$iyi+1] - $A[$ixa ,$iyi  ])  -  ($A[$ixa ,$iyi  ] - $A[$ixa ,$iyi-1]) )) end
+macro    d2_ya(A)  @expandargs(A);  esc(:( ($A[$ixa  ,$iyi+1] - $A[$ixa  ,$iyi  ])  -  ($A[$ixa  ,$iyi  ] - $A[$ixa  ,$iyi-1]) )) end
 macro    d2_xi(A)  @expandargs(A);  esc(:( ($A[$ixi+1,$iyi  ] - $A[$ixi  ,$iyi  ])  -  ($A[$ixi  ,$iyi  ] - $A[$ixi-1,$iyi  ]) )) end
 macro    d2_yi(A)  @expandargs(A);  esc(:( ($A[$ixi  ,$iyi+1] - $A[$ixi  ,$iyi  ])  -  ($A[$ixi  ,$iyi  ] - $A[$ixi  ,$iyi-1]) )) end
 macro      all(A)  @expandargs(A);  esc(:( $A[$ixa ,$iya ] )) end
@@ -323,7 +323,7 @@ import ..ParallelStencil
 import ..ParallelStencil: INDICES, INDICES_INN, INDICES_DIR, WITHIN_DOC, @expandargs
 ixa, iya, iza = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
-ix, iy, iz  = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
+ix , iy , iz  = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 
 macro     d_xa(A)  @expandargs(A);  esc(:( $A[$ix+1,$iya ,$iza ] - $A[$ix  ,$iya ,$iza ] )) end
 macro     d_ya(A)  @expandargs(A);  esc(:( $A[$ixa ,$iy+1,$iza ] - $A[$ixa ,$iy  ,$iza ] )) end
