@@ -312,14 +312,14 @@ function threads(caller::Module, args...; package::Symbol=get_package(caller))
     end
 end
 
-function _firstindex(caller::Module, A::Expr, dim::Expr, padding::Union{Bool, Symbol, Expr}=false)
+function _firstindex(caller::Module, A::Union{Symbol, Expr}, dim::Union{Integer, Symbol, Expr}, padding::Union{Bool, Symbol, Expr}=false)
     padding = eval_arg(caller, padding)
     if (padding) return :($A.indices[$dim][1])
     else         return :(1)
     end
 end
 
-function _lastindex(caller::Module, A::Expr, dim::Expr, padding::Union{Bool, Symbol, Expr}=false)
+function _lastindex(caller::Module, A::Union{Symbol, Expr}, dim::Union{Integer, Symbol, Expr}, padding::Union{Bool, Symbol, Expr}=false)
     padding = eval_arg(caller, padding)
     if (padding) return :($A.indices[$dim][end])
     else         return :(size($A, $dim))

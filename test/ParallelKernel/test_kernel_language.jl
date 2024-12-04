@@ -15,7 +15,7 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
+    import Metal # Import also on non-Apple systems to test macro expansions
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES

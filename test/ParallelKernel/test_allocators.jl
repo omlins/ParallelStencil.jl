@@ -566,10 +566,10 @@ eval(:(
             end
             @reset_parallel_kernel()
         end;
-        $(interpolate(:padding, (false, true), :(
-            @testset "6. Fields (padding=$(_$padding))" begin
+        $(interpolate(:__padding__, (false, true), :(
+            @testset "6. Fields (padding=$__padding__)" begin
                 @require !@is_initialized()
-                @init_parallel_kernel($package, Float16, padding=_$padding)
+                @init_parallel_kernel($package, Float16, padding=__padding__)
                 @require @is_initialized()
                 (nx, ny, nz) = (3, 4, 5)
                 @testset "mapping to array allocators" begin
@@ -654,7 +654,7 @@ eval(:(
                     @test size.(Tuple(@BVectorField((nx,)))) == (size(@BXField((nx,))),)
                     @test size.(Tuple( @TensorField((nx,)))) == (size(@XXField((nx,))),)
                 end;
-                @static if _$padding
+                @static if __padding__
                     @testset "array size (3D)" begin
                         @test size(  @Field((nx, ny, nz)).parent) == (nx,   ny,   nz  )
                         @test size( @XField((nx, ny, nz)).parent) == (nx+1, ny,   nz  )
