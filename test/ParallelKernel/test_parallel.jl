@@ -133,8 +133,8 @@ eval(:(
                         end
                         return
                     end
-                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))
-                    Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!),Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const.
+                    Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!), Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
                     @test Array(Ā) ≈ Ā_ref
                     @test Array(B̄) ≈ B̄_ref
                 end

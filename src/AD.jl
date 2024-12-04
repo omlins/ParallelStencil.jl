@@ -7,8 +7,8 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
     import ParallelStencil.AD
 
 # Functions
-- `autodiff_deferred!`: wraps function `autodiff_deferred`.
-- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`.
+- `autodiff_deferred!`: wraps function `autodiff_deferred`, promoting all arguments that are not Enzyme.Annotations to Enzyme.Const.
+- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`, promoting all arguments that are not Enzyme.Annotations to Enzyme.Const.
 
 # Examples
     const USE_GPU = true
@@ -42,9 +42,6 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
     end
 
     main()
-
-!!! note "Enzyme runtime activity default"
-    If ParallelStencil is initialized with Threads, then `Enzyme.API.runtimeActivity!(true)` is called to ensure correct behavior of Enzyme. If you want to disable this behavior, then call `Enzyme.API.runtimeActivity!(false)` after loading ParallelStencil.
 
 To see a description of a function type `?<functionname>`.
 """
