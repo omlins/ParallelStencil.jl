@@ -1,7 +1,7 @@
 name = "ParallelStencil"
 uuid = "94395366-693c-11ea-3b26-d9b7aac5d958"
 authors = ["Samuel Omlin", "Ludovic Räss"]
-version = "0.13.6"
+version = "0.14.0"
 
 [deps]
 CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
