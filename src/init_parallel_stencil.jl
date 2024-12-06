@@ -68,6 +68,41 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
 end
 
 
+function Metadata_PS()
+    :(module $MOD_METADATA_PS # NOTE: there cannot be any newline before 'module $MOD_METADATA_PS' or it will create a begin end block and the module creation will fail.
+        let
+            global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_inbounds, get_inbounds, set_padding, get_padding, set_memopt, get_memopt, set_nonconst_metadata, get_nonconst_metadata, check_initialized, check_already_initialized
+            _is_initialized::Dict{Module, Bool}               = Dict{Module, Bool}()
+            package::Dict{Module, Symbol}                     = Dict{Module, Symbol}()
+            numbertype::Dict{Module, DataType}                = Dict{Module, DataType}()
+            ndims::Dict{Module, Integer}                      = Dict{Module, Integer}()
+            inbounds::Dict{Module, Bool}                      = Dict{Module, Bool}()
+            padding::Dict{Module, Bool}                       = Dict{Module, Bool}()
+            memopt::Dict{Module, Bool}                        = Dict{Module, Bool}()
+            nonconst_metadata::Dict{Module, Bool}             = Dict{Module, Bool}()
+            set_initialized(caller::Module, flag::Bool)       = (_is_initialized[caller] = flag)
+            is_initialized(caller::Module)                    = haskey(_is_initialized, caller) && _is_initialized[caller]
+            set_package(caller::Module, pkg::Symbol)          = (package[caller] = pkg)
+            get_package(caller::Module)                       =  package[caller]
+            set_numbertype(caller::Module, T::DataType)       = (numbertype[caller] = T)
+            get_numbertype(caller::Module)                    =  numbertype[caller]
+            set_ndims(caller::Module, n::Integer)             = (ndims[caller] = n)
+            get_ndims(caller::Module)                         =  ndims[caller]
+            set_inbounds(caller::Module, flag::Bool)          = (inbounds[caller] = flag)
+            get_inbounds(caller::Module)                      =  inbounds[caller]
+            set_padding(caller::Module, flag::Bool)           = (padding[caller] = flag)
+            get_padding(caller::Module)                       =  padding[caller]
+            set_memopt(caller::Module, flag::Bool)            = (memopt[caller] = flag)
+            get_memopt(caller::Module)                        =  memopt[caller]
+            set_nonconst_metadata(caller::Module, flag::Bool) = (nonconst_metadata[caller] = flag)
+            get_nonconst_metadata(caller::Module)             =  nonconst_metadata[caller]
+        end
+    end)
+end
+
+createmeta_PS(caller::Module) = if !hasmeta_PS(caller) @eval(caller, $(Metadata_PS())) end
+
+
 macro is_initialized() is_initialized(__module__) end
 macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
@@ -78,30 +113,22 @@ macro get_memopt() get_memopt(__module__) end
 macro get_nonconst_metadata() get_nonconst_metadata(__module__) end
 let
     global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_ndims, get_ndims, set_inbounds, get_inbounds, set_padding, get_padding, set_memopt, get_memopt, set_nonconst_metadata, get_nonconst_metadata, check_initialized, check_already_initialized
-    _is_initialized::Dict{Module, Bool}               = Dict{Module, Bool}()
-    package::Dict{Module, Symbol}                     = Dict{Module, Symbol}()
-    numbertype::Dict{Module, DataType}                = Dict{Module, DataType}()
-    ndims::Dict{Module, Integer}                      = Dict{Module, Integer}()
-    inbounds::Dict{Module, Bool}                      = Dict{Module, Bool}()
-    padding::Dict{Module, Bool}                       = Dict{Module, Bool}()
-    memopt::Dict{Module, Bool}                        = Dict{Module, Bool}()
-    nonconst_metadata::Dict{Module, Bool}             = Dict{Module, Bool}()
-    set_initialized(caller::Module, flag::Bool)       = (_is_initialized[caller] = flag)
-    is_initialized(caller::Module)                    = haskey(_is_initialized, caller) && _is_initialized[caller]
-    set_package(caller::Module, pkg::Symbol)          = (package[caller] = pkg)
-    get_package(caller::Module)                       =  package[caller]
-    set_numbertype(caller::Module, T::DataType)       = (numbertype[caller] = T)
-    get_numbertype(caller::Module)                    =  numbertype[caller]
-    set_ndims(caller::Module, n::Integer)             = (ndims[caller] = n)
-    get_ndims(caller::Module)                         =  ndims[caller]
-    set_inbounds(caller::Module, flag::Bool)          = (inbounds[caller] = flag)
-    get_inbounds(caller::Module)                      =  inbounds[caller]
-    set_padding(caller::Module, flag::Bool)           = (padding[caller] = flag)
-    get_padding(caller::Module)                       =  padding[caller]
-    set_memopt(caller::Module, flag::Bool)            = (memopt[caller] = flag)
-    get_memopt(caller::Module)                        =  memopt[caller]
-    set_nonconst_metadata(caller::Module, flag::Bool) = (nonconst_metadata[caller] = flag)
-    get_nonconst_metadata(caller::Module)             =  nonconst_metadata[caller]
+    set_initialized(caller::Module, flag::Bool)       = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_initialized($caller, $flag)))
+    is_initialized(caller::Module)                    = hasmeta_PS(caller) && @eval(caller, $MOD_METADATA_PS.is_initialized($caller))
+    set_package(caller::Module, pkg::Symbol)          = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_package($caller, $(quote_expr(pkg)))))
+    get_package(caller::Module)                       = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_package($caller)) : PKG_NONE
+    set_numbertype(caller::Module, T::DataType)       = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_numbertype($caller, $T)))
+    get_numbertype(caller::Module)                    = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_numbertype($caller)) : NUMBERTYPE_NONE
+    set_ndims(caller::Module, n::Integer)             = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_ndims($caller, $n)))
+    get_ndims(caller::Module)                         = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_ndims($caller)) : NDIMS_NONE
+    set_inbounds(caller::Module, flag::Bool)          = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_inbounds($caller, $flag)))
+    get_inbounds(caller::Module)                      = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_inbounds($caller)) : INBOUNDS_DEFAULT
+    set_padding(caller::Module, flag::Bool)           = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_padding($caller, $flag)))
+    get_padding(caller::Module)                       = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_padding($caller)) : PADDING_DEFAULT
+    set_memopt(caller::Module, flag::Bool)            = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_memopt($caller, $flag)))
+    get_memopt(caller::Module)                        = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_memopt($caller)) : MEMOPT_DEFAULT
+    set_nonconst_metadata(caller::Module, flag::Bool) = (createmeta_PS(caller); @eval(caller, $MOD_METADATA_PS.set_nonconst_metadata($caller, $flag)))
+    get_nonconst_metadata(caller::Module)             = hasmeta_PS(caller) ? @eval(caller, $MOD_METADATA_PS.get_nonconst_metadata($caller)) : NONCONST_METADATA_DEFAULT
     check_initialized(caller::Module)                 = if !is_initialized(caller) @NotInitializedError("no ParallelStencil macro or function can be called before @init_parallel_stencil in each module (missing call in $caller).") end
 
     function check_already_initialized(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool, nonconst_metadata::Bool)
