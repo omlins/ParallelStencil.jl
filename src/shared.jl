@@ -34,7 +34,7 @@ const USE_SHMEMHALO_1D_DEFAULT       = true
 const USE_FULLRANGE_DEFAULT          = (false, false, true)
 const FULLRANGE_THRESHOLD            = 1
 const NOEXPR                         = :(begin end)
-const MOD_METADATA_PS                   = :__metadata_PS__ # gensym_world("__metadata__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
+const MOD_METADATA_PS                = gensym_world("__metadata_PS__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const META_FUNCTION_PREFIX           = string(gensym_world("META", @__MODULE__))
 
 

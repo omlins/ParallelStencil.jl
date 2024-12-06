@@ -13,7 +13,7 @@ ixd(count) = @ModuleInternalError("function ixd had not been evaluated at parse 
 iyd(count) = @ModuleInternalError("function iyd had not been evaluated at parse time")
 izd(count) = @ModuleInternalError("function izd had not been evaluated at parse time")
 
-const MOD_METADATA_PK              = :__metadata_PK__ # gensym_world("__metadata__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
+const MOD_METADATA_PK              = gensym_world("__metadata_PK__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_METAL                    = :Metal
