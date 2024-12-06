@@ -9,10 +9,11 @@ gensym_world(tag::String, generator::Module) = gensym(string(tag, GENSYM_SEPARAT
 gensym_world(tag::Symbol, generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 gensym_world(tag::Expr,   generator::Module) = gensym(string(tag, GENSYM_SEPARATOR, generator))
 
-ixd(count) = @ModuleInternalError("function ixd had not be evaluated at parse time")
-iyd(count) = @ModuleInternalError("function iyd had not be evaluated at parse time")
-izd(count) = @ModuleInternalError("function izd had not be evaluated at parse time")
+ixd(count) = @ModuleInternalError("function ixd had not been evaluated at parse time")
+iyd(count) = @ModuleInternalError("function iyd had not been evaluated at parse time")
+izd(count) = @ModuleInternalError("function izd had not been evaluated at parse time")
 
+const MOD_METADATA_PK              = :__metadata_PK__ # gensym_world("__metadata__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_METAL                    = :Metal
@@ -53,6 +54,8 @@ const SUPPORTED_LITERALTYPES       =      [Float16, Float32, Float64, Complex{Fl
 const SUPPORTED_NUMBERTYPES        =      [Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}]
 const PKNumber                     = Union{Float16, Float32, Float64, Complex{Float16}, Complex{Float32}, Complex{Float64}} # NOTE: this always needs to correspond to SUPPORTED_NUMBERTYPES!
 const NUMBERTYPE_NONE              = DataType
+const INBOUNDS_DEFAULT             = false
+const PADDING_DEFAULT              = false
 const MODULENAME_DATA              = :Data
 const MODULENAME_TDATA             = :TData
 const MODULENAME_DEVICE            = :Device
@@ -566,11 +569,15 @@ end
 
 interpolate(sym::Symbol, vals_expr::Expr, block::Expr) = interpolate(sym, (extract_tuple(vals_expr)...,), block)
 
+quote_expr(expr) = :($(Expr(:quote, expr)))
+
 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
 iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL))
+
+hasmeta_PK(caller::Module) = isdefined(caller, MOD_METADATA_PK)
 
 
 ## TEMPORARY FUNCTION DEFINITIONS TO BE MERGED IN MACROTOOLS (https://github.com/FluxML/MacroTools.jl/pull/173)
