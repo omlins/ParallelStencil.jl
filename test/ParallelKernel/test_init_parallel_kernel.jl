@@ -133,6 +133,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             @reset_parallel_kernel()
         end;
         @testset "3. Exceptions" begin
+            @init_parallel_kernel(package=$package) # NOTE: Initialization is potentially later required to create the metadata module
             @testset "already initialized" begin
                 set_initialized(@__MODULE__, true)
                 @require is_initialized(@__MODULE__)
