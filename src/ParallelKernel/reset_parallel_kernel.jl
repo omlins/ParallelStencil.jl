@@ -16,8 +16,10 @@ function reset_parallel_kernel(caller::Module)
         tdata_module = TData_none()
         @eval(caller, $tdata_module)
     end
-    set_initialized(caller, false)
-    set_package(caller, PKG_NONE)
-    set_numbertype(caller, NUMBERTYPE_NONE)
+    if isdefined(caller, MOD_METADATA_PK)
+        set_initialized(caller, false)
+        set_package(caller, PKG_NONE)
+        set_numbertype(caller, NUMBERTYPE_NONE)
+    end
     return nothing
 end

@@ -87,28 +87,49 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
 end
 
 
+function Metadata_PK()
+    :(module $MOD_METADATA_PK # NOTE: there cannot be any newline before 'module $MOD_METADATA_PK' or it will create a begin end block and the module creation will fail.
+        let
+            global set_initialized, is_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding
+            _is_initialized::Bool       = false
+            package::Symbol             = $(quote_expr(PKG_NONE))
+            numbertype::DataType        = $NUMBERTYPE_NONE
+            inbounds::Bool              = $INBOUNDS_DEFAULT
+            padding::Bool               = $PADDING_DEFAULT
+            set_initialized(flag::Bool) = (_is_initialized = flag)
+            is_initialized()            = _is_initialized
+            set_package(pkg::Symbol)    = (package = pkg)
+            get_package()               = package
+            set_numbertype(T::DataType) = (numbertype = T)
+            get_numbertype()            = numbertype
+            set_inbounds(flag::Bool)    = (inbounds = flag)
+            get_inbounds()              = inbounds
+            set_padding(flag::Bool)     = (padding = flag)
+            get_padding()               = padding
+        end
+    end)
+end
+
+createmeta_PK(caller::Module) = if !hasmeta_PK(caller) @eval(caller, $(Metadata_PK())) end
+
+
 macro is_initialized() is_initialized(__module__) end
 macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
 macro get_inbounds() get_inbounds(__module__) end
 macro get_padding() get_padding(__module__) end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, check_initialized, check_already_initialized
-    _is_initialized::Dict{Module, Bool}         = Dict{Module, Bool}()
-    package::Dict{Module, Symbol}               = Dict{Module, Symbol}()
-    numbertype::Dict{Module, DataType}          = Dict{Module, DataType}()
-    inbounds::Dict{Module, Bool}                = Dict{Module, Bool}()
-    padding::Dict{Module, Bool}                 = Dict{Module, Bool}()
-    set_initialized(caller::Module, flag::Bool) = (_is_initialized[caller] = flag)
-    is_initialized(caller::Module)              = haskey(_is_initialized, caller) && _is_initialized[caller]
-    set_package(caller::Module, pkg::Symbol)    = (package[caller] = pkg)
-    get_package(caller::Module)                 =  package[caller]
-    set_numbertype(caller::Module, T::DataType) = (numbertype[caller] = T)
-    get_numbertype(caller::Module)              =  numbertype[caller]
-    set_inbounds(caller::Module, flag::Bool)    = (inbounds[caller] = flag)
-    get_inbounds(caller::Module)                =  inbounds[caller]
-    set_padding(caller::Module, flag::Bool)     = (padding[caller] = flag)
-    get_padding(caller::Module)                 =  padding[caller]
+    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, check_initialized, check_already_initialized    
+    set_initialized(caller::Module, flag::Bool) = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_initialized($flag)))
+    is_initialized(caller::Module)              = hasmeta_PK(caller) && @eval(caller, $MOD_METADATA_PK.is_initialized())
+    set_package(caller::Module, pkg::Symbol)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_package($(quote_expr(pkg)))))
+    get_package(caller::Module)                 = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_package()) : PKG_NONE
+    set_numbertype(caller::Module, T::DataType) = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_numbertype($T)))
+    get_numbertype(caller::Module)              = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_numbertype()) : NUMBERTYPE_NONE
+    set_inbounds(caller::Module, flag::Bool)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_inbounds($flag)))
+    get_inbounds(caller::Module)                = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_inbounds()) : INBOUNDS_DEFAULT
+    set_padding(caller::Module, flag::Bool)     = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_padding($flag)))
+    get_padding(caller::Module)                 = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_padding()) : PADDING_DEFAULT
     check_initialized(caller::Module)           = if !is_initialized(caller) @NotInitializedError("no ParallelKernel macro or function can be called before @init_parallel_kernel in each module (missing call in $caller).") end
     check_already_initialized(caller::Module)   = if is_initialized(caller) @IncoherentCallError("ParallelKernel has already been initialized for the module $caller.") end
 end

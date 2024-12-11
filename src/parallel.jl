@@ -462,8 +462,8 @@ end
 
 function create_metadata_storage(source::LineNumberNode, caller::Module, kernel::Expr)
     kernelid = get_kernelid(get_name(kernel), source.file, source.line)
-    create_module(caller, MOD_METADATA)
-    topmodule = @eval(caller, $MOD_METADATA)
+    create_module(caller, MOD_METADATA_PS)
+    topmodule = @eval(caller, $MOD_METADATA_PS)
     create_module(topmodule, kernelid)
     metadata_module = @eval(topmodule, $kernelid)
     metadata_function = create_metadata_function(kernel, metadata_module)
