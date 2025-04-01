@@ -388,8 +388,8 @@ function simplify_conditions(caller::Module, expr::Expr)
                 elseif (@capture(cond, a_ <= ixyz_ - c_ <= b_) && ixyz in INDICES) cond = :($a + $c <= $ixyz <= $b + $c)
                 end
                 if @capture(cond, a_ < x_ < b_) || @capture(cond, a_ < x_ <= b_) || @capture(cond, a_ <= x_ < b_) || @capture(cond, a_ <= x_ <= b_)
-                    a_val = eval_try(caller, a)
-                    b_val = eval_try(caller, b)
+                    a_val = eval_try(caller, a; when_interactive=false)
+                    b_val = eval_try(caller, b; when_interactive=false)
                     if !isnothing(a_val) cond = substitute(cond, a, :($a_val), inQuoteNode=true) end
                     if !isnothing(b_val) cond = substitute(cond, b, :($b_val), inQuoteNode=true) end
                 end
