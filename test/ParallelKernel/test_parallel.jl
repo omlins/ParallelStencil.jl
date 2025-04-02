@@ -138,7 +138,7 @@ eval(:(
                     @test Array(Ā) ≈ Ā_ref
                     @test Array(B̄) ≈ B̄_ref
                 end
-            end
+            end;
             @testset "@parallel_indices" begin
                 @testset "inbounds" begin
                     expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
@@ -147,27 +147,27 @@ eval(:(
                     @test !occursin("Base.@inbounds begin", expansion)
                     expansion = @prettystring(1, @parallel_indices (ix) f(A) = (2*A; return))
                     @test !occursin("Base.@inbounds begin", expansion)
-                end
+                end;
                 @testset "addition of range arguments" begin
                     expansion = @gorgeousstring(1, @parallel_indices (ix,iy) f(a::T, b::T) where T <: Union{Array{Float32}, Array{Float64}} = (println("a=$a, b=$b)"); return))
                     @test occursin("f(a::T, b::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
-                end
-                $(interpolate(:__T__, ARRAYTYPES, :(
+                end;
+                @testset "Data.T to Data.Device.T" $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "Data.__T__ to Data.Device.__T__" begin
                         @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.__T__, B::Data.__T__, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.Device.__T__, B::Data.Device.__T__,", expansion)
                         end
-                    end
-                )))
-                $(interpolate(:__T__, FIELDTYPES, :(
+                    end;
+                )));
+                @testset "Data.Fields.T to Data.Fields.Device.T" $(interpolate(:__T__, FIELDTYPES, :(
                     @testset "Data.Fields.__T__ to Data.Fields.Device.__T__" begin
                         @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Fields.__T__, B::Data.Fields.__T__, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::Data.Fields.Device.__T__, B::Data.Fields.Device.__T__,", expansion)
                         end
-                    end
-                )))
+                    end;
+                )));
                 # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
                 # @testset "Fields.Field to Data.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
@@ -183,22 +183,22 @@ eval(:(
                 #             @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
                 #     end
                 # end
-                $(interpolate(:__T__, ARRAYTYPES, :(
+                @testset "TData.T to TData.Device.T" $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "TData.__T__ to TData.Device.__T__" begin
                         @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::TData.__T__, B::TData.__T__, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::TData.Device.__T__, B::TData.Device.__T__,", expansion)
                         end
-                    end
-                )))
-                $(interpolate(:__T__, FIELDTYPES, :(
+                    end;
+                )));
+                @testset "TData.Fields.T to TData.Fields.Device.T" $(interpolate(:__T__, FIELDTYPES, :(
                     @testset "TData.Fields.__T__ to TData.Fields.Device.__T__" begin
                         @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::TData.Fields.__T__, B::TData.Fields.__T__, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::TData.Fields.Device.__T__, B::TData.Fields.Device.__T__,", expansion)
                         end
-                    end
-                )))
+                    end;
+                )));
                 # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
                 # @testset "Fields.Field to TData.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
@@ -214,14 +214,14 @@ eval(:(
                 #             @test occursin("f(A::TData.Fields.Device.Field, B::TData.Fields.Device.Field,", expansion)
                 #     end
                 # end
-                $(interpolate(:__T__, ARRAYTYPES, :(
+                @testset "Nested Data.T to Data.Device.T" $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "Nested Data.__T__ to Data.Device.__T__" begin
                         @static if @isgpu($package)
                             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::NamedTuple{T1, NTuple{T2,T3}} where {T1,T2} where T3 <: Data.__T__, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                             @test occursin("f(A::((NamedTuple{T1, NTuple{T2, T3}} where {T1, T2}) where T3 <: Data.Device.__T__),", expansion)
                         end
-                    end
-                )))
+                    end;
+                )));
                 @testset "@parallel_indices (1D)" begin
                     A  = @zeros(4)
                     @parallel_indices (ix) function write_indices!(A)
@@ -422,22 +422,22 @@ eval(:(
             @require !@is_initialized()
             @init_parallel_kernel(package = $package)
             @require @is_initialized
-            $(interpolate(:__T__, ARRAYTYPES, :(
+            @testset "Data.T{T2} to Data.Device.T{T2}" $(interpolate(:__T__, ARRAYTYPES, :(
                 @testset "Data.__T__{T2} to Data.Device.__T__{T2}" begin
                     @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.__T__{T2}, B::Data.__T__{T2}, c<:Integer) where T2 <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.Device.__T__{T2}, B::Data.Device.__T__{T2},", expansion)
                     end
                 end;
-            )))
-            $(interpolate(:__T__, FIELDTYPES, :(
+            )));
+            @testset "Data.Fields.T{T2} to Data.Fields.Device.T{T2}" $(interpolate(:__T__, FIELDTYPES, :(
                 @testset "Data.Fields.__T__{T2} to Data.Fields.Device.__T__{T2}" begin
                     @static if @isgpu($package)
                         expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Data.Fields.__T__{T2}, B::Data.Fields.__T__{T2}, c<:Integer) where T2 <: Union{Float32, Float64}  = (A[ix,iy] = B[ix,iy]^c; return))
                         @test occursin("f(A::Data.Fields.Device.__T__{T2}, B::Data.Fields.Device.__T__{T2},", expansion)
                     end
                 end;
-            )))
+            )));
             @reset_parallel_kernel()
         end;
         @testset "5. Exceptions" begin

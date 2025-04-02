@@ -377,8 +377,8 @@ function eval_arg(caller::Module, arg)
     end
 end
 
-function eval_try(caller::Module, expr)
-    if isinteractive() # NOTE: this is required to avoid that this function returns non-constant values in interactive sessions.
+function eval_try(caller::Module, expr; when_interactive::Bool=true)
+    if !when_interactive && isinteractive() # NOTE: this is required to avoid that this function returns non-constant values in interactive sessions, when not appropriate (e.g. in for optimization)
         return nothing
     else
         try
@@ -562,9 +562,9 @@ end
 
 
 function interpolate(sym::Symbol, vals::NTuple, block::Expr)
-    return quote
+    return flatten(unblock(quote
         $((substitute(block, sym, val; inQuoteNode=true, inString=true) for val in vals)...)
-    end
+    end))
 end
 
 interpolate(sym::Symbol, vals_expr::Expr, block::Expr) = interpolate(sym, (extract_tuple(vals_expr)...,), block)
