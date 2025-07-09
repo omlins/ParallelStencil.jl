@@ -5,6 +5,7 @@ const ERRMSG_CUDAEXT_NOT_LOADED = "the CUDA extension was not loaded. Make sure 
 
 function get_priority_custream end
 function get_custream end
+function get_cuda_compute_capability end
 
 
 # allocators.jl
