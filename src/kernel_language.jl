@@ -568,12 +568,12 @@ function define_optranges(optranges_arg, optvars, offsets, int_type, package)
         fullrange    = typemin(int_type):typemax(int_type)
         pointrange_x = oxy_zspan_max[1]: oxy_zspan_max[1]
         pointrange_y = oxy_zspan_max[2]: oxy_zspan_max[2]
-        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                       optranges[A] = getproperty(optranges_arg, A)
+        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                   optranges[A] = getproperty(optranges_arg, A)
         elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))  optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                              optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                              optranges[A] = (pointrange_x, fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                              optranges[A] = (fullrange,    pointrange_y, fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                              optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                          optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                          optranges[A] = (pointrange_x, fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                          optranges[A] = (fullrange,    pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                          optranges[A] = (pointrange_x, pointrange_y, fullrange)
         end
     end
     return optranges
