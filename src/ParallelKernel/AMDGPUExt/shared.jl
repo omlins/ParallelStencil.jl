@@ -29,3 +29,12 @@ let
         return rocstreams[id]
     end
 end
+
+
+## FUNCTIONS TO QUERY DEVICE PROPERTIES
+
+function ParallelStencil.ParallelKernel.get_amdgpu_compute_capability(default::VersionNumber)
+    compute_capability = default
+    #TODO: implement and convert to something comparable to CUDA compute capability.
+    return compute_capability
+end
