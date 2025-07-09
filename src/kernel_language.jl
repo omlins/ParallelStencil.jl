@@ -78,7 +78,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, loopdim)
     optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
     if (length(optvars)==0) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set memopt=false for this kernel.") end
-    optranges             = define_optranges(optranges, optvars, offsets, int_type)
+    optranges             = define_optranges(optranges, optvars, offsets, int_type, package)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, loopdim)
 
     if loopdim == 3
@@ -102,6 +102,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
         ranges             = RANGES_VARNAME
         range_z            = :(($ranges[3])[$tz_g])
         range_z_start      = :(($ranges[3])[1])
+        range_z_end        = :(($ranges[3])[end])
         i                  = gensym_world("i", @__MODULE__)
         loopoffset         = gensym_world("loopoffset", @__MODULE__)
 
@@ -125,7 +126,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
 
         #TODO: replace wrap_if where possible with in-line if - compare performance when doing it
         body = quote
-                    $loopoffset    = (@blockIdx().z-1)*$loopsize #TODO: MOVE UP - see no perf change! interchange other lines!
+                    $loopoffset    = (@blockIdx().z-1)*$loopsize + $range_z_start-1 #TODO: MOVE UP - see no perf change! interchange other lines!
 $((quote
                     $tx            = @threadIdx().x + $hx1
                     $ty            = @threadIdx().y + $hy1
@@ -164,9 +165,12 @@ $((:(               $reg           = 0.0                                        
                     # for $i = $loopstart:$(mainloopstart-1)
 $(wrap_loop(i, loopstart:mainloopstart-1,
         quote
-                        $tz_g = $i + $loopoffset
-                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
-                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+                        $iz = $i + $loopoffset
+                        if ($iz > $range_z_end) ParallelStencil.@return_nothing; end
+                        # NOTE: the following is now fully included in the loopoffset (0.25% performance gain measured on H100) but is still of interest if we implement step ranges:
+                        # $tz_g = $i + $loopoffset
+                        # if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+                        # $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
 $((wrap_if(:($i > $(loopentry-1)),
        :(               $reg       = (0<$ix+$(oxy[1])<=size($A,1) && 0<$iy+$(oxy[2])<=size($A,2) && 0<$iz+$oz<=size($A,3)) ? $(regtarget(A, (oxy...,oz), indices)) : $reg
         )
@@ -212,9 +216,12 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
                     # for $i = $mainloopstart:$mainloopend # ParallelStencil.@unroll 
 $(wrap_loop(i, mainloopstart:mainloopend, 
         quote
-                        $tz_g = $i + $loopoffset
-                        if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
-                        $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
+                        $iz = $i + $loopoffset
+                        if ($iz > $range_z_end) ParallelStencil.@return_nothing; end
+                        # NOTE: the following is now fully included in the loopoffset (0.25% performance gain measured on H100) but is still of interest if we implement step ranges:
+                        # $tz_g = $i + $loopoffset
+                        # if ($tz_g > $rangelength_z) ParallelStencil.@return_nothing; end
+                        # $iz = ($tz_g < 1) ? $range_z_start-(1-$tz_g) : $range_z # TODO: this will probably always be formulated with range_z_start
 $(use_any_shmem ? 
     :(                  @sync_threads()
      ) :                NOEXPR
@@ -468,7 +475,7 @@ end
 
 function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, body::Expr; package::Symbol=get_package(caller))
     loopdim            = isa(indices,Expr) ? length(indices.args) : 1
-    loopsize           = LOOPSIZE
+    loopsize           = compute_loopsize(package)
     optranges          = nothing
     use_shmemhalos     = nothing
     optimize_halo_read = true
@@ -545,7 +552,8 @@ function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by
     return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
 end
 
-function define_optranges(optranges_arg, optvars, offsets, int_type)
+function define_optranges(optranges_arg, optvars, offsets, int_type, package)
+    compute_capability = get_compute_capability(package)
     optranges = Dict()
     for A in optvars
         zspan_max     = 0
@@ -560,12 +568,12 @@ function define_optranges(optranges_arg, optvars, offsets, int_type)
         fullrange    = typemin(int_type):typemax(int_type)
         pointrange_x = oxy_zspan_max[1]: oxy_zspan_max[1]
         pointrange_y = oxy_zspan_max[2]: oxy_zspan_max[2]
-        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)) optranges[A] = getproperty(optranges_arg, A)
-        elseif (length(optvars) <= FULLRANGE_THRESHOLD)               optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))        optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))        optranges[A] = (pointrange_x, fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))        optranges[A] = (fullrange,    pointrange_y, fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))        optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                       optranges[A] = getproperty(optranges_arg, A)
+        elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))  optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                              optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                              optranges[A] = (pointrange_x, fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                              optranges[A] = (fullrange,    pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                              optranges[A] = (pointrange_x, pointrange_y, fullrange)
         end
     end
     return optranges
