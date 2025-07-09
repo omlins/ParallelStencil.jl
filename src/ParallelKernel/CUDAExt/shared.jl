@@ -29,3 +29,21 @@ let
         return custreams[id]
     end
 end
+
+
+## FUNCTIONS TO QUERY DEVICE PROPERTIES
+
+function ParallelStencil.ParallelKernel.get_cuda_compute_capability(default::VersionNumber)
+    compute_capability = default
+    if haskey(ENV, "PS_CUDA_COMPUTE_CAPABILITY")
+        compute_capability = parse(VersionNumber, ENV["PS_CUDA_COMPUTE_CAPABILITY"])
+    else
+        try
+            dev = CUDA.device()
+            compute_capability = CUDA.capability(dev)
+        catch e
+            @warn "Could not determine CUDA compute capability: assuming a recent architecture. Set the environment variable PS_CUDA_COMPUTE_CAPABILITY to a specific value if desired."
+        end
+    end
+    return compute_capability
+end
