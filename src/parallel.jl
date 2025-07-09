@@ -248,7 +248,7 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     return :(@parallel_indices $indices_expr $(kwargs_expr...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(package), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
@@ -364,7 +364,19 @@ end
 
 determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : NTHREADS_MAX_MEMOPT_METAL)
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
-compute_loopsize()                             = LOOPSIZE
+
+function compute_loopsize(package::Symbol)
+    compute_capability = get_compute_capability(package)
+    if compute_capability == v"∞" # if not set (could also be not CUDA), choose a value that should work well for all architectures, favouring newer ones.
+        return 32
+    elseif compute_capability < v"8"
+        return 16
+    elseif compute_capability < v"9"
+        return 32
+    else
+        return 64
+    end
+end
 
 
 ## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
