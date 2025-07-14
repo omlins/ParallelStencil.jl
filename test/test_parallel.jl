@@ -33,7 +33,6 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-
 @static for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
@@ -655,14 +654,14 @@ eval(:(
                                         return
                                     end
                                     @static if $package == $PKG_CUDA
-                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((CUDA.blockIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_AMDGPU
-                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((AMDGPU.workgroupIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_METAL
-                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
                                     end
                                     @test occursin("for i = -4:3", kernel)
-                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("iz = i + loopoffset", kernel) # Alternative: @test occursin("tz = i + loopoffset", kernel)
                                     @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
                                     @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
                                     @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
@@ -712,14 +711,14 @@ eval(:(
                                         return
                                     end
                                     @static if $package == $PKG_CUDA
-                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((CUDA.blockIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_AMDGPU
-                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((AMDGPU.workgroupIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_METAL
-                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
                                     end
                                     @test occursin("for i = -4:3", kernel)
-                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("iz = i + loopoffset", kernel) # Alternative: @test occursin("tz = i + loopoffset", kernel)
                                     @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
                                     @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
                                     @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
