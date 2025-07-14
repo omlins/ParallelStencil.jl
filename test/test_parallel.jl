@@ -33,7 +33,6 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
-
 @static for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
@@ -330,7 +329,7 @@ eval(:(
                                     Ci     = @Field(nxyz, @ones);
                                     copy!(T, [ix + (iy-1)*size(T,1) + (iz-1)*size(T,1)*size(T,2) for ix=1:size(T,1), iy=1:size(T,2), iz=1:size(T,3)].^3);
                                     @parallel_indices (ix,iy,iz) memopt=true loopsize=3 function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-                                        if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2) && iz>1 && iz<size(T2,3))
+                                        if (1<ix<size(T2,1) && 1<iy<size(T2,2) && 1<iz<size(T2,3))
                                             T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
                                                             - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
                                                             - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy
@@ -655,14 +654,14 @@ eval(:(
                                         return
                                     end
                                     @static if $package == $PKG_CUDA
-                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((CUDA.blockIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_AMDGPU
-                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((AMDGPU.workgroupIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_METAL
-                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
                                     end
                                     @test occursin("for i = -4:3", kernel)
-                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("iz = i + loopoffset", kernel) # Alternative: @test occursin("tz = i + loopoffset", kernel)
                                     @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
                                     @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
                                     @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
@@ -712,14 +711,14 @@ eval(:(
                                         return
                                     end
                                     @static if $package == $PKG_CUDA
-                                        @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((CUDA.blockIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((CUDA.blockIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_AMDGPU
-                                        @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((AMDGPU.workgroupIdx()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((AMDGPU.workgroupIdx()).z - 1) * 3", kernel)
                                     elseif $package == $PKG_METAL
-                                        @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
+                                        @test occursin("loopoffset = (((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3 + (ranges[3])[1]) - 1", kernel) # Alternative: @test occursin("loopoffset = ((Metal.threadgroup_position_in_grid_3d()).z - 1) * 3", kernel)
                                     end
                                     @test occursin("for i = -4:3", kernel)
-                                    @test occursin("tz = i + loopoffset", kernel)
+                                    @test occursin("iz = i + loopoffset", kernel) # Alternative: @test occursin("tz = i + loopoffset", kernel)
                                     @test occursin("A2[ix - 1, iy + 2, iz] = (A_ixm1_iyp2_izp3 - 2A_ixm3_iyp2_iz) + A_ixm4_iyp2_izm2", kernel)
                                     @test occursin("B2[ix + 1, iy + 2, iz + 1] = (B[ix + 1, iy + 2, iz + 2] - 2 * B[ix - 3, iy + 2, iz + 1]) + B[ix - 4, iy + 2, iz + 1]", kernel)
                                     @test occursin("C2[ix - 1, iy + 2, iz - 1] = (C_ixm1_iyp2_iz - 2C_ixm1_iyp2_izm1) + C_ixm1_iyp2_izm1", kernel)
@@ -899,7 +898,7 @@ eval(:(
                         Ci     = @Field(nxyz, @ones);
                         copy!(T, [ix + (iy-1)*size(T,1) for ix=1:size(T,1), iy=1:size(T,2), iz=1:1]);
                         @parallel_indices (ix,iy,iz) memopt=true function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy)
-                            if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2))
+                            if (1<ix<size(T2,1) && 1<iy<size(T2,2))
                                 T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
                                                 - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
                                                 - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy)

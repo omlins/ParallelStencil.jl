@@ -6,10 +6,14 @@ import Metal.MTL
 
 @define_MtlCellArray
 
+
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
+
 ParallelStencil.ParallelKernel.is_loaded(::Val{:ParallelStencil_MetalExt}) = true
 
+
 ## FUNCTIONS TO GET CREATE AND MANAGE METAL QUEUES
+
 ParallelStencil.ParallelKernel.get_priority_metalstream(arg...) = get_priority_metalstream(arg...)
 ParallelStencil.ParallelKernel.get_metalstream(arg...)     = get_metalstream(arg...)
 
@@ -27,4 +31,13 @@ let
         while (id > length(metalqueues)) push!(metalqueues, MTL.MTLCommandQueue(Metal.device())) end
         return metalqueues[id]
     end
+end
+
+
+## FUNCTIONS TO QUERY DEVICE PROPERTIES
+
+function ParallelStencil.ParallelKernel.get_metal_compute_capability(default::VersionNumber)
+    compute_capability = default
+    #TODO: implement and convert to something comparable to CUDA compute capability.
+    return compute_capability
 end

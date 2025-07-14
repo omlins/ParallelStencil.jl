@@ -26,6 +26,7 @@ const INT_AMDGPU                   = Int64 # NOTE: ...
 const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
+const COMPUTE_CAPABILITY_DEFAULT   = v"∞" # having it infinity if it is not set allows to directly use statements like `if compute_capability < v"8"`, assuming a recent architecture if it is not set.
 const NTHREADS_X_MAX               = 32
 const NTHREADS_X_MAX_AMDGPU        = 64
 const NTHREADS_MAX                 = 256
@@ -570,6 +571,23 @@ end
 interpolate(sym::Symbol, vals_expr::Expr, block::Expr) = interpolate(sym, (extract_tuple(vals_expr)...,), block)
 
 quote_expr(expr) = :($(Expr(:quote, expr)))
+
+
+## FUNCTIONS TO QUERY DEVICE PROPERTIES
+
+function get_compute_capability(package::Symbol)
+    default = COMPUTE_CAPABILITY_DEFAULT
+    if     (package == PKG_CUDA)      get_cuda_compute_capability(default)
+    elseif (package == PKG_AMDGPU)    get_amdgpu_compute_capability(default)
+    elseif (package == PKG_METAL)     get_metal_compute_capability(default)
+    elseif (package == PKG_THREADS)   get_cpu_compute_capability(default)
+    elseif (package == PKG_POLYESTER) get_cpu_compute_capability(default)
+    else
+        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package). Supported packages are: $(join(SUPPORTED_PACKAGES, ", ")).")
+    end
+end
+
+get_cpu_compute_capability(default::VersionNumber) = return default
 
 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR

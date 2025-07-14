@@ -4,6 +4,8 @@ const ERRMSG_METALEXT_NOT_LOADED = "the Metal extension was not loaded. Make sur
 
 function get_priority_metalstream end
 function get_metalstream end
+function get_metal_compute_capability end
+
 
 # allocators
 
@@ -14,5 +16,3 @@ falses_metal(arg...) = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)
 trues_metal(arg...)  = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)
 fill_metal(arg...)   = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)
 fill_metal!(arg...)  = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)
-
-

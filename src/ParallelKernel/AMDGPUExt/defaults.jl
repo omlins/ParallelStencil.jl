@@ -5,6 +5,7 @@ const ERRMSG_AMDGPUEXT_NOT_LOADED = "the AMDGPU extension was not loaded. Make s
 
 function get_priority_rocstream end
 function get_rocstream end
+function get_amdgpu_compute_capability end
 
 
 # allocators.jl
