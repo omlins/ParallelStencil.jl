@@ -90,6 +90,110 @@ macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module
 
 
 ##
+const WARPSIZE_DOC = """
+    @warpsize() -> Int
+
+Return the logical warp / wavefront / SIMD-group width in threads for the active backend.  CUDA returns 32. AMD GPUs return the hardware wavefront size (typically 64 or 32). Metal returns the device `threadExecutionWidth`. CPU backend returns 1.  Guaranteed constant for the lifetime of the kernel invocation. Use this value (not a hard‑coded constant) for portable intra-warp algorithms.
+"""
+@doc WARPSIZE_DOC
+macro warpsize(args...) check_initialized(__module__); checknoargs(args...); esc(warpsize(__module__, args...)); end
+
+
+##
+const LANEID_DOC = """
+    @laneid() -> Int
+
+Return the 1-based logical lane index in the current warp (range: 1:warpsize()).  For CUDA this is `CUDA.laneid()+1` internally; for backends with 0-based hardware lane numbering the abstraction adds 1.  CPU backend always returns 1.
+"""
+@doc LANEID_DOC
+macro laneid(args...) check_initialized(__module__); checknoargs(args...); esc(laneid(__module__, args...)); end
+
+
+##
+const ACTIVE_MASK_DOC = """
+    @active_mask() -> Unsigned
+
+Return a bit mask of currently active (non-exited, converged) lanes in the caller's warp.  Bit (laneid()-1) corresponds to that logical lane.  CUDA returns a 32-bit value; AMD returns a 64-bit value.  Absent (throws) on Metal if not supported; CPU returns UInt64(0x1).
+"""
+@doc ACTIVE_MASK_DOC
+macro active_mask(args...) check_initialized(__module__); checknoargs(args...); esc(active_mask(__module__, args...)); end
+
+
+##
+const SHFL_SYNC_DOC = """
+    @shfl_sync(mask::Unsigned, val, lane::Integer)
+    @shfl_sync(mask::Unsigned, val, lane::Integer, width::Integer)
+
+Return the value of `val` from the source lane `lane` (1-based) among lanes named in `mask`.  Optional `width` (power of two, 1 <= width <= warpsize()) logically partitions the warp into independent contiguous sub-groups each behaving as a mini-warp with lanes numbered 1:width.  The source lane index is resolved modulo `width`.  All participating lanes must supply identical `mask`, `lane`, and (if present) `width`.  `val` may be any isbits type; larger composite isbits values are shuffled by decomposition into supported word sizes.  CPU backend returns `val` unchanged.
+"""
+@doc SHFL_SYNC_DOC
+macro shfl_sync(args...) check_initialized(__module__); checkargs_shfl_sync(args...); esc(shfl_sync(__module__, args...)); end
+
+
+##
+const SHFL_UP_SYNC_DOC = """
+    @shfl_up_sync(mask::Unsigned, val, delta::Integer)
+    @shfl_up_sync(mask::Unsigned, val, delta::Integer, width::Integer)
+
+Shift `val` up by `delta` lanes within each logical partition (width semantics as in `shfl_sync`).  Lanes with no valid upstream partner retain their original `val`.  `delta >= 0`.  CPU backend returns `val` unchanged.
+"""
+@doc SHFL_UP_SYNC_DOC
+macro shfl_up_sync(args...) check_initialized(__module__); checkargs_shfl_up_down_xor(args...); esc(shfl_up_sync(__module__, args...)); end
+
+
+##
+const SHFL_DOWN_SYNC_DOC = """
+    @shfl_down_sync(mask::Unsigned, val, delta::Integer)
+    @shfl_down_sync(mask::Unsigned, val, delta::Integer, width::Integer)
+
+Shift `val` down by `delta` lanes within each logical partition; lanes without a valid downstream partner retain their original `val`.  `delta >= 0`.  CPU backend returns `val` unchanged.
+"""
+@doc SHFL_DOWN_SYNC_DOC
+macro shfl_down_sync(args...) check_initialized(__module__); checkargs_shfl_up_down_xor(args...); esc(shfl_down_sync(__module__, args...)); end
+
+
+##
+const SHFL_XOR_SYNC_DOC = """
+    @shfl_xor_sync(mask::Unsigned, val, lane_mask::Integer)
+    @shfl_xor_sync(mask::Unsigned, val, lane_mask::Integer, width::Integer)
+
+Perform a butterfly (bitwise XOR) shuffle: each lane exchanges with the lane whose (laneid()-1) XOR `lane_mask` differs in the specified bits, constrained within each `width` partition if provided.  If the computed partner is outside the partition the calling lane's own `val` is returned.  CPU backend returns `val` unchanged.
+"""
+@doc SHFL_XOR_SYNC_DOC
+macro shfl_xor_sync(args...) check_initialized(__module__); checkargs_shfl_up_down_xor(args...); esc(shfl_xor_sync(__module__, args...)); end
+
+
+##
+const VOTE_ANY_SYNC_DOC = """
+    @vote_any_sync(mask::Unsigned, predicate::Bool) -> Bool
+
+Evaluate `predicate` across all active lanes named in `mask`; return true if any lane's predicate is true.  Does not imply a memory fence.  CPU backend returns `predicate`.
+"""
+@doc VOTE_ANY_SYNC_DOC
+macro vote_any_sync(args...) check_initialized(__module__); checkargs_vote(args...); esc(vote_any_sync(__module__, args...)); end
+
+
+##
+const VOTE_ALL_SYNC_DOC = """
+    @vote_all_sync(mask::Unsigned, predicate::Bool) -> Bool
+
+Evaluate `predicate` across all active lanes named in `mask`; return true only if every such lane's predicate is true.  No memory ordering implied.  CPU backend returns `predicate`.
+"""
+@doc VOTE_ALL_SYNC_DOC
+macro vote_all_sync(args...) check_initialized(__module__); checkargs_vote(args...); esc(vote_all_sync(__module__, args...)); end
+
+
+##
+const VOTE_BALLOT_SYNC_DOC = """
+    @vote_ballot_sync(mask::Unsigned, predicate::Bool) -> Unsigned
+
+Return a bit mask aggregating `predicate` values for lanes named in `mask`: bit (laneid()-1) set iff that lane's predicate is true.  Width of result equals hardware warp mask width (32 for CUDA, 64 for AMD, CPU uses 64 with only bit 0 meaningful).  Caller may safely promote to `UInt64` for uniform handling; upper bits beyond hardware width are zero.  No memory ordering implied.
+"""
+@doc VOTE_BALLOT_SYNC_DOC
+macro vote_ballot_sync(args...) check_initialized(__module__); checkargs_vote(args...); esc(vote_ballot_sync(__module__, args...)); end
+
+
+##
 const FORALL_DOC = """
     @∀ x ∈ X statement
     @∀ x in X statement
@@ -176,6 +280,18 @@ end
 
 function checkargs_begin_end(args...)
     if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
+end
+
+function checkargs_shfl_sync(args...)
+    if !(3 <= length(args) <= 4) @ArgumentError("wrong number of arguments.") end
+end
+
+function checkargs_shfl_up_down_xor(args...)
+    if !(3 <= length(args) <= 4) @ArgumentError("wrong number of arguments.") end
+end
+
+function checkargs_vote(args...)
+    if !(length(args) == 2) @ArgumentError("wrong number of arguments.") end
 end
 
 
