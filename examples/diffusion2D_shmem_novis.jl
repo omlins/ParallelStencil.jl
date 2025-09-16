@@ -13,7 +13,7 @@ end
     ty  = @threadIdx().y + 1
     T_l = @sharedMem(eltype(T), (@blockDim().x+2, @blockDim().y+2))
     T_l[tx,ty] = T[ix,iy]
-    if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2))
+    if (1<ix<size(T2,1) && 1<iy<size(T2,2))
         if (@threadIdx().x == 1)             T_l[tx-1,ty] = T[ix-1,iy] end
         if (@threadIdx().x == @blockDim().x) T_l[tx+1,ty] = T[ix+1,iy] end
         if (@threadIdx().y == 1)             T_l[tx,ty-1] = T[ix,iy-1] end
