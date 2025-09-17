@@ -386,6 +386,152 @@ function pk_println(caller::Module, args...; package::Symbol=get_package(caller)
 end
 
 
+## FUNCTIONS FOR WARP-LEVEL PRIMITIVES (backend mapping)
+
+function warpsize(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.warpsize())
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.wavefrontsize())
+    elseif (package == PKG_METAL)   return :(Metal.threads_per_simdgroup())
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.warpsize_cpu())
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function laneid(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.laneid() + 1)
+    elseif (package == PKG_AMDGPU)  return :(unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1))
+    elseif (package == PKG_METAL)   return :(unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.laneid_cpu())
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function active_mask(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.active_mask())
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.activemask())
+    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.active_mask_cpu())
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function shfl_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)
+        return :(CUDA.shfl_sync($(args...)))
+    elseif (package == PKG_AMDGPU)
+        if length(args) == 3
+            # (mask, val, lane)
+            return :(AMDGPU.Device.shfl_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1)))
+        else
+            # (mask, val, lane, width)
+            return :(AMDGPU.Device.shfl_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1), unsafe_trunc(Cuint, $(args[4]))))
+        end
+    elseif (package == PKG_METAL)
+        @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)
+        if length(args) == 3
+            return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
+        else
+            return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1), Int64($(args[4]))))
+        end
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function shfl_up_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)
+        return :(CUDA.shfl_up_sync($(args...)))
+    elseif (package == PKG_AMDGPU)
+        if length(args) == 3
+            return :(AMDGPU.Device.shfl_up_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3]))))
+        else
+            return :(AMDGPU.Device.shfl_up_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])), unsafe_trunc(Cuint, $(args[4]))))
+        end
+    elseif (package == PKG_METAL)
+        @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)
+        if length(args) == 3
+            return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
+        else
+            return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])), Int64($(args[4]))))
+        end
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function shfl_down_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)
+        return :(CUDA.shfl_down_sync($(args...)))
+    elseif (package == PKG_AMDGPU)
+        if length(args) == 3
+            return :(AMDGPU.Device.shfl_down_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3]))))
+        else
+            return :(AMDGPU.Device.shfl_down_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])), unsafe_trunc(Cuint, $(args[4]))))
+        end
+    elseif (package == PKG_METAL)
+        @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)
+        if length(args) == 3
+            return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
+        else
+            return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])), Int64($(args[4]))))
+        end
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function shfl_xor_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)
+        return :(CUDA.shfl_xor_sync($(args...)))
+    elseif (package == PKG_AMDGPU)
+        if length(args) == 3
+            return :(AMDGPU.Device.shfl_xor_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1)))
+        else
+            return :(AMDGPU.Device.shfl_xor_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1), unsafe_trunc(Cuint, $(args[4]))))
+        end
+    elseif (package == PKG_METAL)
+        @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)
+        if length(args) == 3
+            return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
+        else
+            return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1), Int64($(args[4]))))
+        end
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function vote_any_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.vote_any_sync($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.any_sync(UInt64($(args[1])), $(args[2])))
+    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_any_sync_cpu($(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function vote_all_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.vote_all_sync($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.all_sync(UInt64($(args[1])), $(args[2])))
+    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_all_sync_cpu($(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+function vote_ballot_sync(caller::Module, args...; package::Symbol=get_package(caller))
+    if     (package == PKG_CUDA)    return :(CUDA.vote_ballot_sync($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.ballot_sync(UInt64($(args[1])), $(args[2])))
+    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_ballot_sync_cpu($(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
 ## FUNCTIONS FOR MATH SYNTAX
 
 function ∀(caller::Module, member_expr::Expr, statement::Union{Expr, Symbol})
@@ -461,3 +607,61 @@ macro sync_threads_cpu() esc(:(begin end)) end
 macro sharedMem_cpu(T, dims) :(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))}(undef)); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code.
 
 macro sharedMem_cpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sharedMem_cpu($T, $dims))) end
+
+## CPU BACKEND: WARP-LEVEL PRIMITIVES (zero-overhead pure functions)
+
+# The CPU backend follows a single-thread-per-block model. All warp-level
+# operations therefore degenerate to constants or identity operations.
+# These functions are intentionally small, @inline, allocation-free, and
+# operate on isbits values only. They are called by the macro dispatchers
+# for the CPU backend.
+
+@inline warpsize_cpu()::Int = 1
+
+@inline laneid_cpu()::Int = 1
+
+@inline active_mask_cpu()::UInt64 = UInt64(0x1)
+
+# Shuffle: direct, with optional width. Identity on CPU.
+@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64)
+    val
+end
+
+@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64, width::Int64)
+    val
+end
+
+# Shuffle up
+@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64)
+    val
+end
+
+@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64)
+    val
+end
+
+# Shuffle down
+@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64)
+    val
+end
+
+@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64)
+    val
+end
+
+# Shuffle xor (butterfly)
+@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64)
+    val
+end
+
+@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64, width::Int64)
+    val
+end
+
+# Vote operations
+@inline vote_any_sync_cpu(mask::Unsigned, predicate::Bool)::Bool = predicate
+
+@inline vote_all_sync_cpu(mask::Unsigned, predicate::Bool)::Bool = predicate
+
+# Ballot returns a mask with bit 0 set iff predicate is true; CPU uses 64-bit mask.
+@inline vote_ballot_sync_cpu(mask::Unsigned, predicate::Bool)::UInt64 = predicate ? UInt64(0x1) : UInt64(0x0)
