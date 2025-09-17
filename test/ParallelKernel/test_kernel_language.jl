@@ -153,6 +153,35 @@ eval(:(
                         @test @prettystring(1, @vote_ballot_sync(mask, predicate)) == "ParallelStencil.ParallelKernel.vote_ballot_sync_cpu(mask, predicate)"
                     end
                 end;
+                @testset "CPU zero overhead" begin
+                    @static if @iscpu($package)
+                        # Use stable literal arguments to exercise CPU code paths
+                        mask      = UInt64(0x1)
+                        valf      = one($FloatDefault)
+                        lane      = 1
+                        width     = 1
+                        delta     = 1
+                        lanemask  = 1
+                        predicate = true
+
+                        @test @allocated(@warpsize())    == 0
+                        @test @allocated(@laneid())      == 0
+                        @test @allocated(@active_mask()) == 0
+
+                        @test @allocated(@shfl_sync(mask, valf, lane))            == 0
+                        @test @allocated(@shfl_sync(mask, valf, lane, width))     == 0
+                        @test @allocated(@shfl_up_sync(mask, valf, delta))        == 0
+                        @test @allocated(@shfl_up_sync(mask, valf, delta, width)) == 0
+                        @test @allocated(@shfl_down_sync(mask, valf, delta))      == 0
+                        @test @allocated(@shfl_down_sync(mask, valf, delta, width)) == 0
+                        @test @allocated(@shfl_xor_sync(mask, valf, lanemask))    == 0
+                        @test @allocated(@shfl_xor_sync(mask, valf, lanemask, width)) == 0
+
+                        @test @allocated(@vote_any_sync(mask, predicate))    == 0
+                        @test @allocated(@vote_all_sync(mask, predicate))    == 0
+                        @test @allocated(@vote_ballot_sync(mask, predicate)) == 0
+                    end
+                end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
                 @static if $package == $PKG_THREADS
