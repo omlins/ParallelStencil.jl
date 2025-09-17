@@ -79,6 +79,81 @@ eval(:(
                     @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Polyester.@batch"
                 end;
             end;
+            @testset "Warp level primitives" begin
+                @testset "Parse-time direct call mapping" begin
+                    # Common test variables used in macro expansions
+                    mask      = UInt64(0xffff_ffff_ffff_ffff)
+                    mask32    = UInt32(0xffff_ffff)
+                    val       = one($FloatDefault)
+                    lane      = 1
+                    width     = 32
+                    delta     = 1
+                    lane_mask = 1
+                    predicate = true
+
+                    if $package == $PKG_CUDA
+                        @test @prettystring(1, @warpsize()) == "CUDA.warpsize()"
+                        @test @prettystring(1, @laneid())   == "CUDA.laneid()"
+                        @test @prettystring(1, @active_mask()) == "CUDA.active_mask()"
+
+                        @test @prettystring(1, @shfl_sync(mask32, val, lane)) == "CUDA.shfl_sync(mask32, val, lane)"
+                        @test @prettystring(1, @shfl_sync(mask32, val, lane, width)) == "CUDA.shfl_sync(mask32, val, lane, width)"
+                        @test @prettystring(1, @shfl_up_sync(mask32, val, delta)) == "CUDA.shfl_up_sync(mask32, val, delta)"
+                        @test @prettystring(1, @shfl_up_sync(mask32, val, delta, width)) == "CUDA.shfl_up_sync(mask32, val, delta, width)"
+                        @test @prettystring(1, @shfl_down_sync(mask32, val, delta)) == "CUDA.shfl_down_sync(mask32, val, delta)"
+                        @test @prettystring(1, @shfl_down_sync(mask32, val, delta, width)) == "CUDA.shfl_down_sync(mask32, val, delta, width)"
+                        @test @prettystring(1, @shfl_xor_sync(mask32, val, lane_mask)) == "CUDA.shfl_xor_sync(mask32, val, lane_mask)"
+                        @test @prettystring(1, @shfl_xor_sync(mask32, val, lane_mask, width)) == "CUDA.shfl_xor_sync(mask32, val, lane_mask, width)"
+
+                        @test @prettystring(1, @vote_any_sync(mask32, predicate))   == "CUDA.vote_any_sync(mask32, predicate)"
+                        @test @prettystring(1, @vote_all_sync(mask32, predicate))   == "CUDA.vote_all_sync(mask32, predicate)"
+                        @test @prettystring(1, @vote_ballot_sync(mask32, predicate)) == "CUDA.vote_ballot_sync(mask32, predicate)"
+
+                    elseif $package == $PKG_AMDGPU
+                        @test @prettystring(1, @warpsize()) == "AMDGPU.Device.wavefrontsize()"
+                        @test @prettystring(1, @laneid())   == "unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1)"
+                        @test @prettystring(1, @active_mask()) == "AMDGPU.Device.activemask()"
+
+                        @test @prettystring(1, @shfl_sync(mask, val, lane)) == "AMDGPU.Device.shfl_sync(UInt64(mask), val, unsafe_trunc(Cint, lane) - Cint(1))"
+                        @test @prettystring(1, @shfl_sync(mask, val, lane, width)) == "AMDGPU.Device.shfl_sync(UInt64(mask), val, unsafe_trunc(Cint, lane) - Cint(1), unsafe_trunc(Cuint, width))"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta)) == "AMDGPU.Device.shfl_up_sync(UInt64(mask), val, unsafe_trunc(Cint, delta))"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta, width)) == "AMDGPU.Device.shfl_up_sync(UInt64(mask), val, unsafe_trunc(Cint, delta), unsafe_trunc(Cuint, width))"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta)) == "AMDGPU.Device.shfl_down_sync(UInt64(mask), val, unsafe_trunc(Cint, delta))"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta, width)) == "AMDGPU.Device.shfl_down_sync(UInt64(mask), val, unsafe_trunc(Cint, delta), unsafe_trunc(Cuint, width))"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask)) == "AMDGPU.Device.shfl_xor_sync(UInt64(mask), val, unsafe_trunc(Cint, lane_mask) - Cint(1))"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask, width)) == "AMDGPU.Device.shfl_xor_sync(UInt64(mask), val, unsafe_trunc(Cint, lane_mask) - Cint(1), unsafe_trunc(Cuint, width))"
+
+                        @test @prettystring(1, @vote_any_sync(mask, predicate))   == "AMDGPU.Device.any_sync(UInt64(mask), predicate)"
+                        @test @prettystring(1, @vote_all_sync(mask, predicate))   == "AMDGPU.Device.all_sync(UInt64(mask), predicate)"
+                        @test @prettystring(1, @vote_ballot_sync(mask, predicate)) == "AMDGPU.Device.ballot_sync(UInt64(mask), predicate)"
+
+                    elseif $package == $PKG_METAL
+                        @test @prettystring(1, @warpsize()) == "Metal.threads_per_simdgroup()"
+                        @test @prettystring(1, @laneid())   == "unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1)"
+                        @test_throws Exception @prettystring(1, @active_mask())
+                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
+                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
+
+                    elseif @iscpu($package)
+                        @test @prettystring(1, @warpsize())     == "ParallelStencil.ParallelKernel.warpsize_cpu()"
+                        @test @prettystring(1, @laneid())       == "ParallelStencil.ParallelKernel.laneid_cpu()"
+                        @test @prettystring(1, @active_mask())  == "ParallelStencil.ParallelKernel.active_mask_cpu()"
+
+                        @test @prettystring(1, @shfl_sync(mask, val, lane)) == "ParallelStencil.ParallelKernel.shfl_sync_cpu(mask, val, Int64(lane) - Int64(1))"
+                        @test @prettystring(1, @shfl_sync(mask, val, lane, width)) == "ParallelStencil.ParallelKernel.shfl_sync_cpu(mask, val, Int64(lane) - Int64(1), Int64(width))"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta)) == "ParallelStencil.ParallelKernel.shfl_up_sync_cpu(mask, val, Int64(delta))"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta, width)) == "ParallelStencil.ParallelKernel.shfl_up_sync_cpu(mask, val, Int64(delta), Int64(width))"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta)) == "ParallelStencil.ParallelKernel.shfl_down_sync_cpu(mask, val, Int64(delta))"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta, width)) == "ParallelStencil.ParallelKernel.shfl_down_sync_cpu(mask, val, Int64(delta), Int64(width))"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask)) == "ParallelStencil.ParallelKernel.shfl_xor_sync_cpu(mask, val, Int64(lane_mask) - Int64(1))"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask, width)) == "ParallelStencil.ParallelKernel.shfl_xor_sync_cpu(mask, val, Int64(lane_mask) - Int64(1), Int64(width))"
+
+                        @test @prettystring(1, @vote_any_sync(mask, predicate))   == "ParallelStencil.ParallelKernel.vote_any_sync_cpu(mask, predicate)"
+                        @test @prettystring(1, @vote_all_sync(mask, predicate))   == "ParallelStencil.ParallelKernel.vote_all_sync_cpu(mask, predicate)"
+                        @test @prettystring(1, @vote_ballot_sync(mask, predicate)) == "ParallelStencil.ParallelKernel.vote_ballot_sync_cpu(mask, predicate)"
+                    end
+                end;
+            end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
                 @static if $package == $PKG_THREADS
                     A  = @zeros(4)
