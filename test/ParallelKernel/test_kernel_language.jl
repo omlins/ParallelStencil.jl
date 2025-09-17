@@ -182,6 +182,49 @@ eval(:(
                         @test @allocated(@vote_ballot_sync(mask, predicate)) == 0
                     end
                 end;
+                @testset "Semantic smoke tests" begin
+                    @static if @iscpu($package)
+                        N = 8
+                        A  = @rand($FloatDefault, N)
+                        P  = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]  # simple predicate
+                        Bout_any    = Vector{Bool}(undef, N)
+                        Bout_all    = Vector{Bool}(undef, N)
+                        Bout_ballot = Vector{UInt64}(undef, N)
+                        Bshfl       = similar(A)
+                        Bshfl_up    = similar(A)
+                        Bshfl_down  = similar(A)
+                        Bshfl_xor   = similar(A)
+
+                        @parallel_indices (ix) function kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, A, P)
+                            m = @active_mask()
+                            w = @warpsize()
+                            l = @laneid()
+                            # basic invariants under CPU model
+                            @test w == 1
+                            @test l == 1
+                            # shuffle identities
+                            Bshfl[ix]      = @shfl_sync(m, A[ix], l)
+                            Bshfl_up[ix]   = @shfl_up_sync(m, A[ix], 1)
+                            Bshfl_down[ix] = @shfl_down_sync(m, A[ix], 1)
+                            Bshfl_xor[ix]  = @shfl_xor_sync(m, A[ix], 1)
+                            # votes
+                            pa = P[ix]
+                            Bout_any[ix]   = @vote_any_sync(m, pa)
+                            Bout_all[ix]   = @vote_all_sync(m, pa)
+                            Bout_ballot[ix] = @vote_ballot_sync(m, pa)
+                            return
+                        end
+                        @parallel (1:N) kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, A, P)
+
+                        @test all(Bshfl .== A)
+                        @test all(Bshfl_up .== A)
+                        @test all(Bshfl_down .== A)
+                        @test all(Bshfl_xor .== A)
+                        @test Bout_any == P
+                        @test Bout_all == P
+                        @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
+                    end
+                end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
                 @static if $package == $PKG_THREADS
