@@ -623,40 +623,24 @@ macro sharedMem_cpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@share
 @inline active_mask_cpu()::UInt64 = UInt64(0x1)
 
 # Shuffle: direct, with optional width. Identity on CPU.
-@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64)
-    val
-end
+@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64) = val
 
-@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64, width::Int64)
-    val
-end
+@inline shfl_sync_cpu(mask::Unsigned, val, lane0::Int64, width::Int64) = val
 
 # Shuffle up
-@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64)
-    val
-end
+@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64) = val
 
-@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64)
-    val
-end
+@inline shfl_up_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64) = val
 
 # Shuffle down
-@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64)
-    val
-end
+@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64) = val
 
-@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64)
-    val
-end
+@inline shfl_down_sync_cpu(mask::Unsigned, val, delta::Int64, width::Int64) = val
 
 # Shuffle xor (butterfly)
-@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64)
-    val
-end
+@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64) = val
 
-@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64, width::Int64)
-    val
-end
+@inline shfl_xor_sync_cpu(mask::Unsigned, val, lane_mask0::Int64, width::Int64) = val
 
 # Vote operations
 @inline vote_any_sync_cpu(mask::Unsigned, predicate::Bool)::Bool = predicate
