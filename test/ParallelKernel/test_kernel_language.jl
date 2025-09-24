@@ -225,6 +225,33 @@ eval(:(
                         @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
                     end
                 end;
+                @testset "Unsupported primitives" begin
+                    @static if $package == $PKG_METAL
+                        mask      = UInt64(0x1)
+                        mask32    = UInt32(0x1)
+                        valf      = one($FloatDefault)
+                        lane      = 1
+                        width     = 1
+                        delta     = 1
+                        lanemask  = 1
+                        predicate = true
+
+                        @test_throws Exception @prettystring(1, @active_mask())
+
+                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane))
+                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane, width))
+                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta))
+                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta, width))
+                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta))
+                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta, width))
+                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask))
+                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask, width))
+
+                        @test_throws Exception @prettystring(1, @vote_any_sync(mask32, predicate))
+                        @test_throws Exception @prettystring(1, @vote_all_sync(mask32, predicate))
+                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask32, predicate))
+                    end
+                end;
             end;
             @testset "@gridDim, @blockIdx, @blockDim, @threadIdx (1D)" begin
                 @static if $package == $PKG_THREADS
