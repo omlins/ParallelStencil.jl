@@ -60,6 +60,7 @@ using .ParallelKernel.Exceptions
 include("shared.jl")
 
 ## Alphabetical include of function files
+include("allocators.jl")
 include("init_parallel_stencil.jl")
 include("memopt.jl")
 include("parallel.jl")
