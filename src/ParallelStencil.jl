@@ -61,6 +61,8 @@ include("shared.jl")
 
 ## Alphabetical include of function files
 include("allocators.jl")
+include("hide_communication.jl")
+include("kernel_language.jl")
 include("init_parallel_stencil.jl")
 include("memopt.jl")
 include("parallel.jl")
