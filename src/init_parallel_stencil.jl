@@ -1,6 +1,3 @@
-# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore defined in parallel.jl
-@doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
-
 """
     @init_parallel_stencil(package, numbertype, ndims)
     @init_parallel_stencil(package, numbertype, ndims, inbounds=...)

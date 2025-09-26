@@ -1,5 +1,9 @@
 import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
 
+# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore re-defined here in parallel.jl
+@doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
+
+
 const PARALLEL_DOC = """
     @parallel kernel
     @parallel inbounds=... memopt=... ndims=... kernel
