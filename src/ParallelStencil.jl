@@ -32,6 +32,17 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@threadIdx`](@ref)
     - [`@sync_threads`](@ref)
     - [`@sharedMem`](@ref)
+!!! note "Warp-level primitives"
+    - [`@warpsize`](@ref)
+    - [`@laneid`](@ref)
+    - [`@active_mask`](@ref)
+    - [`@shfl_sync`](@ref)
+    - [`@shfl_up_sync`](@ref)
+    - [`@shfl_down_sync`](@ref)
+    - [`@shfl_xor_sync`](@ref)
+    - [`@vote_any_sync`](@ref)
+    - [`@vote_all_sync`](@ref)
+    - [`@vote_ballot_sync`](@ref)
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
