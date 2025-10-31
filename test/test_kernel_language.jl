@@ -70,7 +70,7 @@ Base.retry_load_extensions()
         @testset "CPU semantic smoke tests" begin
             @static if @iscpu($package)
                 N = 8
-                A = @rand($FloatDefault, N)
+                A = @rand(N)
                 P = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]
                 Bout_any    = Vector{Bool}(undef, N)
                 Bout_all    = Vector{Bool}(undef, N)
