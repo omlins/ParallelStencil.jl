@@ -3,7 +3,7 @@ using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES,
     PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, @require, @iscpu
 
-TEST_PACKAGES = copy(SUPPORTED_PACKAGES)
+TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional()
@@ -131,4 +131,4 @@ normalized_string(expr) = strip(replace(string(expand_once(expr)), r"#= .*? =#" 
             end
         end
     ))
-end
+end == nothing || true;
