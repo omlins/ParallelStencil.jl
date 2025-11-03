@@ -9,13 +9,14 @@ import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_revise.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
-function runtests()
+function runtests(testfiles=String[])
     exename   = joinpath(Sys.BINDIR, Base.julia_exename())
     testdir   = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
-    testfiles = sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...)))
+    testfiles = isempty(testfiles) ? sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...))) : testfiles
 
-    nfail = 0
+    nerror = 0
+    errorfiles = String[]
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
@@ -37,13 +38,49 @@ function runtests()
             println("$f")
             continue
         end
+        cmd = `$exename -O3 --startup-file=no $(joinpath(testdir, f))`
+        stdout_path = tempname()
+        stderr_path = tempname()
+        stdout_content = ""
+        stderr_content = ""
         try
-            run(`$exename -O3 --startup-file=no $(joinpath(testdir, f))`)
+            open(stdout_path, "w") do stdout_io
+                open(stderr_path, "w") do stderr_io
+                    proc = run(pipeline(Cmd(cmd; ignorestatus=true), stdout=stdout_io, stderr=stderr_io); wait=false)
+                    wait(proc)
+                end
+            end
+            stdout_content = read(stdout_path, String)
+            stderr_content = read(stderr_path, String)
+            print(stdout_content)
+            print(Base.stderr, stderr_content)
         catch ex
-            nfail += 1
+            println("Test Error: an exception occurred while running the test file $f :")
+            println(ex)
+        finally
+            if ispath(stdout_path)
+                rm(stdout_path; force=true)
+            end
+            if ispath(stderr_path)
+                rm(stderr_path; force=true)
+            end
+        end
+        if !occursin(r"(?i)test summary", stdout_content)
+            nerror += 1
+            push!(errorfiles, f)
         end
     end
-    return nfail
+    println("")
+    if nerror == 0
+        printstyled("Test suite: all selected test files executed (see above for results).\n"; bold=true, color=:green)
+    else
+        printstyled("Test suite: $nerror test file(s) aborted execution due to error (see above for details); files aborting execution:\n"; bold=true, color=:red)
+        for f in errorfiles
+            println(" - $f")
+        end
+    end
+    println("")
+    return nerror
 end
 
-exit(runtests())
+exit(runtests(ARGS))
