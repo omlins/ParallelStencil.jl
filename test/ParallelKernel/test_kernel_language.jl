@@ -24,6 +24,20 @@ end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 
+macro expr_allocated(ex)
+    expanded = Base.macroexpand(__module__, ex; recursive=true)
+    quote
+        # Warm-up evaluation to exclude first-call setup allocations
+        let
+            $(esc(expanded))
+        end
+        @allocated begin
+            $(esc(expanded))
+        end
+    end
+end
+
+
 @static for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
     
@@ -93,7 +107,7 @@ eval(:(
 
                     if $package == $PKG_CUDA
                         @test @prettystring(1, @warpsize()) == "CUDA.warpsize()"
-                        @test @prettystring(1, @laneid())   == "CUDA.laneid()"
+                        @test @prettystring(1, @laneid())   == "CUDA.laneid() + 1"
                         @test @prettystring(1, @active_mask()) == "CUDA.active_mask()"
 
                         @test @prettystring(1, @shfl_sync(mask32, val, lane)) == "CUDA.shfl_sync(mask32, val, lane)"
@@ -164,28 +178,28 @@ eval(:(
                         lanemask  = 1
                         predicate = true
 
-                        @test @allocated(@warpsize())    == 0
-                        @test @allocated(@laneid())      == 0
-                        @test @allocated(@active_mask()) == 0
+                        @test @expr_allocated(@warpsize())    == 0
+                        @test @expr_allocated(@laneid())      == 0
+                        @test @expr_allocated(@active_mask()) == 0
 
-                        @test @allocated(@shfl_sync(mask, valf, lane))            == 0
-                        @test @allocated(@shfl_sync(mask, valf, lane, width))     == 0
-                        @test @allocated(@shfl_up_sync(mask, valf, delta))        == 0
-                        @test @allocated(@shfl_up_sync(mask, valf, delta, width)) == 0
-                        @test @allocated(@shfl_down_sync(mask, valf, delta))      == 0
-                        @test @allocated(@shfl_down_sync(mask, valf, delta, width)) == 0
-                        @test @allocated(@shfl_xor_sync(mask, valf, lanemask))    == 0
-                        @test @allocated(@shfl_xor_sync(mask, valf, lanemask, width)) == 0
+                        @test @expr_allocated(@shfl_sync(mask, valf, lane))            == 0
+                        @test @expr_allocated(@shfl_sync(mask, valf, lane, width))     == 0
+                        @test @expr_allocated(@shfl_up_sync(mask, valf, delta))        == 0
+                        @test @expr_allocated(@shfl_up_sync(mask, valf, delta, width)) == 0
+                        @test @expr_allocated(@shfl_down_sync(mask, valf, delta))      == 0
+                        @test @expr_allocated(@shfl_down_sync(mask, valf, delta, width)) == 0
+                        @test @expr_allocated(@shfl_xor_sync(mask, valf, lanemask))    == 0
+                        @test @expr_allocated(@shfl_xor_sync(mask, valf, lanemask, width)) == 0
 
-                        @test @allocated(@vote_any_sync(mask, predicate))    == 0
-                        @test @allocated(@vote_all_sync(mask, predicate))    == 0
-                        @test @allocated(@vote_ballot_sync(mask, predicate)) == 0
+                        @test @expr_allocated(@vote_any_sync(mask, predicate))    == 0
+                        @test @expr_allocated(@vote_all_sync(mask, predicate))    == 0
+                        @test @expr_allocated(@vote_ballot_sync(mask, predicate)) == 0
                     end
                 end;
                 @testset "Semantic smoke tests" begin
                     @static if @iscpu($package)
                         N = 8
-                        A  = @rand($FloatDefault, N)
+                        A  = @rand(N)
                         P  = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]  # simple predicate
                         Bout_any    = Vector{Bool}(undef, N)
                         Bout_all    = Vector{Bool}(undef, N)
