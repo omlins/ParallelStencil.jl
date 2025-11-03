@@ -8,7 +8,7 @@ else
 end
 
 @parallel_indices (ix,iy,iz) function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz)
-        if (ix>1 && ix<size(T2,1) && iy>1 && iy<size(T2,2) && iz>1 && iz<size(T2,3))
+        if (1<ix<size(T2,1) && 1<iy<size(T2,2) && 1<iz<size(T2,3))
             T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
                             - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
                             - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy

@@ -32,6 +32,17 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@threadIdx`](@ref)
     - [`@sync_threads`](@ref)
     - [`@sharedMem`](@ref)
+!!! note "Warp-level primitives"
+    - [`@warpsize`](@ref)
+    - [`@laneid`](@ref)
+    - [`@active_mask`](@ref)
+    - [`@shfl_sync`](@ref)
+    - [`@shfl_up_sync`](@ref)
+    - [`@shfl_down_sync`](@ref)
+    - [`@shfl_xor_sync`](@ref)
+    - [`@vote_any_sync`](@ref)
+    - [`@vote_all_sync`](@ref)
+    - [`@vote_ballot_sync`](@ref)
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
@@ -60,8 +71,11 @@ using .ParallelKernel.Exceptions
 include("shared.jl")
 
 ## Alphabetical include of function files
+include("allocators.jl")
+include("hide_communication.jl")
 include("init_parallel_stencil.jl")
 include("kernel_language.jl")
+include("memopt.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
 
@@ -74,6 +88,7 @@ include("FiniteDifferences.jl")
 export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D, AD
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
+export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PSNumber
 
 end # Module ParallelStencil

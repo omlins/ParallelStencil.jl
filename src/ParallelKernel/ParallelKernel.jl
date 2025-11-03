@@ -32,6 +32,17 @@ Enables writing parallel high-performance kernels and whole applications that ca
     - [`@threadIdx`](@ref)
     - [`@sync_threads`](@ref)
     - [`@sharedMem`](@ref)
+!!! note "Warp-level primitives"
+    - [`@warpsize`](@ref)
+    - [`@laneid`](@ref)
+    - [`@active_mask`](@ref)
+    - [`@shfl_sync`](@ref)
+    - [`@shfl_up_sync`](@ref)
+    - [`@shfl_down_sync`](@ref)
+    - [`@shfl_xor_sync`](@ref)
+    - [`@vote_any_sync`](@ref)
+    - [`@vote_all_sync`](@ref)
+    - [`@vote_ballot_sync`](@ref)
 
 # Submodules
 - [`ParallelKernel.AD`](@ref)
@@ -74,6 +85,7 @@ include("FieldAllocators.jl")
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println, @∀
+export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PKNumber
 
 end # Module ParallelKernel
