@@ -1,7 +1,7 @@
 """
 Module ParallelKernel
 
-Enables writing parallel high-performance kernels and whole applications that can be deployed on both GPUs and CPUs.
+Enables writing parallel high-performance kernels and whole applications that can be deployed on both GPUs and CPUs. Supports both single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) and abstraction-layer backends such as KernelAbstractions that defer the concrete hardware choice to runtime via [`select_hardware`](@ref) / [`current_hardware`](@ref); see [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow guidance.
 
 # Usage
     using ParallelStencil.ParallelKernel
@@ -51,6 +51,10 @@ Enables writing parallel high-performance kernels and whole applications that ca
 # Modules generated in caller
 - [`Data`](@ref)
 
+# Runtime hardware selection
+- [`select_hardware`](@ref)
+- [`current_hardware`](@ref)
+
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
 module ParallelKernel
@@ -78,6 +82,7 @@ include("init_parallel_kernel.jl")
 include("kernel_language.jl")
 include("parallel.jl")
 include("reset_parallel_kernel.jl")
+include("select_hardware.jl")
 
 ## Alphabetical include of submodules (not extensions)
 include("FieldAllocators.jl")
@@ -87,5 +92,6 @@ export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices,
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PKNumber
+export select_hardware, current_hardware
 
 end # Module ParallelKernel
