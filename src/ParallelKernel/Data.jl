@@ -3,6 +3,9 @@ const DATA_DOC = """
 
 The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
 
+!!! note "KernelAbstractions workflows"
+    `Data` / `TData` are generated only when [`@init_parallel_kernel`](@ref) selects a single-architecture backend (CUDA, AMDGPU, Metal, Threads, Polyester). KernelAbstractions omits these modules because hardware is chosen at runtime via [`select_hardware`](@ref) / [`current_hardware`](@ref); allocate arrays after selecting a runtime symbol as described in [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection).
+
 It contains the following submodules:
 
     Data.Fields
@@ -119,6 +122,9 @@ const DATA_DOC_NUMBERTYPE_NONE = """
     Module Data
 
 The module Data is created in the module where `@init_parallel_kernel` is called from. It provides data types, some of which are organized in submodules.
+
+!!! note "KernelAbstractions workflows"
+    `Data` / `TData` are generated only when [`@init_parallel_kernel`](@ref) selects a single-architecture backend (CUDA, AMDGPU, Metal, Threads, Polyester). KernelAbstractions omits these modules because hardware is chosen at runtime via [`select_hardware`](@ref) / [`current_hardware`](@ref); allocate arrays after selecting a runtime symbol as described in [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection).
 
 It contains the following submodules:
 
