@@ -74,6 +74,9 @@ const PKSHOW_DOC = """
     @pk_show(...)
 
 Call a macro analogue to `Base.@show`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@show for Threads or Polyester and CUDA.@cushow for CUDA).
+
+!!! note "Runtime hardware selection"
+    When [`@init_parallel_kernel`](@ref) activates the KernelAbstractions backend, the runtime hardware symbol reported by [`current_hardware`](@ref) determines which package provides the logging primitive. Update it with [`select_hardware`](@ref) to switch between CPU (`:cpu`) and GPU targets (`:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi`).
 """
 @doc PKSHOW_DOC
 macro pk_show(args...) check_initialized(__module__); esc(pk_show(__module__, args...)); end
@@ -84,6 +87,9 @@ const PKPRINTLN_DOC = """
     @pk_println(...)
 
 Call a macro analogue to `Base.@println`, compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (Base.@println for Threads or Polyester and CUDA.@cuprintln for CUDA).
+
+!!! note "Runtime hardware selection"
+    When [`@init_parallel_kernel`](@ref) activates the KernelAbstractions backend, the runtime hardware symbol reported by [`current_hardware`](@ref) determines which package provides the printing primitive. Update it with [`select_hardware`](@ref) to switch between CPU (`:cpu`) and GPU targets (`:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi`).
 """
 @doc PKPRINTLN_DOC
 macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module__, args...)); end
