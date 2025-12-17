@@ -1,7 +1,7 @@
 """
 Module ParallelStencil
 
-Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs and CPUs.
+Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs and CPUs. Supports both single-architecture backends accessed directly (CUDA, AMDGPU, Metal, Threads, Polyester) and abstraction-layer workflows powered by KernelAbstractions where the concrete hardware is picked at runtime through [`select_hardware`](@ref) / [`current_hardware`](@ref); see [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for a guided walkthrough.
 
 # General overview and examples
 https://github.com/omlins/ParallelStencil.jl
@@ -55,7 +55,11 @@ https://github.com/omlins/ParallelStencil.jl
 - [`Data`](@ref)
 
 !! note "Activation of GPU support"
-    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU or Metal); this is automatically done by [`@init_parallel_stencil`](@ref).
+    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). KernelAbstractions is included to let you target multiple architectures from the same session; select the backend package at parse time with [`@init_parallel_stencil`](@ref) and pick the concrete runtime hardware via [`select_hardware`](@ref) / [`current_hardware`](@ref). Installation is handled by the initialization macro, while the interactive prototyping section linked above details the runtime selection workflow.
+
+# Runtime hardware selection
+- [`select_hardware`](@ref)
+- [`current_hardware`](@ref)
 
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
@@ -78,6 +82,7 @@ include("kernel_language.jl")
 include("memopt.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
+include("select_hardware.jl")
 
 ## Alphabetical include of allocation/computation-submodules (must be at end as needs to import from ParallelStencil, .e.g. INDICES).
 include("AD.jl")
@@ -90,5 +95,6 @@ export @parallel, @hide_communication, @parallel_indices, @parallel_async, @sync
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PSNumber
+export select_hardware, current_hardware
 
 end # Module ParallelStencil
