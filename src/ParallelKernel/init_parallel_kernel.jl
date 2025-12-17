@@ -2,15 +2,21 @@
     @init_parallel_kernel(package, numbertype)
     @init_parallel_kernel(package, numbertype, inbounds=..., padding=...)
 
-Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
+Initialize the package ParallelKernel, giving access to its main functionality. For backends that target a single hardware architecture (CUDA, AMDGPU, Metal, Threads, Polyester) the macro creates `Data` and `TData` modules in the caller containing hardware-specific array aliases parameterised by `numbertype`. When the KernelAbstractions backend is selected, the macro skips generating these convenience modules and instead defaults the runtime hardware selection to `:cpu`; choose the concrete device later with [`select_hardware`](@ref) and inspect it with [`current_hardware`](@ref).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA or AMDGPU or Metal for GPU, or Threads or Polyester for CPU).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel.
+- `package::Module`: the package used for parallelization. Accepted values are `CUDA`, `AMDGPU`, `Metal`, `Threads`, `Polyester`, or `KernelAbstractions`. KernelAbstractions defers the concrete hardware to runtime and pairs with [`select_hardware`](@ref) / [`current_hardware`](@ref) for interactive switching.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel when a single-architecture backend is selected.
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 - `padding::Bool=false`: whether to apply padding to the fields allocated with macros from [`ParallelKernel.FieldAllocators`](@ref).
 
-See also: [`Data`](@ref)
+!!! note "Runtime hardware symbols"
+    Use [`select_hardware`](@ref) with the following symbols to steer KernelAbstractions at runtime: `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi`. Single-architecture backends already fix the hardware and report that symbol through [`current_hardware`](@ref).
+
+!!! note "Convenience modules"
+    `Data` and `TData` are only generated for single-architecture backends. KernelAbstractions users should allocate arrays after selecting a runtime hardware symbol; see [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for guidance.
+
+See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
 """
 macro init_parallel_kernel(args...)
     check_already_initialized(__module__)
