@@ -3,15 +3,21 @@
     @init_parallel_stencil(package, numbertype, ndims, inbounds=...)
     @init_parallel_stencil(package=..., ndims=..., inbounds=...)
 
-Initialize the package ParallelStencil, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_stencil` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_stencil` to see the full description of the module).
+Initialize the package ParallelStencil, giving access to its main functionality. For single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) the macro mirrors ParallelKernel by creating `Data` and `TData` modules in the caller with hardware-specific aliases based on `numbertype`. When KernelAbstractions is selected, the macro leaves these convenience modules undefined and instead defaults the runtime hardware to `:cpu`, expecting you to pick the concrete device later via [`select_hardware`](@ref) / [`current_hardware`](@ref).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA, AMDGPU or Metal for GPU, or Threads or Polyester for CPU).
-- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
+- `package::Module`: the package used for parallelization. Accepted values are `CUDA`, `AMDGPU`, `Metal`, `Threads`, `Polyester`, or `KernelAbstractions`. KernelAbstractions enables runtime hardware selection handled by the `select_hardware` / `current_hardware` wrappers.
+- `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil when a single-architecture backend is selected. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (overwritable in each kernel definition).
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
-See also: [`Data`](@ref)
+!!! note "Runtime hardware symbols"
+    After initialization, call [`select_hardware`](@ref) with one of `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, or `:gpu_oneapi` to steer KernelAbstractions at runtime. Single-architecture backends expose their fixed symbol through [`current_hardware`](@ref).
+
+!!! note "Convenience modules"
+    `Data` and `TData` are only created for single-architecture backends. KernelAbstractions users should allocate arrays after choosing the runtime hardware; see [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for hands-on guidance.
+
+See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
 """
 macro init_parallel_stencil(args...)
     posargs, kwargs_expr = split_args(args)
