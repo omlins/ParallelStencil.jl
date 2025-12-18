@@ -2,15 +2,16 @@
 const SELECT_HARDWARE_DOC = """
     select_hardware(hardware)
 
-Set the runtime hardware architecture used by ParallelKernel backends. When a backend that supports multiple architectures — such as KernelAbstractions — is active, the function records the chosen `hardware` symbol so kernel launch and allocation macros can dispatch to the matching device without re-parsing code. For single-architecture backends the call leaves the preselected hardware unchanged.
+Set the runtime hardware architecture used by ParallelKernel backends. When a backend that supports multiple architectures — such as KernelAbstractions — is active, the function records the chosen `hardware` symbol so kernel launch and allocation macros can dispatch to the matching device without reparsing code. For single-architecture backends the call leaves the preselected hardware unchanged.
 
-# Supported hardware symbols by backend
-- KernelAbstractions: `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi` (defaults to `:cpu`).
-- Threads: `:cpu`.
-- Polyester: `:cpu`.
-- CUDA: `:gpu_cuda`.
-- AMDGPU: `:gpu_amd`.
-- Metal: `:gpu_metal`.
+# Arguments
+- `hardware::Symbol`: the symbol representing the hardware architecture to select for runtime execution. Supported hardware symbols by backend are:
+        - KernelAbstractions: `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi` (defaults to `:cpu`).
+        - Threads: `:cpu`.
+        - Polyester: `:cpu`.
+        - CUDA: `:gpu_cuda`.
+        - AMDGPU: `:gpu_amd`.
+        - Metal: `:gpu_metal`.
 
 For workflow guidance refer to the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
