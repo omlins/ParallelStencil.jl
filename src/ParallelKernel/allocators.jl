@@ -3,19 +3,10 @@ const ZEROS_DOC = """
     @zeros(args...)
     @zeros(args..., <keyword arguments>)
 
-Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA, AMDGPU.zeros for AMDGPU and Metal.zeros for Metal).
+Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA, AMDGPU.zeros for AMDGPU, Metal.zeros for Metal, and a runtime-dispatched allocator for KernelAbstractions that honours [`current_hardware`](@ref) — defaulting to `:cpu` and switchable to other targets via [`select_hardware`](@ref)).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
-
-!!! note "Runtime hardware selection"
-    The allocation follows the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: allocates on the CPU using Base `zeros`.
-    - `:gpu_cuda`: allocates with CUDA.jl.
-    - `:gpu_amd`: allocates with AMDGPU.jl.
-    - `:gpu_metal`: allocates with Metal.jl.
-    - `:gpu_oneapi`: allocates with the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
@@ -40,19 +31,10 @@ const ONES_DOC = """
     @ones(args...)
     @ones(args..., <keyword arguments>)
 
-Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA, AMDGPU.ones for AMDGPU and Metal.ones for Metal).
+Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA, AMDGPU.ones for AMDGPU, Metal.ones for Metal, and a runtime-dispatched allocator for KernelAbstractions that honours [`current_hardware`](@ref) — defaulting to `:cpu` and switchable to other targets via [`select_hardware`](@ref)).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
-
-!!! note "Runtime hardware selection"
-    The allocation follows the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: allocates on the CPU using Base `ones`.
-    - `:gpu_cuda`: allocates with CUDA.jl.
-    - `:gpu_amd`: allocates with AMDGPU.jl.
-    - `:gpu_metal`: allocates with Metal.jl.
-    - `:gpu_oneapi`: allocates with the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
@@ -76,19 +58,10 @@ const RAND_DOC = """
     @rand(args...)
     @rand(args..., <keyword arguments>)
 
-Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
-
-!!! note "Runtime hardware selection"
-    Random array allocation follows the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: uses Random and Base routines on the CPU.
-    - `:gpu_cuda`: uses CUDA.jl RNG support.
-    - `:gpu_amd`: uses AMDGPU.jl RNG support.
-    - `:gpu_metal`: uses Metal.jl RNG support.
-    - `:gpu_oneapi`: uses the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
@@ -113,21 +86,12 @@ const FALSES_DOC = """
     @falses(args...)
     @falses(args..., <keyword arguments>)
 
-Call `falses(args...)`, where the function `falses` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `falses(args...)`, where the function `falses` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
-
-!!! note "Runtime hardware selection"
-    Boolean allocations follow the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: allocates via Base on the CPU.
-    - `:gpu_cuda`: allocates with CUDA.jl.
-    - `:gpu_amd`: allocates with AMDGPU.jl.
-    - `:gpu_metal`: allocates with Metal.jl.
-    - `:gpu_oneapi`: allocates with the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
@@ -145,21 +109,12 @@ const TRUES_DOC = """
     @trues(args...)
     @trues(args..., <keyword arguments>)
 
-Call `trues(args...)`, where the function `trues` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `trues(args...)`, where the function `trues` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
-
-!!! note "Runtime hardware selection"
-    Boolean allocations follow the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: allocates via Base on the CPU.
-    - `:gpu_cuda`: allocates with CUDA.jl.
-    - `:gpu_amd`: allocates with AMDGPU.jl.
-    - `:gpu_metal`: allocates with Metal.jl.
-    - `:gpu_oneapi`: allocates with the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@fill`](@ref), [`@CellType`](@ref)
 """
@@ -177,19 +132,10 @@ const FILL_DOC = """
     @fill(x, args...)
     @fill(x, args..., <keyword arguments>)
 
-Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
 
 !!! note "Advanced"
     The element type `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
-
-!!! note "Runtime hardware selection"
-    The allocation follows the runtime hardware symbol reported by [`current_hardware`](@ref). When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively:
-    - `:cpu`: allocates on the CPU using Base `fill`.
-    - `:gpu_cuda`: allocates with CUDA.jl.
-    - `:gpu_amd`: allocates with AMDGPU.jl.
-    - `:gpu_metal`: allocates with Metal.jl.
-    - `:gpu_oneapi`: allocates with the KernelAbstractions.oneAPI backend.
-    See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
@@ -214,14 +160,11 @@ const FILL!_DOC = """
     @fill!(A, x)
     @fill!(A, x)
 
-Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
+Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
 
 # Arguments
 - `A::Array|CellArray|TArray|TCellArray`: the array to be filled with `x`.
 - `x::Number|Data.Index|Enum|Collection{Number|Data.Index|Enum, celldims}`: the content to fill `A` with. If `A` is an CellArray, then `x` can be either a single value or a collection of values (e.g. an array, tuple,...) of the size `celldims` of `A`.
-
-!!! note "Runtime hardware selection"
-    The in-place operation respects the runtime hardware symbol reported by [`current_hardware`](@ref) by delegating to the package-specific `fill!` chosen during allocation. When KernelAbstractions is the initialized backend, update the symbol with [`select_hardware`](@ref) to swap architectures interactively. See [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection) for workflow details.
 
 See also: [`@fill`](@ref)
 """
