@@ -48,6 +48,8 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@vote_any_sync`](@ref)
     - [`@vote_all_sync`](@ref)
     - [`@vote_ballot_sync`](@ref)
+    !!! note "Warp-level primitives support"
+        Warp-level primitives are only partially supported with the KernelAbstractions and Metal backends.
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
