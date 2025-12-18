@@ -1,31 +1,34 @@
+##
 const SELECT_HARDWARE_DOC = """
     select_hardware(hardware)
 
-Update the runtime hardware selection for the backend chosen during [`@init_parallel_kernel`](@ref). Use it in interactive workflows to swap the target architecture without redefining kernels.
+Set the runtime hardware architecture used by ParallelKernel backends. When a backend that supports multiple architectures — such as KernelAbstractions — is active, the function records the chosen `hardware` symbol so kernel launch and allocation macros can dispatch to the matching device without re-parsing code. For single-architecture backends the call leaves the preselected hardware unchanged.
 
-# Arguments
-- `hardware::Symbol`: Backend-specific selector accepted by the initialized backend:
-    - KernelAbstractions: `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi`.
-    - Threads: `:cpu`.
-    - Polyester: `:cpu`.
-    - CUDA: `:gpu_cuda`.
-    - AMDGPU: `:gpu_amd`.
-    - Metal: `:gpu_metal`.
+# Supported hardware symbols by backend
+- KernelAbstractions: `:cpu`, `:gpu_cuda`, `:gpu_amd`, `:gpu_metal`, `:gpu_oneapi` (defaults to `:cpu`).
+- Threads: `:cpu`.
+- Polyester: `:cpu`.
+- CUDA: `:gpu_cuda`.
+- AMDGPU: `:gpu_amd`.
+- Metal: `:gpu_metal`.
 
-Multi-architecture backends default to `:cpu` immediately after initialization; call this function whenever you need to execute kernels on a different supported architecture. The active selection is reflected by [`current_hardware`](@ref) and is consumed automatically by launch and allocation helpers.
+For workflow guidance refer to the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
-See also: [`current_hardware`](@ref), [`ParallelStencil.select_hardware`](@ref), [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection)
+See also: [`current_hardware`](@ref)
 """
 @doc SELECT_HARDWARE_DOC
-function select_hardware(::Symbol)
+function select_hardware(hardware::Symbol)
 end
 
+##
 const CURRENT_HARDWARE_DOC = """
     current_hardware()
 
-Return the hardware symbol currently used by ParallelKernel to launch kernels and allocate arrays for the backend chosen during [`@init_parallel_kernel`](@ref). For multi-architecture backends the value starts as `:cpu` until [`select_hardware`](@ref) sets another supported symbol.
+Return the symbol representing the hardware architecture currently selected for runtime execution. Before any call to [`select_hardware`](@ref) on multi-architecture backends, the default is `:cpu`; single-architecture backends report their fixed hardware symbol. Kernel launch and allocation macros consult this value when constructing backend-specific calls.
 
-See also: [`select_hardware`](@ref), [`ParallelStencil.current_hardware`](@ref), [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-with-runtime-hardware-selection)
+For workflow guidance refer to the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
+
+See also: [`select_hardware`](@ref)
 """
 @doc CURRENT_HARDWARE_DOC
 function current_hardware()
