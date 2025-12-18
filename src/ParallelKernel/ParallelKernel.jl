@@ -49,7 +49,7 @@ Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fi
     - [`@vote_all_sync`](@ref)
     - [`@vote_ballot_sync`](@ref)
     !!! note "Warp-level primitives support"
-        Warp-level primitives are only partially supported with the KernelAbstractions and Metal backends.
+        Warp-level primitives are not supported with the KernelAbstractions backend and only partially supported with the Metal backend.
 
 # Submodules
 - [`ParallelKernel.AD`](@ref)
