@@ -1,11 +1,16 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, select_hardware, current_hardware
 import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
+const PKG_KERNELABSTRACTIONS = hasproperty(ParallelStencil.ParallelKernel, :PKG_KERNELABSTRACTIONS) ? ParallelStencil.ParallelKernel.PKG_KERNELABSTRACTIONS : Symbol(:KernelAbstractions)
+
+TEST_PACKAGES = collect(SUPPORTED_PACKAGES)
+if PKG_KERNELABSTRACTIONS ∉ TEST_PACKAGES
+    push!(TEST_PACKAGES, PKG_KERNELABSTRACTIONS)
+end
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
@@ -21,7 +26,34 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    if Base.find_package("KernelAbstractions") === nothing
+        TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES)
+    else
+        import KernelAbstractions
+    end
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+
+kernelabstractions_gpu_symbols() = Symbol[]
+
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    function kernelabstractions_gpu_symbols()
+        symbols = Symbol[]
+        if isdefined(@__MODULE__, :CUDA) && CUDA.functional()
+            push!(symbols, :gpu_cuda)
+        end
+        if isdefined(@__MODULE__, :AMDGPU) && AMDGPU.functional()
+            push!(symbols, :gpu_amd)
+        end
+        if isdefined(@__MODULE__, :Metal)
+            if Sys.isapple() && Metal.functional()
+                push!(symbols, :gpu_metal)
+            end
+        end
+        return symbols
+    end
+end
 
 
 macro expr_allocated(ex)
@@ -75,6 +107,49 @@ eval(:(
                     @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal $(nameof($FloatDefault)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"        #TODO: not yet supported for Metal
                     # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"  #TODO: not yet supported for Metal
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
+                    @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
+                    @test @prettystring(1, @blockDim()) == "ParallelStencil.ParallelKernel.@blockDim_cpu"
+                    @test @prettystring(1, @threadIdx()) == "ParallelStencil.ParallelKernel.@threadIdx_cpu"
+                    @test @prettystring(1, @sync_threads()) == "ParallelStencil.ParallelKernel.@sync_threads_cpu"
+                    @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_cpu $(nameof($FloatDefault)) (2, 3)"
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            @test @prettystring(1, @gridDim()) == "CUDA.gridDim()"
+                            @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
+                            @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
+                            @test @prettystring(1, @threadIdx()) == "CUDA.threadIdx()"
+                            @test @prettystring(1, @sync_threads()) == "CUDA.sync_threads()"
+                            @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "CUDA.@cuDynamicSharedMem $(nameof($FloatDefault)) (2, 3)"
+                        elseif symbol == :gpu_amd
+                            @test @prettystring(1, @gridDim()) == "AMDGPU.gridGroupDim()"
+                            @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
+                            @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
+                            @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
+                            @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
+                            # @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == ""    #TODO: not yet supported for AMDGPU
+                        elseif symbol == :gpu_metal
+                            @test @prettystring(1, @gridDim()) == "Metal.threadgroups_per_grid_3d()"
+                            @test @prettystring(1, @blockIdx()) == "Metal.threadgroup_position_in_grid_3d()"
+                            @test @prettystring(1, @blockDim()) == "Metal.threads_per_threadgroup_3d()"
+                            @test @prettystring(1, @threadIdx()) == "Metal.thread_position_in_threadgroup_3d()"
+                            @test @prettystring(1, @sync_threads()) == "Metal.threadgroup_barrier(; flag = Metal.MemoryFlagThreadGroup)"
+                            @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal $(nameof($FloatDefault)) (2, 3)"
+                        end
+                        @test current_hardware() == symbol
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
+                    @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
+                    @test @prettystring(1, @blockDim()) == "ParallelStencil.ParallelKernel.@blockDim_cpu"
+                    @test @prettystring(1, @threadIdx()) == "ParallelStencil.ParallelKernel.@threadIdx_cpu"
+                    @test @prettystring(1, @sync_threads()) == "ParallelStencil.ParallelKernel.@sync_threads_cpu"
+                    @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_cpu $(nameof($FloatDefault)) (2, 3)"
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
