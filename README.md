@@ -7,7 +7,7 @@ ParallelStencil empowers domain scientists to write architecture-agnostic high-l
 
 <a id="fig_teff">![Performance ParallelStencil Teff](docs/images/perf_ps2.png)</a>
 
-ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl], [AMDGPU.jl], [Metal.jl] and on [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
+ParallelStencil relies on the native kernel programming capabilities of [CUDA.jl], [AMDGPU.jl], [Metal.jl], the multi-architecture [KernelAbstractions.jl] package (enabling the runtime hardware selection workflow described in [Interactive prototyping with runtime hardware selection](#interactive-prototyping-with-runtime-hardware-selection)), and on [Polyester.jl] and [Base.Threads] for high-performance computations on GPUs and CPUs, respectively. It is seamlessly interoperable with [ImplicitGlobalGrid.jl], which renders the distributed parallelization of stencil-based GPU and CPU applications on a regular staggered grid almost trivial and enables close to ideal weak scaling of real-world applications on thousands of GPUs \[[1][JuliaCon20a], [2][JuliaCon20b], [3][JuliaCon19], [4][PASC19]\]. Moreover, ParallelStencil enables hiding communication behind computation with a simple macro call and without any particular restrictions on the package used for communication. ParallelStencil has been designed in conjunction with [ImplicitGlobalGrid.jl] for simplest possible usage by domain-scientists, rendering fast and interactive development of massively scalable high performance multi-GPU applications readily accessible to them. Furthermore, we have developed a self-contained approach for "Solving Nonlinear Multi-Physics on GPU Supercomputers with Julia" relying on ParallelStencil and [ImplicitGlobalGrid.jl] \[[1][JuliaCon20a]\]. ParallelStencil's feature to hide communication behind computation was showcased when a close to ideal weak scaling was demonstrated for a 3-D poro-hydro-mechanical real-world application on up to 1024 GPUs on the Piz Daint Supercomputer \[[1][JuliaCon20a]\]:
 
 ![Parallel efficiency of ParallelStencil with CUDA C backend](docs/images/par_eff_c_julia2.png)
 
@@ -15,25 +15,35 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 
 Beyond traditional high-performance computing, ParallelStencil supports automatic differentiation of architecture-agnostic parallel kernels relying on [Enzyme.jl], enabling both high-level and generic syntax for maximal flexibility.
 
-## Contents
-* [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)
-* [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
-* [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
-* [50-lines multi-xPU example](#50-lines-multi-xpu-example)
-* [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
-* [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
-* [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
-* [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
-* [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
-* [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
-* [Dependencies](#dependencies)
-* [Installation](#installation)
-* [Questions, comments and discussions](#questions-comments-and-discussions)
-* [Your contributions](#your-contributions)
-* [References](#references)
+## Contents <!-- omit in toc -->
+- [Parallelization and optimization with one macro call](#parallelization-and-optimization-with-one-macro-call)
+- [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
+- [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-gpu-and-cpu)
+- [50-lines multi-xPU example](#50-lines-multi-xpu-example)
+- [Interactive prototyping with runtime hardware selection](#interactive-prototyping-with-runtime-hardware-selection)
+- [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
+- [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
+- [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
+- [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
+- [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
+- [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
+    - [Performance metric](#performance-metric)
+    - [Miniapp content](#miniapp-content)
+    - [Thermo-mechanical convection 2-D app](#thermo-mechanical-convection-2-d-app)
+    - [Viscous Stokes 2-D app](#viscous-stokes-2-d-app)
+    - [Viscous Stokes 3-D app](#viscous-stokes-3-d-app)
+    - [Acoustic wave 2-D app](#acoustic-wave-2-d-app)
+    - [Acoustic wave 3-D app](#acoustic-wave-3-d-app)
+    - [Scalar porosity waves 2-D app](#scalar-porosity-waves-2-d-app)
+    - [Hydro-mechanical porosity waves 2-D app](#hydro-mechanical-porosity-waves-2-d-app)
+- [Dependencies](#dependencies)
+- [Installation](#installation)
+- [Questions, comments and discussions](#questions-comments-and-discussions)
+- [Your contributions](#your-contributions)
+- [References](#references)
 
 ## Parallelization and optimization with one macro call
-A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl], [AMDGPU.jl] and [Metal.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
+A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl], [AMDGPU.jl], [Metal.jl], and the multi-architecture [KernelAbstractions.jl] backend for running on GPU, and [Base.Threads] and [Polyester.jl] for executing on CPU; when using KernelAbstractions the session starts on the CPU and you can switch the hardware target mid-run via `select_hardware`/`current_hardware` as outlined in [Interactive prototyping with runtime hardware selection](#interactive-prototyping-with-runtime-hardware-selection). The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
 ```julia
 #(...)
 @init_parallel_stencil(CUDA,...)
@@ -247,6 +257,38 @@ Here is the resulting movie when running the application on 8 GPUs, solving 3-D 
 
 The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_hidecomm.jl).
 
+## Interactive prototyping with runtime hardware selection
+The KernelAbstractions backend keeps the familiar parse-time `@init_parallel_stencil` workflow while enabling runtime hardware switches through the `select_hardware` and `current_hardware` functions; the runtime hardware target defaults to CPU and can be switched as many times as desired during a session without requiring redefinition of kernels or reinitialization of the backend. The following copy-pasteable example outlines this workflow with a simple SAXPY kernel, demonstrating initial execution on CPU followed by a switch to CUDA GPU and a second execution there:
+
+```julia
+# --- Session setup -------------------------------------------------------
+using ParallelStencil
+@init_parallel_stencil(package=KernelAbstractions, numbertype=Float32)  # 1 Initialize KernelAbstractions backend at parse time
+const N = 1024
+const α = 2.5
+
+# --- Kernel definition ---------------------------------------------------
+@parallel_indices (i) function saxpy!(Y, α, X)                          # 2 Define a single time a hardware-agnostic SAXPY kernel
+  Y[i] = α * X[i] + Y[i]
+  return
+end
+
+# --- First run on default runtime hardware (CPU) -------------------------
+println("Current runtime hardware target: ", current_hardware())        # 3 Query current (default) runtime hardware target
+X = @rand(N)                                                            # 4 Allocate data on the current target
+Y = @rand(N)                                                            # 4 Allocate data on the current target
+@parallel saxpy!(Y, α, X)                                               # 5 Launch kernel on the current target
+
+# --- Reselect runtime hardware to CUDA GPU and run again --------------------------------
+select_hardware(:gpu_cuda)                                              # 6 Switch runtime hardware target to CUDA-capable GPU
+println("Current runtime hardware target: ", current_hardware())        # 7 Confirm the CUDA-capable GPU runtime hardware target
+X = @rand(N)                                                            # 8 Allocate data on the new target
+Y = @rand(N)                                                            # 8 Allocate data on the new target
+@parallel saxpy!(Y, α, X)                                               # 9 Launch kernel on the new target without redefining anything
+```
+Type `?select_hardware` and `?current_hardware` in the [Julia REPL] to see what runtime hardware targets are supported and which symbols to use to select them.
+Note that the KernelAbstractions backend comes with a trade-off: the convenience `Data`/`TData` modules for fixed data types and single-architecture backends are not available, as well as the warp-level primitives in `@parallel_indices` kernels (see [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)).
+
 ## Seamless interoperability with communication packages and hiding communication
 The previous multi-xPU example shows that ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl]. The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl] (besides, [MPI.jl] is also seamlessly interoperable with [ImplicitGlobalGrid.jl] and can extend its functionality).
 
@@ -274,7 +316,7 @@ It can be launched as follows:
 ```julia
 @parallel (1:size(A,1), 1:size(A,3)) bc_y!(A)
 ```
-Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)).
+Furthermore, a set of architecture-agnostic low level kernel language constructs is supported in these `@parallel_indices` kernels (see in [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)). They enable, e.g., explicit usage of shared memory (see [this 2-D heat diffusion example](/examples/diffusion2D_shmem_novis.jl)) and usage of warp-level primitives.
 
 ## Support for logical arrays of small arrays / structs
 Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)). To this purpose, ParallelStencil leverages `CellArray`s (from [CellArrays.jl], which relies in turn on [StaticArrays.jl]). To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
@@ -508,7 +550,7 @@ The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing 
 *The animation depicts the formation of fluid escape pipes in two-phase media, owing to decompaction weakening running the miniapp [HydroMech2D.jl](/miniapps/HydroMech2D.jl). Top row: evolution of the porosity distribution and effective pressure. Bottom row: Darcy flux (relative fluid to solid motion) and solid (porous matrix) deformation.*
 
 ## Dependencies
-ParallelStencil relies on the Julia packages ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]), [AMDGPU.jl], [MacroTools.jl], [CellArrays.jl] and [StaticArrays.jl].
+ParallelStencil relies on the Julia packages ([CUDA.jl] \[[5][Julia CUDA paper 1], [6][Julia CUDA paper 2]\]), [AMDGPU.jl], [Metal.jl], [KernelAbstractions.jl], [Polyester.jl], [MacroTools.jl], [CellArrays.jl], [StaticArrays.jl] and [Enzyme.jl]. However, thanks to usage of Julia's extensions feature, only [CellArrays.jl], [MacroTools.jl] and [StaticArrays.jl] are fix dependencies that will be automatically installed when installing ParallelStencil; the other packages are only required when using the respective backends or features.
 
 ## Installation
 ParallelStencil may be installed directly with the [Julia package manager](https://docs.julialang.org/en/v1/stdlib/Pkg/index.html) from the REPL:
@@ -547,6 +589,7 @@ Please open an issue to discuss your idea for a contribution beforehand. Further
 [JuliaCon20b]: https://www.youtube.com/watch?v=1t1AKnnGRqA
 [JuliaCon19]: https://www.youtube.com/watch?v=b90qqbYJ58Q
 [PASC19]: https://pasc19.pasc-conference.org/program/schedule/index.html%3Fpost_type=page&p=10&id=msa218&sess=sess144.html
+[Polyester.jl]: https://github.com/JuliaSIMD/Polyester.jl
 [Base.Threads]: https://docs.julialang.org/en/v1/base/multi-threading/
 [ImplicitGlobalGrid.jl]: https://github.com/eth-cscs/ImplicitGlobalGrid.jl
 [JULIA_NUM_THREADS]:https://docs.julialang.org/en/v1.0.0/manual/environment-variables/#JULIA_NUM_THREADS-1
@@ -555,6 +598,7 @@ Please open an issue to discuss your idea for a contribution beforehand. Further
 [CUDA.jl]: https://github.com/JuliaGPU/CUDA.jl
 [AMDGPU.jl]: https://github.com/JuliaGPU/AMDGPU.jl
 [Metal.jl]: https://github.com/JuliaGPU/Metal.jl
+[KernelAbstractions.jl]: https://github.com/JuliaGPU/KernelAbstractions.jl
 [Enzyme.jl]: https://github.com/EnzymeAD/Enzyme.jl
 [MacroTools.jl]: https://github.com/FluxML/MacroTools.jl
 [StaticArrays.jl]: https://github.com/JuliaArrays/StaticArrays.jl
