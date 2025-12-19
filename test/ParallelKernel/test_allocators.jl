@@ -2,13 +2,19 @@ using Test
 using CellArrays, StaticArrays
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, select_hardware, current_hardware
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, interpolate
 import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.FieldAllocators
 import ParallelStencil.ParallelKernel.FieldAllocators: checksargs_field_macros, checkargs_allocate
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
+
+const PKG_KERNELABSTRACTIONS = hasproperty(ParallelStencil.ParallelKernel, :PKG_KERNELABSTRACTIONS) ? ParallelStencil.ParallelKernel.PKG_KERNELABSTRACTIONS : Symbol(:KernelAbstractions)
+
+TEST_PACKAGES = collect(SUPPORTED_PACKAGES)
+if PKG_KERNELABSTRACTIONS ∉ TEST_PACKAGES
+    push!(TEST_PACKAGES, PKG_KERNELABSTRACTIONS)
+end
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
@@ -27,8 +33,67 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    if Base.find_package("KernelAbstractions") === nothing
+        TEST_PACKAGES = filter!(x -> x ≠ PKG_KERNELABSTRACTIONS, TEST_PACKAGES)
+    else
+        import KernelAbstractions
+    end
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
+
+function default_hardware_symbol(package::Symbol)
+    if package == PKG_KERNELABSTRACTIONS
+        return :cpu
+    elseif package == PKG_THREADS || package == PKG_POLYESTER
+        return :cpu
+    elseif package == PKG_CUDA
+        return :gpu_cuda
+    elseif package == PKG_AMDGPU
+        return :gpu_amd
+    elseif package == PKG_METAL
+        return :gpu_metal
+    else
+        return :cpu
+    end
+end
+
+function invalid_hardware_symbol(package::Symbol, default_symbol::Symbol)
+    if package == PKG_THREADS || package == PKG_POLYESTER
+        return :gpu_cuda
+    elseif package == PKG_CUDA
+        return :cpu
+    elseif package == PKG_AMDGPU
+        return :cpu
+    elseif package == PKG_METAL
+        return :cpu
+    else
+        return Symbol(default_symbol, :_unsupported)
+    end
+end
+
+kernelabstractions_gpu_symbols() = Symbol[]
+
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    function kernelabstractions_gpu_symbols()
+        symbols = Symbol[]
+        if isdefined(@__MODULE__, :CUDA) && CUDA.functional()
+            push!(symbols, :gpu_cuda)
+        end
+        if isdefined(@__MODULE__, :AMDGPU) && AMDGPU.functional()
+            push!(symbols, :gpu_amd)
+        end
+        if isdefined(@__MODULE__, :Metal)
+            if Sys.isapple() && Metal.functional()
+                push!(symbols, :gpu_metal)
+            end
+        end
+        return symbols
+    end
+end
+
+is_multi_architecture(package::Symbol) = package == PKG_KERNELABSTRACTIONS
 
 
 @static for package in TEST_PACKAGES
@@ -116,6 +181,8 @@ eval(:(
                 @test SymmetricTensor2D_Index <: FieldArray
             end;
             @testset "mapping to package (no celldims/celltype)" begin
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     @test typeof(@zeros(2,3))                      == typeof(CUDA.CuArray(zeros(Float16,2,3)))
                     @test typeof(@zeros(2,3, eltype=Float32))      == typeof(CUDA.CuArray(zeros(Float32,2,3)))
@@ -155,6 +222,71 @@ eval(:(
                     @test typeof(@fill(9, 2,3))                    == typeof(Metal.MtlArray(fill(convert(Float16, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float32))    == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(fill(convert(DATA_INDEX, 9), 2,3)))
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    cpu_zeros_type = typeof(@zeros(2,3))
+                    @test cpu_zeros_type == typeof(zeros(Float16,2,3))
+                    @test typeof(@zeros(2,3, eltype=Float32))      == typeof(zeros(Float32,2,3))
+                    @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(zeros(DATA_INDEX,2,3))
+                    @test typeof(@ones(2,3))                       == typeof(ones(Float16,2,3))
+                    @test typeof(@ones(2,3, eltype=Float32))       == typeof(ones(Float32,2,3))
+                    @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(ones(DATA_INDEX,2,3))
+                    @test typeof(@rand(2,3))                       == typeof(rand(Float16,2,3))
+                    @test typeof(@rand(2,3, eltype=Float64))       == typeof(rand(Float64,2,3))
+                    @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(rand(DATA_INDEX,2,3))
+                    @test typeof(@fill(9, 2,3))                    == typeof(fill(convert(Float16, 9), 2,3))
+                    @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(fill(convert(Float64, 9), 2,3))
+                    @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(fill(convert(DATA_INDEX, 9), 2,3))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            @test typeof(@zeros(2,3))                      == typeof(CUDA.CuArray(zeros(Float16,2,3)))
+                            @test typeof(@zeros(2,3, eltype=Float32))      == typeof(CUDA.CuArray(zeros(Float32,2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(CUDA.CuArray(zeros(DATA_INDEX,2,3)))
+                            @test typeof(@ones(2,3))                       == typeof(CUDA.CuArray(ones(Float16,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))       == typeof(CUDA.CuArray(ones(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(CUDA.CuArray(ones(DATA_INDEX,2,3)))
+                            @test typeof(@rand(2,3))                       == typeof(CUDA.CuArray(rand(Float16,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float64))       == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                            @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(CUDA.CuArray(rand(DATA_INDEX,2,3)))
+                            @test typeof(@fill(9, 2,3))                    == typeof(CUDA.CuArray(fill(convert(Float16, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(CUDA.CuArray(fill(convert(DATA_INDEX, 9), 2,3)))
+                        elseif symbol == :gpu_amd
+                            @test typeof(@zeros(2,3))                      == typeof(AMDGPU.ROCArray(zeros(Float16,2,3)))
+                            @test typeof(@zeros(2,3, eltype=Float32))      == typeof(AMDGPU.ROCArray(zeros(Float32,2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(AMDGPU.ROCArray(zeros(DATA_INDEX,2,3)))
+                            @test typeof(@ones(2,3))                       == typeof(AMDGPU.ROCArray(ones(Float16,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))       == typeof(AMDGPU.ROCArray(ones(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(AMDGPU.ROCArray(ones(DATA_INDEX,2,3)))
+                            @test typeof(@rand(2,3))                       == typeof(AMDGPU.ROCArray(rand(Float16,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float64))       == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
+                            @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(AMDGPU.ROCArray(rand(DATA_INDEX,2,3)))
+                            @test typeof(@fill(9, 2,3))                    == typeof(AMDGPU.ROCArray(fill(convert(Float16, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(AMDGPU.ROCArray(fill(convert(DATA_INDEX, 9), 2,3)))
+                        elseif symbol == :gpu_metal
+                            @test typeof(@zeros(2,3))                      == typeof(Metal.MtlArray(zeros(Float16,2,3)))
+                            @test typeof(@zeros(2,3, eltype=Float32))      == typeof(Metal.MtlArray(zeros(Float32,2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
+                            @test typeof(@ones(2,3))                       == typeof(Metal.MtlArray(ones(Float16,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))       == typeof(Metal.MtlArray(ones(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(Metal.MtlArray(ones(DATA_INDEX,2,3)))
+                            @test typeof(@rand(2,3))                       == typeof(Metal.MtlArray(rand(Float16,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float32))       == typeof(Metal.MtlArray(rand(Float32,2,3)))
+                            @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(Metal.MtlArray(rand(DATA_INDEX,2,3)))
+                            @test typeof(@fill(9, 2,3))                    == typeof(Metal.MtlArray(fill(convert(Float16, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float32))    == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(fill(convert(DATA_INDEX, 9), 2,3)))
+                        end
+                        @test current_hardware() == symbol
+                        @test typeof(@zeros(2,3)) != cpu_zeros_type
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test typeof(@zeros(2,3)) == cpu_zeros_type
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test typeof(@zeros(2,3))                      == typeof(parentmodule($package).zeros(Float16,2,3))
                     @test typeof(@zeros(2,3, eltype=Float32))      == typeof(parentmodule($package).zeros(Float32,2,3))
@@ -169,8 +301,14 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(fill(convert(Float64, 9), 2,3))
                     @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(fill(convert(DATA_INDEX, 9), 2,3))
                 end
-                @test Array(@falses(2,3)) == Array(parentmodule($package).falses(2,3))
-                @test Array(@trues(2,3))  == Array(parentmodule($package).trues(2,3))
+                reference_module = is_multi_architecture($package) ? Base : parentmodule($package)
+                @test Array(@falses(2,3)) == Array(reference_module.falses(2,3))
+                @test Array(@trues(2,3))  == Array(reference_module.trues(2,3))
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
+                end
             end;
             @testset "mapping to package (with celldims)" begin
                 T_Float16 = SMatrix{(3,4)..., Float16,    prod((3,4))}
@@ -178,6 +316,8 @@ eval(:(
                 T_Float64 = SMatrix{(3,4)..., Float64,    prod((3,4))}
                 T_Bool    = SMatrix{(3,4)..., Bool,       prod((3,4))}
                 T_Index   = SMatrix{(3,4)..., DATA_INDEX, prod((3,4))}
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
@@ -220,6 +360,70 @@ eval(:(
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
                     Metal.allowscalar(false)
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                    @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                    @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(CPUCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
+                    @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                    @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(CPUCellArray{T_Float16,1}(undef,2,3))
+                    @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CPUCellArray{T_Float64,1}(undef,2,3))
+                    @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(CPUCellArray{T_Float16,1}(undef,2,3))
+                    @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CPUCellArray{T_Float64,1}(undef,2,3))
+                    @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                    @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                    @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(CPUCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            CUDA.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(CuCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(CuCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CuCellArray{T_Float64,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(CuCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CuCellArray{T_Float64,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(CuCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
+                            CUDA.allowscalar(false)
+                        elseif symbol == :gpu_amd
+                            AMDGPU.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(ROCCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(ROCCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
+                            AMDGPU.allowscalar(false)
+                        elseif symbol == :gpu_metal
+                            Metal.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
+                            Metal.allowscalar(false)
+                        end
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celldims=(3,4)) == CellArrays.fill!(CPUCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test @zeros(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Float16}(undef,2,3), T_Float16(zeros((3,4))))
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
@@ -233,8 +437,15 @@ eval(:(
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(CPUCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
                 end
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
+                end
             end;
             @testset "mapping to package (with celltype)" begin
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
@@ -271,6 +482,62 @@ eval(:(
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                     Metal.allowscalar(false)
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                    @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(CPUCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                    @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                    @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                    @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                    @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
+                    @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
+                    @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            CUDA.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CuCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(CuCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CuCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
+                            CUDA.allowscalar(false)
+                        elseif symbol == :gpu_amd
+                            AMDGPU.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(ROCCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
+                            AMDGPU.allowscalar(false)
+                        elseif symbol == :gpu_metal
+                            Metal.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(MtlCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
+                            Metal.allowscalar(false)
+                        end
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celltype=SymmetricTensor2D) == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -281,6 +548,11 @@ eval(:(
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
                     @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
+                end
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
                 end
             end;
             @reset_parallel_kernel()
@@ -305,6 +577,8 @@ eval(:(
                 @test SymmetricTensor2D_Bool <: FieldArray
             end;
             @testset "mapping to package (no celldims/celltype)" begin
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     @test typeof(@zeros(2,3, eltype=Float32))    == typeof(CUDA.CuArray(zeros(Float32,2,3)))
                     @test typeof(@ones(2,3, eltype=Float32))     == typeof(CUDA.CuArray(ones(Float32,2,3)))
@@ -323,6 +597,41 @@ eval(:(
                     @test typeof(@rand(2,3, eltype=Float32))     == typeof(Metal.MtlArray(rand(Float32,2,3)))
                     @test typeof(@fill(9, 2,3, eltype=Float32))  == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
                     @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test typeof(@zeros(2,3, eltype=Float32))    == typeof(zeros(Float32,2,3))
+                    @test typeof(@ones(2,3, eltype=Float32))     == typeof(ones(Float32,2,3))
+                    @test typeof(@rand(2,3, eltype=Float64))     == typeof(rand(Float64,2,3))
+                    @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(fill(convert(Float64, 9), 2,3))
+                    @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(zeros(DATA_INDEX,2,3))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            @test typeof(@zeros(2,3, eltype=Float32))    == typeof(CUDA.CuArray(zeros(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))     == typeof(CUDA.CuArray(ones(Float32,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float64))     == typeof(CUDA.CuArray(rand(Float64,2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(CUDA.CuArray(fill(convert(Float64, 9), 2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(CUDA.CuArray(zeros(DATA_INDEX,2,3)))
+                        elseif symbol == :gpu_amd
+                            @test typeof(@zeros(2,3, eltype=Float32))    == typeof(AMDGPU.ROCArray(zeros(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))     == typeof(AMDGPU.ROCArray(ones(Float32,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float64))     == typeof(AMDGPU.ROCArray(rand(Float64,2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(AMDGPU.ROCArray(fill(convert(Float64, 9), 2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(AMDGPU.ROCArray(zeros(DATA_INDEX,2,3)))
+                        elseif symbol == :gpu_metal
+                            @test typeof(@zeros(2,3, eltype=Float32))    == typeof(Metal.MtlArray(zeros(Float32,2,3)))
+                            @test typeof(@ones(2,3, eltype=Float32))     == typeof(Metal.MtlArray(ones(Float32,2,3)))
+                            @test typeof(@rand(2,3, eltype=Float32))     == typeof(Metal.MtlArray(rand(Float32,2,3)))
+                            @test typeof(@fill(9, 2,3, eltype=Float32))  == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
+                            @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
+                        end
+                        @test current_hardware() == symbol
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test typeof(@zeros(2,3, eltype=Float32)) == typeof(zeros(Float32,2,3))
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test typeof(@zeros(2,3, eltype=Float32))    == typeof(zeros(Float32,2,3))
                     @test typeof(@ones(2,3, eltype=Float32))     == typeof(ones(Float32,2,3))
@@ -330,14 +639,22 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(fill(convert(Float64, 9), 2,3))
                     @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(zeros(DATA_INDEX,2,3))
                 end
-                @test Array(@falses(2,3)) == Array(parentmodule($package).falses(2,3))
-                @test Array(@trues(2,3))  == Array(parentmodule($package).trues(2,3))
+                reference_module = is_multi_architecture($package) ? Base : parentmodule($package)
+                @test Array(@falses(2,3)) == Array(reference_module.falses(2,3))
+                @test Array(@trues(2,3))  == Array(reference_module.trues(2,3))
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
+                end
             end;
             @testset "mapping to package (with celldims)" begin
                 T_Float16 = SMatrix{(3,4)..., Float16, prod((3,4))}
                 T_Float32 = SMatrix{(3,4)..., Float32, prod((3,4))}
                 T_Float64 = SMatrix{(3,4)..., Float64, prod((3,4))}
                 T_Bool    = SMatrix{(3,4)..., Bool,    prod((3,4))}
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
@@ -365,6 +682,50 @@ eval(:(
                     @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     Metal.allowscalar(false)
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                    @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                    @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CPUCellArray{T_Float64,1}(undef,2,3))
+                    @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CPUCellArray{T_Float64,1}(undef,2,3))
+                    @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                    @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            CUDA.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CuCellArray{T_Float64,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CuCellArray{T_Float64,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            CUDA.allowscalar(false)
+                        elseif symbol == :gpu_amd
+                            AMDGPU.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            AMDGPU.allowscalar(false)
+                        elseif symbol == :gpu_metal
+                            Metal.allowscalar(true)
+                            @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                            @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
+                            @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
+                            Metal.allowscalar(false)
+                        end
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celldims=(3,4), eltype=Float32) == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                     @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CPUCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
@@ -373,8 +734,15 @@ eval(:(
                     @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), falses((3,4)))
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CPUCellArray{T_Bool}(undef,2,3), trues((3,4)))
                 end
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
+                end
             end;
             @testset "mapping to package (with celltype)" begin
+                default_symbol = default_hardware_symbol($package)
+                @test current_hardware() == default_symbol
                 @static if $package == $PKG_CUDA
                     CUDA.allowscalar(true)
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
@@ -408,6 +776,61 @@ eval(:(
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
                     Metal.allowscalar(false)
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                    @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(CPUCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                    @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                    @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CPUCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                    @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                    @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
+                    @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        if symbol == :gpu_cuda
+                            CUDA.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CuCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(CuCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CuCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            CUDA.allowscalar(false)
+                            @test current_hardware() == symbol
+                        elseif symbol == :gpu_amd
+                            AMDGPU.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(ROCCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(ROCCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            AMDGPU.allowscalar(false)
+                            @test current_hardware() == symbol
+                        elseif symbol == :gpu_metal
+                            Metal.allowscalar(true)
+                            @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(MtlCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
+                            @test @zeros(2,3, celltype=Tensor2D)                        == CellArrays.fill!(MtlCellArray{Tensor2D}(undef,2,3), Tensor2D(zeros((2,2,2,2))))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float32}(zeros(3)))
+                            @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
+                            @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            Metal.allowscalar(false)
+                            @test current_hardware() == symbol
+                        end
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test @zeros(2,3, celltype=SymmetricTensor2D) == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 else
                     @test @zeros(2,3, celltype=SymmetricTensor2D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(zeros(3)))
                     @test @zeros(2,3, celltype=SymmetricTensor3D)               == CellArrays.fill!(CPUCellArray{SymmetricTensor3D}(undef,2,3), SymmetricTensor3D(zeros(6)))
@@ -417,6 +840,11 @@ eval(:(
                     @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CPUCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
                     @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CPUCellArray{SymmetricTensor2D,1}(undef,2,3))
+                end
+                if !is_multi_architecture($package)
+                    invalid_symbol = invalid_hardware_symbol($package, default_symbol)
+                    @test_throws ArgumentError select_hardware(invalid_symbol)
+                    @test current_hardware() == default_symbol
                 end
             end;
             @reset_parallel_kernel()
