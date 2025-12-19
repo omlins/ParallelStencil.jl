@@ -258,28 +258,28 @@ Here is the resulting movie when running the application on 8 GPUs, solving 3-D 
 The corresponding file can be found [here](/examples/diffusion3D_multigpucpu_hidecomm.jl).
 
 ## Interactive prototyping with runtime hardware selection
-The KernelAbstractions backend keeps the familiar parse-time `@init_parallel_stencil` workflow while enabling runtime hardware switches through the `select_hardware` and `current_hardware` functions; the runtime hardware target defaults to CPU and can be switched as many times as desired during a session without requiring redefinition of kernels or reinitialization of the backend. The following copy-pasteable example outlines this workflow with a simple SAXPY kernel, demonstrating initial execution on CPU followed by a switch to CUDA GPU and a second execution there:
+The KernelAbstractions backend keeps the familiar parse-time `@init_parallel_stencil` workflow while enabling runtime hardware switches through the `select_hardware` and `current_hardware` functions; the runtime hardware target defaults to CPU and can be switched as many times as desired during a session without requiring redefinition of kernels or reinitialization of the backend. The following copy-pasteable example outlines this workflow with a simple SAXPY kernel, demonstrating initial execution on CPU followed by a switch to CUDA-capable GPU and a second execution there:
 
 ```julia
-# --- Session setup -------------------------------------------------------
+# --- Session setup -----------------------------------------------------
 using ParallelStencil
 @init_parallel_stencil(package=KernelAbstractions, numbertype=Float32)  # 1 Initialize KernelAbstractions backend at parse time
 const N = 1024
 const α = 2.5
 
-# --- Kernel definition ---------------------------------------------------
+# --- Kernel definition -------------------------------------------------
 @parallel_indices (i) function saxpy!(Y, α, X)                          # 2 Define a single time a hardware-agnostic SAXPY kernel
   Y[i] = α * X[i] + Y[i]
   return
 end
 
-# --- First run on default runtime hardware (CPU) -------------------------
+# --- First run on default runtime hardware (CPU) -----------------------
 println("Current runtime hardware target: ", current_hardware())        # 3 Query current (default) runtime hardware target
 X = @rand(N)                                                            # 4 Allocate data on the current target
 Y = @rand(N)                                                            # 4 Allocate data on the current target
 @parallel saxpy!(Y, α, X)                                               # 5 Launch kernel on the current target
 
-# --- Reselect runtime hardware to CUDA GPU and run again --------------------------------
+# --- Reselect runtime hardware to CUDA-capable GPU and run again -------
 select_hardware(:gpu_cuda)                                              # 6 Switch runtime hardware target to CUDA-capable GPU
 println("Current runtime hardware target: ", current_hardware())        # 7 Confirm the CUDA-capable GPU runtime hardware target
 X = @rand(N)                                                            # 8 Allocate data on the new target
@@ -472,7 +472,7 @@ Using simple array broadcasting capabilities both with GPU and CPU arrays within
 * [Hydro-mechanical porosity waves 2-D app](#hydro-mechanical-porosity-waves-2-d-app)
 * More to come, stay tuned...
 
-All miniapp codes follow a similar structure and permit serial and threaded CPU as well as Nvidia GPU execution. The first line of each miniapp code permits to enable the CUDA GPU backend upon setting the `USE_GPU` flag to `true`.
+All miniapp codes follow a similar structure and permit serial and threaded CPU as well as Nvidia GPU execution. The first line of each miniapp code permits to enable the CUDA.jl GPU backend upon setting the `USE_GPU` flag to `true`.
 
 All the miniapps can be interactively executed within the [Julia REPL] (this includes the multi-xPU versions when using a single CPU or GPU). Note that for optimal performance the miniapp script of interest `<miniapp_code>` should be launched from the shell using the project's dependencies `--project`, disabling array bound checking `--check-bounds=no`, and using optimization level 3 `-O3`.
 ```sh
