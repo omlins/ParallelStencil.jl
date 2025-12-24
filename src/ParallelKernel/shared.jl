@@ -16,19 +16,22 @@ izd(count) = @ModuleInternalError("function izd had not been evaluated at parse 
 const MOD_METADATA_PK              = gensym_world("__metadata_PK__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
+const PKG_KERNELABSTRACTIONS       = :KernelAbstractions
 const PKG_METAL                    = :Metal
 const PKG_THREADS                  = :Threads
 const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL]
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_KERNELABSTRACTIONS, PKG_METAL]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
+const INT_KERNELABSTRACTIONS       = Int64 # NOTE: KernelAbstractions dispatch defaults to CPU integers until a GPU-specific handle is selected at runtime.
 const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
 const COMPUTE_CAPABILITY_DEFAULT   = v"∞" # having it infinity if it is not set allows to directly use statements like `if compute_capability < v"8"`, assuming a recent architecture if it is not set.
 const NTHREADS_X_MAX               = 32
 const NTHREADS_X_MAX_AMDGPU        = 64
+const NTHREADS_X_MAX_KERNELABSTRACTIONS = 32
 const NTHREADS_MAX                 = 256
 const INDICES                      = (gensym_world("ix", @__MODULE__), gensym_world("iy", @__MODULE__), gensym_world("iz", @__MODULE__))
 const INDICES_INN                  = (gensym_world("ixi", @__MODULE__), gensym_world("iyi", @__MODULE__), gensym_world("izi", @__MODULE__)) # ( :($(INDICES[1])+1), :($(INDICES[2])+1), :($(INDICES[3])+1) )
@@ -77,12 +80,13 @@ const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse ti
 const ERRMSG_CHECK_PADDING         = "padding must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
-const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
-                                   PKG_CUDA      => 0,
-                                   PKG_AMDGPU    => 0,
-                                   PKG_METAL     => 0,
-                                   PKG_THREADS   => 1,
-                                   PKG_POLYESTER => 1)
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE              => 0,
+                                   PKG_CUDA              => 0,
+                                   PKG_AMDGPU            => 0,
+                                   PKG_KERNELABSTRACTIONS => 0,
+                                   PKG_METAL             => 0,
+                                   PKG_THREADS           => 1,
+                                   PKG_POLYESTER         => 1)
 
 struct Dim3
     x::INT_THREADS
@@ -96,11 +100,28 @@ macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
 function kernel_int_type(package::Symbol)
     if     (package == PKG_CUDA)      int_type = INT_CUDA
     elseif (package == PKG_AMDGPU)    int_type = INT_AMDGPU
+    elseif (package == PKG_KERNELABSTRACTIONS) int_type = INT_KERNELABSTRACTIONS
     elseif (package == PKG_METAL)     int_type = INT_METAL
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
     elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
     end
     return int_type
+end
+
+function default_hardware_for(package::Symbol)
+    if package == PKG_KERNELABSTRACTIONS
+        return :cpu
+    elseif package == PKG_CUDA
+        return :gpu_cuda
+    elseif package == PKG_AMDGPU
+        return :gpu_amd
+    elseif package == PKG_METAL
+        return :gpu_metal
+    elseif package == PKG_THREADS || package == PKG_POLYESTER
+        return :cpu
+    else
+        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package). Supported packages are: $(join(SUPPORTED_PACKAGES, ", ")).")
+    end
 end
 
 
@@ -577,11 +598,12 @@ quote_expr(expr) = :($(Expr(:quote, expr)))
 
 function get_compute_capability(package::Symbol)
     default = COMPUTE_CAPABILITY_DEFAULT
-    if     (package == PKG_CUDA)      get_cuda_compute_capability(default)
-    elseif (package == PKG_AMDGPU)    get_amdgpu_compute_capability(default)
-    elseif (package == PKG_METAL)     get_metal_compute_capability(default)
-    elseif (package == PKG_THREADS)   get_cpu_compute_capability(default)
-    elseif (package == PKG_POLYESTER) get_cpu_compute_capability(default)
+    if     (package == PKG_CUDA)              get_cuda_compute_capability(default)
+    elseif (package == PKG_AMDGPU)            get_amdgpu_compute_capability(default)
+    elseif (package == PKG_KERNELABSTRACTIONS) get_cpu_compute_capability(default)
+    elseif (package == PKG_METAL)             get_metal_compute_capability(default)
+    elseif (package == PKG_THREADS)           get_cpu_compute_capability(default)
+    elseif (package == PKG_POLYESTER)         get_cpu_compute_capability(default)
     else
         @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package). Supported packages are: $(join(SUPPORTED_PACKAGES, ", ")).")
     end
