@@ -90,7 +90,29 @@ See also: [`@parallel`](@ref)
 @doc HIDE_COMMUNICATION_DOC
 macro hide_communication(args...) check_initialized(__module__); checkargs_hide_communication(args...); esc(hide_communication(__module__, args...)); end
 
+const GET_PRIORITY_STREAM_DOC = """
+    @get_priority_stream id
+
+Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for the `Threads` and `Polyester` backends.
+
+# Arguments
+- `id::Integer`: identifier of the stream
+
+See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
+"""
+@doc GET_PRIORITY_STREAM_DOC
 macro get_priority_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_priority_stream(__module__, args...)); end
+const GET_STREAM_DOC = """
+    @get_stream id
+
+Get the default-priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for the `Threads` and `Polyester` backends.
+
+# Arguments
+- `id::Integer`: identifier of the stream
+
+See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
+"""
+@doc GET_STREAM_DOC
 macro get_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_stream(__module__, args...)); end
 
 
@@ -122,6 +144,7 @@ function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...
     if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_priority_stream_metal(args...)
+    elseif iscpu(package)           :(nothing)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -130,6 +153,7 @@ function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package
     if     (package == PKG_CUDA)    get_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_stream_metal(args...)
+    elseif iscpu(package)           :(nothing)
     else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
