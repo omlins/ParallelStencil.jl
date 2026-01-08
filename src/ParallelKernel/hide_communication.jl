@@ -91,7 +91,7 @@ See also: [`@parallel`](@ref)
 macro hide_communication(args...) check_initialized(__module__); checkargs_hide_communication(args...); esc(hide_communication(__module__, args...)); end
 
 const GET_PRIORITY_STREAM_DOC = """
-    @get_priority_stream id
+    @get_priority_stream(id)
 
 Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
 
