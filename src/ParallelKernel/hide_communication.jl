@@ -102,6 +102,7 @@ See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
 """
 @doc GET_PRIORITY_STREAM_DOC
 macro get_priority_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_priority_stream(__module__, args...)); end
+
 const GET_STREAM_DOC = """
     @get_stream(id)
 
