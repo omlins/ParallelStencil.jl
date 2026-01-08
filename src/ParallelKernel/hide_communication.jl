@@ -16,11 +16,11 @@ const HIDE_COMMUNICATION_DOC = """
 Hide the communication behind the computation within the code `block`.
 
 # Arguments
-- `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communcation performed.
+- `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communication performed.
 - `block`: code block wich starts with one [`@parallel`](@ref) call to perform computations (for exceptions, see keyword `computation_calls`), followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations can normally not contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...) (for exceptions, see keyword `computation_calls`). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default stream in CUDA (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of the boundary regions are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
 
 !!! note "Advanced"
-    - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communcation and boundary conditions performed.
+    - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communication and boundary conditions performed.
     - `ranges_inner::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span the data that is not included by `ranges_outer`.
 
 !!! note "Advanced keyword arguments"
@@ -83,7 +83,7 @@ Hide the communication behind the computation within the code `block`.
     end
 
 !!! note "Developers note"
-    The communcation should not perform any blocking operations to enable a maximal overlap of communication with computation.
+    The communication should not perform any blocking operations to enable a maximal overlap of communication with computation.
 
 See also: [`@parallel`](@ref)
 """
