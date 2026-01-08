@@ -164,25 +164,25 @@ eval(:(
                     end
                     @test all(Array(A) .== communication!([3*(ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2)) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
-            @testset "@hide_communication ranges_outer ranges_inner block" begin
-                A  = @zeros(6, 7, 8)
-                ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
-                ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
-                @hide_communication ranges_outer ranges_inner begin
-                    @parallel add_indices!(A);
-                    communication!(A);
-                end
-                @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                @testset "@hide_communication ranges_outer ranges_inner block" begin
+                    A  = @zeros(6, 7, 8)
+                    ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
+                    ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
+                    @hide_communication ranges_outer ranges_inner begin
+                        @parallel add_indices!(A);
+                        communication!(A);
+                    end
+                    @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                end;
+                @testset "@get_stream and @get_priority_stream" begin
+                    @static if ParallelStencil.ParallelKernel.iscpu($package)
+                        @test ParallelStencil.ParallelKernel.@get_stream(1) === nothing
+                        @test ParallelStencil.ParallelKernel.@get_priority_stream(1) === nothing
+                    end
+                end;
             end;
-            @testset "@get_stream and @get_priority_stream" begin
-                @static if ParallelStencil.ParallelKernel.iscpu($package)
-                    @test ParallelStencil.ParallelKernel.@get_stream(1) === nothing
-                    @test ParallelStencil.ParallelKernel.@get_priority_stream(1) === nothing
-                end
-            end;
+            @reset_parallel_kernel()
         end;
-        @reset_parallel_kernel()
-    end;
         @testset "2. Exceptions" begin
             @require !@is_initialized()
             @init_parallel_kernel($package, $FloatDefault)
