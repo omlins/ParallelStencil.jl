@@ -93,7 +93,7 @@ macro hide_communication(args...) check_initialized(__module__); checkargs_hide_
 const GET_PRIORITY_STREAM_DOC = """
     @get_priority_stream id
 
-Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for the `Threads` and `Polyester` backends.
+Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
 
 # Arguments
 - `id::Integer`: identifier of the stream
@@ -105,7 +105,7 @@ macro get_priority_stream(args...) check_initialized(__module__); checkargs_get_
 const GET_STREAM_DOC = """
     @get_stream id
 
-Get the default-priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for the `Threads` and `Polyester` backends.
+Get the default-priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
 
 # Arguments
 - `id::Integer`: identifier of the stream
