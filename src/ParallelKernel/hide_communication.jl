@@ -145,7 +145,7 @@ function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...
     elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_priority_stream_metal(args...)
     elseif iscpu(package)           :(nothing)
-    else                            @ArgumentError("unsupported package (obtained: $package).")
+    else                            @ArgumentError("unsupported package type (obtained: $package).")
     end
 end
 
@@ -154,7 +154,7 @@ function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package
     elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_stream_metal(args...)
     elseif iscpu(package)           :(nothing)
-    else                            @ArgumentError("unsupported package (obtained: $package).")
+    else                            @ArgumentError("unsupported package type (obtained: $package).")
     end
 end
 
