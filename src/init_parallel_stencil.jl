@@ -1,21 +1,39 @@
+# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore defined in parallel.jl
+@doc replace(ParallelKernel.HIDE_COMMUNICATION_DOC, "@init_parallel_kernel" => "@init_parallel_stencil") macro hide_communication(args...) check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@hide_communication($(args...)))); end
+@doc replace(ParallelKernel.ZEROS_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro zeros(args...)              check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@zeros($(args...)))); end
+@doc replace(ParallelKernel.ONES_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro ones(args...)               check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@ones($(args...)))); end
+@doc replace(ParallelKernel.RAND_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro rand(args...)               check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@rand($(args...)))); end
+@doc replace(ParallelKernel.FALSES_DOC,             "@init_parallel_kernel" => "@init_parallel_stencil") macro falses(args...)             check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@falses($(args...)))); end
+@doc replace(ParallelKernel.TRUES_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro trues(args...)              check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@trues($(args...)))); end
+@doc replace(ParallelKernel.FILL_DOC,               "@init_parallel_kernel" => "@init_parallel_stencil") macro fill(args...)               check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@fill($(args...)))); end
+@doc replace(ParallelKernel.FILL!_DOC,              "@init_parallel_kernel" => "@init_parallel_stencil") macro fill!(args...)              check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@fill!($(args...)))); end
+@doc replace(ParallelKernel.CELLTYPE_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro CellType(args...)           check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@CellType($(args...)))); end
+@doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
+@doc replace(ParallelKernel.GRIDDIM_DOC,            "@init_parallel_kernel" => "@init_parallel_stencil") macro gridDim(args...)            check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@gridDim($(args...)))); end
+@doc replace(ParallelKernel.BLOCKIDX_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockIdx(args...)           check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@blockIdx($(args...)))); end
+@doc replace(ParallelKernel.BLOCKDIM_DOC,           "@init_parallel_kernel" => "@init_parallel_stencil") macro blockDim(args...)           check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@blockDim($(args...)))); end
+@doc replace(ParallelKernel.THREADIDX_DOC,          "@init_parallel_kernel" => "@init_parallel_stencil") macro threadIdx(args...)          check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@threadIdx($(args...)))); end
+@doc replace(ParallelKernel.SYNCTHREADS_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro sync_threads(args...)       check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@sync_threads($(args...)))); end
+@doc replace(ParallelKernel.SHAREDMEM_DOC,          "@init_parallel_kernel" => "@init_parallel_stencil") macro sharedMem(args...)          check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@sharedMem($(args...)))); end
+@doc replace(ParallelKernel.FORALL_DOC,             "@init_parallel_kernel" => "@init_parallel_stencil") macro ∀(args...)                  check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@∀($(args...)))); end
+@doc replace(replace(ParallelKernel.PKSHOW_DOC,     "@init_parallel_kernel" => "@init_parallel_stencil"), "pk_show"    => "ps_show")    macro ps_show(args...)     check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@pk_show($(args...)))); end
+@doc replace(replace(ParallelKernel.PKPRINTLN_DOC,  "@init_parallel_kernel" => "@init_parallel_stencil"), "pk_println" => "ps_println") macro ps_println(args...)  check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@pk_println($(args...)))); end
+
+
 """
     @init_parallel_stencil(package, numbertype, ndims)
     @init_parallel_stencil(package, numbertype, ndims, inbounds=...)
     @init_parallel_stencil(package=..., ndims=..., inbounds=...)
 
-Initialize the package ParallelStencil, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_stencil` is called from; the module `Data` contains the types `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_stencil` to see the full description of the module).
-When the abstraction-layer backend KernelAbstractions is selected, the concrete runtime hardware is chosen later via [`select_hardware`](@ref) and inspected with [`current_hardware`](@ref); consult the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection) for an end-to-end workflow.
-
-!!! note "Convenience modules"
-    `Data` and `TData` modules with hardware-specific array aliases are generated only for single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester). KernelAbstractions users trade off the additional convenience modules for runtime hardware selection instead.
+Initialize the package ParallelStencil, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_stencil` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_stencil` to see the full description of the module).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA, AMDGPU, Metal, Threads, Polyester, or KernelAbstractions when deferring the hardware decision to runtime).
+- `package::Module`: the package used for parallelization (CUDA, AMDGPU or Metal for GPU, or Threads or Polyester for CPU).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (overwritable in each kernel definition).
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
-See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
+See also: [`Data`](@ref)
 """
 macro init_parallel_stencil(args...)
     posargs, kwargs_expr = split_args(args)
@@ -34,12 +52,8 @@ macro init_parallel_stencil(args...)
 end
 
 function init_parallel_stencil(caller::Module, package::Symbol, numbertype::DataType, ndims::Integer, inbounds::Bool, padding::Bool, memopt::Bool, nonconst_metadata::Bool)
-    if package == PKG_KERNELABSTRACTIONS
-        datadoc_call = :()
-    elseif numbertype == NUMBERTYPE_NONE
-        datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
-    else
-        datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
+    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
+    else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     end
     return_expr = ParallelKernel.init_parallel_kernel(caller, package, numbertype, inbounds, padding; datadoc_call=datadoc_call, parent_module="ParallelStencil")
     set_package(caller, package)
@@ -49,9 +63,6 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     set_padding(caller, padding)
     set_memopt(caller, memopt)
     set_nonconst_metadata(caller, nonconst_metadata)
-    if package == PKG_KERNELABSTRACTIONS
-        ParallelKernel.reset_runtime_hardware!(package) # ensure runtime selection wrappers reflect the default KernelAbstractions target
-    end
     set_initialized(caller, true)
     return return_expr
 end

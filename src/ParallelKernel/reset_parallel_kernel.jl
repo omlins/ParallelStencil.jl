@@ -17,8 +17,6 @@ function reset_parallel_kernel(caller::Module)
         @eval(caller, $tdata_module)
     end
     if isdefined(caller, MOD_METADATA_PK)
-        pkg = get_package(caller)
-        reset_runtime_hardware!(pkg)
         set_initialized(caller, false)
         set_package(caller, PKG_NONE)
         set_numbertype(caller, NUMBERTYPE_NONE)

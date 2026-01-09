@@ -1,17 +1,10 @@
 using Test
 using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
-import ParallelStencil: @require, @symbols, select_hardware, current_hardware
+import ParallelStencil: @require, @symbols
 import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_padding, set_memopt, set_nonconst_metadata
-using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: current_hardware as pk_current_hardware, @is_initialized
 using ParallelStencil.Exceptions
-const PKG_KERNELABSTRACTIONS = hasproperty(ParallelStencil.ParallelKernel, :PKG_KERNELABSTRACTIONS) ? ParallelStencil.ParallelKernel.PKG_KERNELABSTRACTIONS : Symbol(:KernelAbstractions)
-
-TEST_PACKAGES = collect(SUPPORTED_PACKAGES)
-if PKG_KERNELABSTRACTIONS ∉ TEST_PACKAGES
-    push!(TEST_PACKAGES, PKG_KERNELABSTRACTIONS)
-end
+TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
@@ -31,36 +24,7 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    if Base.find_package("KernelAbstractions") === nothing
-        TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES)
-    else
-        import KernelAbstractions
-    end
-end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
-
-function kernelabstractions_runtime_sequence()
-    sequence = Symbol[:cpu]
-    gpu_targets = Symbol[]
-    if Base.find_package("CUDA") !== nothing
-        push!(gpu_targets, :gpu_cuda)
-    end
-    if Base.find_package("AMDGPU") !== nothing
-        push!(gpu_targets, :gpu_amd)
-    end
-    if Sys.isapple() && Base.find_package("Metal") !== nothing
-        push!(gpu_targets, :gpu_metal)
-    end
-    if Base.find_package("oneAPI") !== nothing
-        push!(gpu_targets, :gpu_oneapi)
-    end
-    if !isempty(gpu_targets)
-        push!(sequence, gpu_targets[1])
-        push!(sequence, :cpu)
-    end
-    return sequence
-end
 
 
 @static for package in TEST_PACKAGES  eval(:(
@@ -68,20 +32,6 @@ end
         @testset "1. initialization of ParallelStencil" begin
             @require !@is_initialized()
             @init_parallel_stencil($package, ComplexF32, 3)
-            if $package == PKG_KERNELABSTRACTIONS
-                runtime_sequence = kernelabstractions_runtime_sequence()
-                @test !isempty(runtime_sequence)
-                @test current_hardware() == runtime_sequence[1]
-                @test pk_current_hardware() == runtime_sequence[1]
-                for target in runtime_sequence[2:end]
-                    select_hardware(target)
-                    @test current_hardware() == target
-                    @test pk_current_hardware() == target
-                end
-                select_hardware(:cpu)
-                @test current_hardware() == :cpu
-                @test pk_current_hardware() == :cpu
-            end
             @testset "initialized" begin
                 @test @is_initialized()
                 @test @get_package() == $package
@@ -91,50 +41,34 @@ end
                 @test @get_nonconst_metadata() == false
                 @test @get_inbounds() == false
                 @test @get_padding() == false
-                if $package == PKG_KERNELABSTRACTIONS
-                    @test current_hardware() == :cpu
-                    @test pk_current_hardware() == :cpu
-                end
             end;
-            if $package == PKG_KERNELABSTRACTIONS
-                @testset "Data" begin
-                    @test !@isdefined(Data)
+            @testset "Data" begin
+                @test @isdefined(Data)
+                @test length(@symbols($(@__MODULE__), Data)) > 1
+                @testset "Data.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                 end;
-                @testset "TData" begin
-                    @test !@isdefined(TData)
+                @testset "Data.Fields" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                 end;
-            else
-                @testset "Data" begin
-                    @test @isdefined(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
-                    @testset "Data.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
-                    end;
-                    @testset "Data.Fields" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
-                    end;
-                    @testset "Data.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
-                    end;
+                @testset "Data.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
                 end;
-                @testset "TData" begin
-                    @test @isdefined(TData)
-                    @test length(@symbols($(@__MODULE__), TData)) > 1
-                    @testset "TData.Device" begin
-                        @test length(@symbols($(@__MODULE__), TData.Device)) > 1
-                    end;
-                    @testset "TData.Fields" begin
-                        @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
-                    end;
-                    @testset "TData.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
-                    end;
+            end;
+            @testset "TData" begin
+                @test @isdefined(TData)
+                @test length(@symbols($(@__MODULE__), TData)) > 1
+                @testset "TData.Device" begin
+                    @test length(@symbols($(@__MODULE__), TData.Device)) > 1
+                end;
+                @testset "TData.Fields" begin
+                    @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
+                end;
+                @testset "TData.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
                 end;
             end;
             @reset_parallel_stencil()
-            if $package == PKG_KERNELABSTRACTIONS
-                @test !ParallelKernel.@is_initialized()
-            end
         end;
         @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, inbounds and padding (and nonconst_metadata)" begin
             @require !@is_initialized()
@@ -148,30 +82,20 @@ end
                 @test @get_nonconst_metadata() == true
                 @test @get_inbounds() == true
                 @test @get_padding() == false   #TODO: this needs to be restored to true when Polyester supports padding.
-                if $package == PKG_KERNELABSTRACTIONS
-                    @test current_hardware() == :cpu
-                    @test pk_current_hardware() == :cpu
-                end
             end;
-            if $package == PKG_KERNELABSTRACTIONS
-                @testset "Data" begin
-                    @test !@isdefined(Data)
+            @testset "Data" begin
+                @test @isdefined(Data)
+                @test length(@symbols($(@__MODULE__), Data)) > 1
+                @testset "Data.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                 end;
-            else
-                @testset "Data" begin
-                    @test @isdefined(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
-                    @testset "Data.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
-                    end;
-                    @testset "Data.Fields" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
-                    end;
-                    @testset "Data.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
-                    end;
+                @testset "Data.Fields" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                 end;
-            end
+                @testset "Data.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                end;
+            end;
             @reset_parallel_stencil()
         end;
         @testset "3. Exceptions" begin

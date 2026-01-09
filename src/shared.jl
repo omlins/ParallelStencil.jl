@@ -1,6 +1,6 @@
 import MacroTools: @capture, postwalk, splitdef, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, insert_device_types, is_kernel, is_call, gensym_world, isgpu, iscpu, @isgpu, @iscpu, substitute, substitute_in_kernel, in_signature, inexpr_walk, adjust_signatures, handle_indices_and_literals, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing, @firstindex, @lastindex, is_access, find_vars, handle_padding, handle_inverses, increment_arg, quote_expr, get_compute_capability
-import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_KERNELABSTRACTIONS, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, INBOUNDS_DEFAULT, PADDING_DEFAULT, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_KERNELABSTRACTIONS, INT_METAL, INT_POLYESTER, INT_THREADS, INDICES, INDICES_INN, INDICES_DIR, INDICES_DIR_FUNCTIONS_SYMS, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, INBOUNDS_DEFAULT, PADDING_DEFAULT, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_METAL, INT_POLYESTER, INT_THREADS, INDICES, INDICES_INN, INDICES_DIR, INDICES_DIR_FUNCTIONS_SYMS, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring, interpolate
 
 
@@ -27,7 +27,6 @@ const PSNumber                       = PKNumber
 const LOOPDIM_NONE                   = 0
 const NTHREADS_MAX_MEMOPT_CUDA       = 128
 const NTHREADS_MAX_MEMOPT_AMDGPU     = 256
-const NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS = 256
 const NTHREADS_MAX_MEMOPT_METAL      = 256
 const USE_SHMEMHALO_DEFAULT          = true
 const USE_SHMEMHALO_1D_DEFAULT       = true

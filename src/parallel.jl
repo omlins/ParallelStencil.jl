@@ -1,8 +1,4 @@
-import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize, resolve_runtime_backend
-
-# NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore re-defined here in parallel.jl
-@doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
-
+import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
 
 const PARALLEL_DOC = """
     @parallel kernel
@@ -34,9 +30,6 @@ See also: [`@init_parallel_stencil`](@ref)
 
 Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below); Enzyme needs to be imported before ParallelStencil in order to have it load the corresponding extension.
 
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
-
 # Arguments
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
@@ -51,7 +44,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA.jl, AMDGPU.jl or Metal.jl (ignored for Threads and Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads and Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -68,9 +61,6 @@ const PARALLEL_INDICES_DOC = """
     @parallel_indices indices inbounds=... memopt=... ndims=... kernel
 
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_stencil`](@ref).
-
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 # Optional keyword arguments
     - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
@@ -109,16 +99,6 @@ macro parallel_async_amdgpu(args...)      check_initialized(__module__); checkar
 macro parallel_async_metal(args...)       check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_METAL)); end
 macro parallel_async_threads(args...)     check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_THREADS)); end
 macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_POLYESTER)); end
-
-
-@inline function runtime_kernel_package(package::Symbol)
-    if package == PKG_KERNELABSTRACTIONS
-        target_package, _, _ = resolve_runtime_backend(package)
-        return target_package
-    else
-        return package
-    end
-end
 
 
 ## ARGUMENT CHECKS
@@ -162,14 +142,13 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                 substitute_N(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
             else
                 numbertype = get_numbertype(caller)
-                kernel_package = runtime_kernel_package(package)
                 if !haskey(kwargs, :metadata_module)
                     get_name(kernelarg)
                     metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
                 else
                     metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
                 end
-                parallel_kernel(metadata_module, metadata_function, caller, kernel_package, ndims, numbertype, kernelarg, posargs...; kwargs)
+                parallel_kernel(metadata_module, metadata_function, caller, package, ndims, numbertype, kernelarg, posargs...; kwargs)
             end
         end
     elseif is_call(args[end])
@@ -217,9 +196,8 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
             memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
             if memopt
-                runtime_package = runtime_kernel_package(package)
                 quote
-                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, runtime_package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                     $metadata_function
                 end
             else
@@ -338,9 +316,8 @@ end
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
-    runtime_package     = runtime_kernel_package(package)
-    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(runtime_package)
-    nthreads_max_memopt = determine_nthreads_max_memopt(runtime_package)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(package)
     configcall_kwarg_expr = :(configcall=$configcall)
     metadata_call   = create_metadata_call(configcall)
     metadata_module = metadata_call
@@ -365,9 +342,8 @@ end
 
 function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     package             = get_package(caller)
-    runtime_package     = runtime_kernel_package(package)
-    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(runtime_package)
-    nthreads_max_memopt = determine_nthreads_max_memopt(runtime_package)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(package)
     metadata_call       = create_metadata_call(configcall)
     metadata_module     = metadata_call
     loopdim             = :($(metadata_module).loopdim)
@@ -386,32 +362,11 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-function determine_nthreads_max_memopt(package::Symbol)
-    runtime_package = package
-    if package == PKG_KERNELABSTRACTIONS
-        runtime_package, _, _ = resolve_runtime_backend(package)
-        if runtime_package == PKG_THREADS || runtime_package == PKG_KERNELABSTRACTIONS
-            return NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS
-        end
-    end
-    if runtime_package == PKG_AMDGPU
-        return NTHREADS_MAX_MEMOPT_AMDGPU
-    elseif runtime_package == PKG_CUDA
-        return NTHREADS_MAX_MEMOPT_CUDA
-    elseif runtime_package == PKG_THREADS
-        return NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS
-    else
-        return NTHREADS_MAX_MEMOPT_METAL
-    end
-end
+determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : NTHREADS_MAX_MEMOPT_METAL)
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
 
 function compute_loopsize(package::Symbol)
-    capability_package = package
-    if package == PKG_KERNELABSTRACTIONS
-        capability_package, _, _ = resolve_runtime_backend(package)
-    end
-    compute_capability = get_compute_capability(capability_package)
+    compute_capability = get_compute_capability(package)
     if compute_capability == v"∞" # if not set (could also be not CUDA), choose a value that should work well for all architectures, favouring newer ones.
         return 32
     elseif compute_capability < v"8"

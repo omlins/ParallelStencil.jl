@@ -112,37 +112,25 @@ end
 function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
     posargs, kwargs_expr = split_args(args)
     kwargs, ~ = extract_kwargs(caller, kwargs_expr, (:computation_calls,), "@hide_communication", false; eval_args=(:computation_calls,))
-    dispatched = package
-    if package == PKG_KERNELABSTRACTIONS
-        dispatched, _, _ = resolve_runtime_backend(package)
-    end
-    if     isgpu(dispatched) hide_communication_gpu(posargs...; kwargs...)
-    elseif iscpu(dispatched) hide_communication_cpu(posargs...; kwargs...)
-    else                     @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
+    if     isgpu(package) hide_communication_gpu(posargs...; kwargs...)
+    elseif iscpu(package) hide_communication_cpu(posargs...; kwargs...)
+    else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
 
 function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
-    dispatched = package
-    if package == PKG_KERNELABSTRACTIONS
-        dispatched, _, _ = resolve_runtime_backend(package)
-    end
-    if     (dispatched == PKG_CUDA)    get_priority_stream_cuda(args...)
-    elseif (dispatched == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
-    elseif (dispatched == PKG_METAL)   get_priority_stream_metal(args...)
-    else                               @ArgumentError("unsupported GPU package (obtained: $dispatched).")
+    if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
+    elseif (package == PKG_METAL)   get_priority_stream_metal(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
 
 function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package::Symbol=get_package(caller))
-    dispatched = package
-    if package == PKG_KERNELABSTRACTIONS
-        dispatched, _, _ = resolve_runtime_backend(package)
-    end
-    if     (dispatched == PKG_CUDA)    get_stream_cuda(args...)
-    elseif (dispatched == PKG_AMDGPU)  get_stream_amdgpu(args...)
-    elseif (dispatched == PKG_METAL)   get_stream_metal(args...)
-    else                               @ArgumentError("unsupported GPU package (obtained: $dispatched).")
+    if     (package == PKG_CUDA)    get_stream_cuda(args...)
+    elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
+    elseif (package == PKG_METAL)   get_stream_metal(args...)
+    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
     end
 end
 

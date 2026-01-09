@@ -2,19 +2,15 @@
     @init_parallel_kernel(package, numbertype)
     @init_parallel_kernel(package, numbertype, inbounds=..., padding=...)
 
-Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from; the module `Data` contains the types `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module). 
-When the abstraction-layer backend KernelAbstractions is selected, the concrete runtime hardware is chosen later via [`select_hardware`](@ref) and inspected with [`current_hardware`](@ref); consult the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection) for an end-to-end workflow.
-
-!!! note "Convenience modules"
-    `Data` and `TData` modules with hardware-specific array aliases are generated only for single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester). The KernelAbstractions backend users trade off the additional convenience modules (and warp level macros) for runtime hardware selection instead.
+Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA, AMDGPU, Metal, Threads, Polyester, or KernelAbstractions when deferring the hardware decision to runtime).
+- `package::Module`: the package used for parallelization (CUDA or AMDGPU or Metal for GPU, or Threads or Polyester for CPU).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel.
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 - `padding::Bool=false`: whether to apply padding to the fields allocated with macros from [`ParallelKernel.FieldAllocators`](@ref).
 
-See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
+See also: [`Data`](@ref)
 """
 macro init_parallel_kernel(args...)
     check_already_initialized(__module__)
@@ -32,76 +28,60 @@ macro init_parallel_kernel(args...)
 end
 
 function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, inbounds::Bool, padding::Bool; datadoc_call=:(), parent_module::String="ParallelKernel")
-    data_module = nothing
-    tdata_module = nothing
-    indextype = INT_THREADS
     if package == PKG_CUDA
         if (isinteractive() && !is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided as an extension of $parent_module and CUDA.jl needs therefore to be installed independently (type `add CUDA` in the julia package manager).") end
         indextype          = INT_CUDA
+        data_module        = Data_cuda(numbertype, indextype)
+        tdata_module       = TData_cuda()
     elseif package == PKG_AMDGPU
         if (isinteractive() && !is_installed("AMDGPU")) @NotInstalledError("AMDGPU was selected as package for parallelization, but AMDGPU.jl is not installed. AMDGPU functionality is provided as an extension of $parent_module and AMDGPU.jl needs therefore to be installed independently (type `add AMDGPU` in the julia package manager).") end
         indextype          = INT_AMDGPU
-    elseif package == PKG_KERNELABSTRACTIONS
-        if (isinteractive() && !is_installed("KernelAbstractions")) @NotInstalledError("KernelAbstractions was selected as package for parallelization, but KernelAbstractions.jl is not installed. KernelAbstractions functionality is provided as an extension of $parent_module and KernelAbstractions.jl needs therefore to be installed independently (type `add KernelAbstractions` in the julia package manager).") end
-        indextype                = INT_KERNELABSTRACTIONS
+        data_module        = Data_amdgpu(numbertype, indextype)
+        tdata_module       = TData_amdgpu()
     elseif package == PKG_METAL
         if (isinteractive() && !is_installed("Metal")) @NotInstalledError("Metal was selected as package for parallelization, but Metal.jl is not installed. Metal functionality is provided as an extension of $parent_module and Metal.jl needs therefore to be installed independently (type `add Metal` in the julia package manager).") end
         indextype          = INT_METAL
+        data_module        = Data_metal(numbertype, indextype)
+        tdata_module       = TData_metal()
     elseif package == PKG_POLYESTER
         if (isinteractive() && !is_installed("Polyester")) @NotInstalledError("Polyester was selected as package for parallelization, but Polyester.jl is not installed. Multi-threading using Polyester is provided as an extension of $parent_module and Polyester.jl needs therefore to be installed independently (type `add Polyester` in the julia package manager).") end
         indextype          = INT_POLYESTER
+        data_module        = Data_cpu(numbertype, indextype)
+        tdata_module       = TData_cpu()
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
-    else
-        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
-    create_convenience_modules = convenience_modules_enabled(package)
-    if create_convenience_modules
-        data_module  = data_module_for(package, numbertype, indextype)
-        tdata_module = tdata_module_for(package)
+        data_module        = Data_cpu(numbertype, indextype)
+        tdata_module       = TData_cpu()
     end
     pkg_import_cmd = define_import(caller, package, parent_module)
     # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD($package))
     @eval(caller, $pkg_import_cmd)
-    if create_convenience_modules
-        if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
-            if (datadoc_call==:())
-                if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
-                else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
-                end
+    if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
+        if (datadoc_call==:())
+            if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
+            else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
             end
-            @eval(caller, $data_module)
-            @eval(caller, $datadoc_call)
-        elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
-            if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
-        else
-            @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
         end
-        if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
-            @eval(caller, $tdata_module)
-        elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
-            if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
-        else
-            @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
-        end             
+        @eval(caller, $data_module)
+        @eval(caller, $datadoc_call)
+    elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
+        if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
     else
-        # KernelAbstractions relies on runtime hardware selection rather than fixed Data/TData convenience modules.
-        if isdefined(caller, :Data) && isdefined(caller.Data, :Device)
-            data_module = Data_none()
-            @eval(caller, $data_module)
-        end
-        if isdefined(caller, :TData) && isdefined(caller.TData, :Device)
-            tdata_module = TData_none()
-            @eval(caller, $tdata_module)
-        end
+        @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
+    if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
+        @eval(caller, $tdata_module)
+    elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
+        if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
+    else
+        @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
+    end              
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
     set_padding(caller, padding)
-    reset_runtime_hardware!(package) # ensure runtime selection matches backend default on init
     set_initialized(caller, true)
     return nothing
 end

@@ -241,42 +241,6 @@ function TData_none()
 end
 
 
-# Multi-architecture backends rely on runtime hardware selection instead of fixed convenience modules.
-convenience_modules_enabled(package::Symbol) = package != PKG_KERNELABSTRACTIONS
-
-function data_module_for(package::Symbol, numbertype::DataType, indextype::DataType)
-    if !convenience_modules_enabled(package)
-        return nothing
-    elseif package == PKG_CUDA
-        return Data_cuda(numbertype, indextype)
-    elseif package == PKG_AMDGPU
-        return Data_amdgpu(numbertype, indextype)
-    elseif package == PKG_METAL
-        return Data_metal(numbertype, indextype)
-    elseif package == PKG_THREADS || package == PKG_POLYESTER
-        return Data_cpu(numbertype, indextype)
-    else
-        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
-end
-
-function tdata_module_for(package::Symbol)
-    if !convenience_modules_enabled(package)
-        return nothing
-    elseif package == PKG_CUDA
-        return TData_cuda()
-    elseif package == PKG_AMDGPU
-        return TData_amdgpu()
-    elseif package == PKG_METAL
-        return TData_metal()
-    elseif package == PKG_THREADS || package == PKG_POLYESTER
-        return TData_cpu()
-    else
-        @ArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
-end
-
-
 # CUDA
 
 function Data_cuda(numbertype::DataType, indextype::DataType)

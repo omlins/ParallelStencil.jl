@@ -2,7 +2,6 @@
 Module ParallelStencil
 
 Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs and CPUs.
-Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fixed to their hardware, while abstraction-layer backends such as KernelAbstractions let you switch the runtime target through [`select_hardware`](@ref) and inspect it with [`current_hardware`](@ref) without reparsing code. Detailed workflow guidance is available in the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
 # General overview and examples
 https://github.com/omlins/ParallelStencil.jl
@@ -23,10 +22,6 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
 
-# Runtime hardware selection
-- [`select_hardware`](@ref)
-- [`current_hardware`](@ref)
-
 # Macros available for [`@parallel_indices`](@ref) kernels
 - [`@ps_show`](@ref)
 - [`@ps_println`](@ref)
@@ -37,19 +32,6 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@threadIdx`](@ref)
     - [`@sync_threads`](@ref)
     - [`@sharedMem`](@ref)
-!!! note "Warp-level primitives"
-    - [`@warpsize`](@ref)
-    - [`@laneid`](@ref)
-    - [`@active_mask`](@ref)
-    - [`@shfl_sync`](@ref)
-    - [`@shfl_up_sync`](@ref)
-    - [`@shfl_down_sync`](@ref)
-    - [`@shfl_xor_sync`](@ref)
-    - [`@vote_any_sync`](@ref)
-    - [`@vote_all_sync`](@ref)
-    - [`@vote_ballot_sync`](@ref)
-    !!! note "Warp-level primitives support"
-        Warp-level primitives are not supported with the KernelAbstractions backend and only partially supported with the Metal backend.
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
@@ -62,7 +44,7 @@ https://github.com/omlins/ParallelStencil.jl
 - [`Data`](@ref)
 
 !! note "Activation of GPU support"
-    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). KernelAbstractions support likewise relies on loading KernelAbstractions.jl (and any optional GPU backends it dispatches to) so runtime hardware targets can be selected. Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU, Metal or KernelAbstractions); this is automatically done by [`@init_parallel_stencil`](@ref).
+    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU or Metal); this is automatically done by [`@init_parallel_stencil`](@ref).
 
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
@@ -78,14 +60,10 @@ using .ParallelKernel.Exceptions
 include("shared.jl")
 
 ## Alphabetical include of function files
-include("allocators.jl")
-include("hide_communication.jl")
 include("init_parallel_stencil.jl")
 include("kernel_language.jl")
-include("memopt.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
-include("select_hardware.jl")
 
 ## Alphabetical include of allocation/computation-submodules (must be at end as needs to import from ParallelStencil, .e.g. INDICES).
 include("AD.jl")
@@ -96,8 +74,6 @@ include("FiniteDifferences.jl")
 export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D, AD
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
-export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
-export select_hardware, current_hardware
 export PSNumber
 
 end # Module ParallelStencil

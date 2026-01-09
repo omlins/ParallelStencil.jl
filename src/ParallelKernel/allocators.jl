@@ -3,7 +3,7 @@ const ZEROS_DOC = """
     @zeros(args...)
     @zeros(args..., <keyword arguments>)
 
-Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA, AMDGPU.zeros for AMDGPU, Metal.zeros for Metal, and a runtime-dispatched allocator for KernelAbstractions that honours [`current_hardware`](@ref) — defaulting to `:cpu` and switchable to other targets via [`select_hardware`](@ref)).
+Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `zeros` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (zeros for Threads or Polyester, CUDA.zeros for CUDA, AMDGPU.zeros for AMDGPU and Metal.zeros for Metal).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -31,7 +31,7 @@ const ONES_DOC = """
     @ones(args...)
     @ones(args..., <keyword arguments>)
 
-Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA, AMDGPU.ones for AMDGPU, Metal.ones for Metal, and a runtime-dispatched allocator for KernelAbstractions that honours [`current_hardware`](@ref) — defaulting to `:cpu` and switchable to other targets via [`select_hardware`](@ref)).
+Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `ones` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (ones for Threads or Polyester, CUDA.ones for CUDA, AMDGPU.ones for AMDGPU and Metal.ones for Metal).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -58,7 +58,7 @@ const RAND_DOC = """
     @rand(args...)
     @rand(args..., <keyword arguments>)
 
-Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
+Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `rand` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -86,7 +86,7 @@ const FALSES_DOC = """
     @falses(args...)
     @falses(args..., <keyword arguments>)
 
-Call `falses(args...)`, where the function `falses` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
+Call `falses(args...)`, where the function `falses` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
@@ -109,7 +109,7 @@ const TRUES_DOC = """
     @trues(args...)
     @trues(args..., <keyword arguments>)
 
-Call `trues(args...)`, where the function `trues` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
+Call `trues(args...)`, where the function `trues` is chosen to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
@@ -132,7 +132,7 @@ const FILL_DOC = """
     @fill(x, args...)
     @fill(x, args..., <keyword arguments>)
 
-Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
+Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numbertype` selected with [`@init_parallel_kernel`](@ref) and the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 !!! note "Advanced"
     The element type `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
@@ -160,7 +160,7 @@ const FILL!_DOC = """
     @fill!(A, x)
     @fill!(A, x)
 
-Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref) (dispatching via [`current_hardware`](@ref) when KernelAbstractions is active; default `:cpu`, switchable through [`select_hardware`](@ref)).
+Call `fill!(A, x)`, where the function `fill` is chosen/implemented to be compatible with the package for parallelization selected with [`@init_parallel_kernel`](@ref).
 
 # Arguments
 - `A::Array|CellArray|TArray|TCellArray`: the array to be filled with `x`.
@@ -276,132 +276,79 @@ end
 
 ## ALLOCATOR FUNCTIONS
 
-const ALLOCATOR_SUFFIXES = Dict(
-    PKG_CUDA => :cuda,
-    PKG_AMDGPU => :amdgpu,
-    PKG_METAL => :metal,
-    PKG_THREADS => :cpu,
-    PKG_POLYESTER => :cpu,
-)
-
-function allocator_function_symbol(kind::Symbol, suffix::Symbol)
-    name = String(kind)
-    if endswith(name, "!")
-        base = name[1:end-1]
-        return Symbol(base * "_" * String(suffix) * "!")
-    else
-        return Symbol(name * "_" * String(suffix))
-    end
-end
-
-function runtime_package_for_handle(handle_obj, hardware::Symbol)
-    ka = Base.require(:KernelAbstractions)
-    if isa(handle_obj, ka.CPU)
-        return PKG_THREADS
-    elseif isa(handle_obj, ka.CUDABackend)
-        return PKG_CUDA
-    elseif isa(handle_obj, ka.ROCBackend)
-        return PKG_AMDGPU
-    elseif isa(handle_obj, ka.MetalBackend)
-        return PKG_METAL
-    elseif isa(handle_obj, ka.oneAPIBackend)
-        @ArgumentError("KernelAbstractions runtime hardware $(hardware) is not supported by ParallelKernel runtime dispatch.")
-    else
-        @ArgumentError("KernelAbstractions runtime hardware $(hardware) generated unsupported handle $(typeof(handle_obj)).")
-    end
-end
-
-function allocator_suffix_for(package::Symbol)
-    return get(ALLOCATOR_SUFFIXES, package, nothing)
-end
-
-function resolve_runtime_backend(package::Symbol, hardware::Union{Symbol,Nothing}=nothing)
-    if package == PKG_KERNELABSTRACTIONS
-        symbol = hardware === nothing ? current_hardware() : hardware
-        handle_obj = handle(symbol)
-        target_package = runtime_package_for_handle(handle_obj, symbol)
-        return target_package, symbol, handle_obj
-    elseif package in SUPPORTED_PACKAGES
-        default_symbol = default_hardware_for(package)
-        symbol = hardware === nothing ? default_symbol : hardware
-        if symbol != default_symbol
-            @ArgumentError("unsupported hardware symbol $(symbol) for package $(package). Supported symbols: $(default_symbol).")
-        end
-        return package, symbol, nothing
-    else
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
-end
-
-# Shared runtime allocator entry used by macros and runtime wrappers.
-function dispatch_allocator(kind::Symbol, package::Symbol, celltype, blocklength, args...; hardware::Union{Symbol,Nothing}=nothing)
-    target_package, _, _ = resolve_runtime_backend(package, hardware)
-    suffix = allocator_suffix_for(target_package)
-    if suffix === nothing
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $target_package).")
-    end
-    fn_sym = allocator_function_symbol(kind, suffix)
-    fn = getfield(@__MODULE__, fn_sym)
-    return fn(celltype, blocklength, args...)
-end
-
-function dispatch_fill!(package::Symbol, args...; hardware::Union{Symbol,Nothing}=nothing)
-    target_package, _, _ = resolve_runtime_backend(package, hardware)
-    suffix = allocator_suffix_for(target_package)
-    if suffix === nothing
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $target_package).")
-    end
-    fn_sym = allocator_function_symbol(:fill!, suffix)
-    fn = getfield(@__MODULE__, fn_sym)
-    return fn(args...)
-end
-
-function allocator_expr(kind::Symbol, package::Symbol, celltype, blocklength, args...)
-    return :(ParallelStencil.ParallelKernel.dispatch_allocator($(QuoteNode(kind)), $(QuoteNode(package)), $celltype, $blocklength, $(args...)))
-end
-
-function fill_bang_expr(package::Symbol, args...)
-    return :(ParallelStencil.ParallelKernel.dispatch_fill!($(QuoteNode(package)), $(args...)))
-end
-
 function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:zeros, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:ones, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:rand, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:falses, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:trues, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    return allocator_expr(:fill, package, celltype, blocklength, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
-    return fill_bang_expr(package, args...)
+    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
+    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
+    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal!($(args...)))
+    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
+    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
 end
 
 function _CellType(caller::Module, name; eltype=nothing, fieldnames=nothing, dims=nothing, parametric=nothing)
