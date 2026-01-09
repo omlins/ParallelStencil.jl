@@ -3,11 +3,16 @@ import ParallelStencil
 using Enzyme
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel.AD
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, ARRAYTYPES, FIELDTYPES, SCALARTYPES, select_hardware, current_hardware
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
+const PKG_KERNELABSTRACTIONS = hasproperty(ParallelStencil.ParallelKernel, :PKG_KERNELABSTRACTIONS) ? ParallelStencil.ParallelKernel.PKG_KERNELABSTRACTIONS : Symbol(:KernelAbstractions)
+
+TEST_PACKAGES = collect(SUPPORTED_PACKAGES)
+if PKG_KERNELABSTRACTIONS ∉ TEST_PACKAGES
+    push!(TEST_PACKAGES, PKG_KERNELABSTRACTIONS)
+end
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
@@ -23,10 +28,37 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    if Base.find_package("KernelAbstractions") === nothing
+        TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES)
+    else
+        import KernelAbstractions
+    end
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
+
+kernelabstractions_gpu_symbols() = Symbol[]
+
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    function kernelabstractions_gpu_symbols()
+        symbols = Symbol[]
+        if isdefined(@__MODULE__, :CUDA) && CUDA.functional()
+            push!(symbols, :gpu_cuda)
+        end
+        if isdefined(@__MODULE__, :AMDGPU) && AMDGPU.functional()
+            push!(symbols, :gpu_amd)
+        end
+        if isdefined(@__MODULE__, :Metal)
+            if Sys.isapple() && Metal.functional()
+                push!(symbols, :gpu_metal)
+            end
+        end
+        return symbols
+    end
+end
 
 
 @static for package in TEST_PACKAGES
@@ -75,6 +107,51 @@ eval(:(
                     @test occursin("Metal.@metal groups = nblocks threads = nthreads queue = Metal.global_queue(Metal.device()) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("Metal.@metal groups = nblocks threads = nthreads queue = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    call = @prettystring(1, @parallel f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    @test occursin("KernelAbstractions.CPU()", call)
+                    call = @prettystring(1, @parallel ranges f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    @test occursin("KernelAbstractions.CPU()", call)
+                    call = @prettystring(1, @parallel nblocks nthreads f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    @test occursin("KernelAbstractions.CPU()", call)
+                    call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    @test occursin("KernelAbstractions.CPU()", call)
+                    call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
+                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    @test occursin("KernelAbstractions.CPU()", call)
+                    for symbol in kernelabstractions_gpu_symbols()
+                        select_hardware(symbol)
+                        call = @prettystring(1, @parallel f(A))
+                        @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                        if symbol == :gpu_cuda
+                            @test occursin("KernelAbstractions.CUDABackend()", call)
+                            @test occursin("nthreads_x_max = 32", call)
+                        elseif symbol == :gpu_amd
+                            @test occursin("KernelAbstractions.ROCBackend()", call)
+                            @test occursin("nthreads_x_max = 64", call)
+                        elseif symbol == :gpu_metal
+                            @test occursin("KernelAbstractions.MetalBackend()", call)
+                            @test occursin("nthreads_x_max = 32", call)
+                        end
+                        call = @prettystring(1, @parallel ranges f(A))
+                        @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                        call = @prettystring(1, @parallel nblocks nthreads f(A))
+                        @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                        call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
+                        @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                        call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
+                        @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                        @test current_hardware() == symbol
+                    end
+                    select_hardware(:cpu)
+                    @test current_hardware() == :cpu
+                    @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
                 elseif @iscpu($package)
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
