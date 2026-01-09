@@ -1,9 +1,14 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, select_hardware, current_hardware
 import ParallelStencil: @require, @prettystring, @iscpu
 
-TEST_PACKAGES = SUPPORTED_PACKAGES
+const PKG_KERNELABSTRACTIONS = hasproperty(ParallelStencil, :PKG_KERNELABSTRACTIONS) ? ParallelStencil.PKG_KERNELABSTRACTIONS : Symbol(:KernelAbstractions)
+
+TEST_PACKAGES = collect(SUPPORTED_PACKAGES)
+if PKG_KERNELABSTRACTIONS ∉ TEST_PACKAGES
+    push!(TEST_PACKAGES, PKG_KERNELABSTRACTIONS)
+end
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional()
@@ -29,10 +34,37 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    if Base.find_package("KernelAbstractions") === nothing
+        TEST_PACKAGES = filter!(x -> x ≠ PKG_KERNELABSTRACTIONS, TEST_PACKAGES)
+    else
+        import KernelAbstractions
+    end
+end
 Base.retry_load_extensions()
 
+kernelabstractions_gpu_symbols() = Symbol[]
+
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    function kernelabstractions_gpu_symbols()
+        symbols = Symbol[]
+        if isdefined(@__MODULE__, :CUDA) && CUDA.functional()
+            push!(symbols, :gpu_cuda)
+        end
+        if isdefined(@__MODULE__, :AMDGPU) && AMDGPU.functional()
+            push!(symbols, :gpu_amd)
+        end
+        if isdefined(@__MODULE__, :Metal)
+            if Sys.isapple() && Metal.functional()
+                push!(symbols, :gpu_metal)
+            end
+        end
+        return symbols
+    end
+end
+
 @static for package in TEST_PACKAGES
-    FloatDefault = (package == PKG_METAL) ? Float32 : Float64
+    FloatDefault = (package == PKG_METAL || package == PKG_KERNELABSTRACTIONS) ? Float32 : Float64
 
     eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
@@ -51,6 +83,54 @@ Base.retry_load_extensions()
             @test @prettystring(1, @ps_println args) == "ParallelStencil.ParallelKernel.@pk_println args"
             @test @prettystring(1, @∀ i ∈ (x, y) body) == "ParallelStencil.ParallelKernel.@∀ i ∈ (x, y) body"
 
+            if $package == $PKG_KERNELABSTRACTIONS
+                select_hardware(:cpu)
+                @test current_hardware() == :cpu
+                call = @prettystring(1, @gridDim())
+                @test occursin("ParallelStencil.ParallelKernel.@gridDim", call)
+                call = @prettystring(1, @blockIdx())
+                @test occursin("ParallelStencil.ParallelKernel.@blockIdx", call)
+                call = @prettystring(1, @blockDim())
+                @test occursin("ParallelStencil.ParallelKernel.@blockDim", call)
+                call = @prettystring(1, @threadIdx())
+                @test occursin("ParallelStencil.ParallelKernel.@threadIdx", call)
+                call = @prettystring(1, @sync_threads())
+                @test occursin("ParallelStencil.ParallelKernel.@sync_threads", call)
+                call = @prettystring(1, @sharedMem(T, dims))
+                @test occursin("ParallelStencil.ParallelKernel.@sharedMem", call)
+
+                for symbol in kernelabstractions_gpu_symbols()
+                    select_hardware(symbol)
+                    call = @prettystring(1, @gridDim())
+                    if symbol == :gpu_cuda
+                        @test call == "CUDA.gridDim()"
+                        @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
+                        @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
+                        @test @prettystring(1, @threadIdx()) == "CUDA.threadIdx()"
+                        @test @prettystring(1, @sync_threads()) == "CUDA.sync_threads()"
+                        @test @prettystring(1, @sharedMem(T, dims)) == "CUDA.@cuDynamicSharedMem T dims"
+                    elseif symbol == :gpu_amd
+                        @test call == "AMDGPU.gridGroupDim()"
+                        @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
+                        @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
+                        @test @prettystring(1, @threadIdx()) == "AMDGPU.workitemIdx()"
+                        @test @prettystring(1, @sync_threads()) == "AMDGPU.sync_workgroup()"
+                        # @test @prettystring(1, @sharedMem(T, dims)) == ""    #TODO: not yet supported for AMDGPU
+                    elseif symbol == :gpu_metal
+                        @test call == "Metal.threadgroups_per_grid_3d()"
+                        @test @prettystring(1, @blockIdx()) == "Metal.threadgroup_position_in_grid_3d()"
+                        @test @prettystring(1, @blockDim()) == "Metal.threads_per_threadgroup_3d()"
+                        @test @prettystring(1, @threadIdx()) == "Metal.thread_position_in_threadgroup_3d()"
+                        @test @prettystring(1, @sync_threads()) == "Metal.threadgroup_barrier(; flag = Metal.MemoryFlagThreadGroup)"
+                        @test @prettystring(1, @sharedMem(T, dims)) == "ParallelStencil.ParallelKernel.@sharedMem_metal T dims"
+                    end
+                    @test current_hardware() == symbol
+                end
+                select_hardware(:cpu)
+                @test current_hardware() == :cpu
+                @test_throws ArgumentError select_hardware(:unsupported_hardware_symbol)
+            end
+
             @test @prettystring(1, @warpsize()) == "ParallelStencil.ParallelKernel.@warpsize"
             @test @prettystring(1, @laneid()) == "ParallelStencil.ParallelKernel.@laneid"
             @test @prettystring(1, @active_mask()) == "ParallelStencil.ParallelKernel.@active_mask"
@@ -68,7 +148,10 @@ Base.retry_load_extensions()
         end
 
         @testset "CPU semantic smoke tests" begin
-            @static if @iscpu($package)
+            @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
+                if $package == $PKG_KERNELABSTRACTIONS
+                    select_hardware(:cpu)
+                end
                 N = 8
                 A = @rand(N)
                 P = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]
@@ -105,6 +188,9 @@ Base.retry_load_extensions()
                 @test Bout_any == P
                 @test Bout_all == P
                 @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
+                if $package == $PKG_KERNELABSTRACTIONS
+                    @test current_hardware() == :cpu
+                end
             end
         end
 
