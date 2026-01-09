@@ -15,5 +15,6 @@ function reset_parallel_stencil(caller::Module)
         set_numbertype(caller, NUMBERTYPE_NONE)
         set_ndims(caller, NDIMS_NONE)
     end
+    ParallelKernel.reset_runtime_hardware!(PKG_NONE)
     return nothing
 end
