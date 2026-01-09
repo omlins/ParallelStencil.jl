@@ -33,7 +33,7 @@ end
 ## GATEWAY FUNCTIONS
 
 function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
-    block = args[1]
+    block = args[1] # safe through checkargs_overlap
     if     isgpu(package) overlap_gpu(block)
     elseif iscpu(package) overlap_cpu(block)
     else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") # ERRMSG_UNSUPPORTED_PACKAGE defined in shared.jl
