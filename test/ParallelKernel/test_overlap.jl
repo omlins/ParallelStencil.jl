@@ -2,23 +2,10 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
-import ParallelStencil.ParallelKernel: @require, @isgpu, is_installed, rmlines
+import ParallelStencil.ParallelKernel: @require, @gorgeousexpand, @isgpu, rmlines
 import ParallelStencil.ParallelKernel: checkargs_overlap, overlap_gpu
 using ParallelStencil.ParallelKernel.Exceptions
-
 TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES && !is_installed("CUDA")
-    TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES)
-end
-@static if PKG_AMDGPU in TEST_PACKAGES && !is_installed("AMDGPU")
-    TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES)
-end
-@static if PKG_METAL in TEST_PACKAGES && !is_installed("Metal")
-    TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
-end
-@static if PKG_POLYESTER in TEST_PACKAGES && !is_installed("Polyester")
-    TEST_PACKAGES = filter!(x->x≠PKG_POLYESTER, TEST_PACKAGES)
-end
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
     if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
@@ -51,8 +38,8 @@ eval(:(
             @require !@is_initialized()
             @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized()
-            @testset "@overlap (macro expansion)" begin
-                expansion = overlap_gpu(:(begin
+            @testset "@overlap block (macro expansion)" begin
+                expansion = string(@gorgeousexpand(1, @overlap begin
                     @parallel (1:sim.Nx, 2:sim.Ny) kernel1!(sim.array1)
                     @parallel (1:sim.Nx, 2:sim.Ny) kernel2!(sim.array2)
                     @parallel (1:sim.Nx, 2:sim.Ny) kernel3!(sim.array3)
@@ -69,11 +56,11 @@ eval(:(
                 @test length(stmts) == length(expected)
                 @test normalize_expr.(stmts) == normalize_expr.(expected)
             end;
-            @parallel_indices (ix,iy,iz) function fill_value!(A, value)
-                A[ix,iy,iz] = value
-                return
-            end
             @testset "@overlap execution" begin
+                @parallel_indices (ix,iy,iz) function fill_value!(A, value)
+                    A[ix,iy,iz] = value
+                    return
+                end
                 A = @zeros(4, 3, 2)
                 B = @zeros(4, 3, 2)
                 two = $FloatDefault(2)
