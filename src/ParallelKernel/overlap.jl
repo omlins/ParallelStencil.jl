@@ -29,6 +29,9 @@ function checkargs_overlap(args...)
     if !is_block(args[1]) @ArgumentError("the argument must be a code block (obtained: $(args[1])).") end
 end
 
+
+## GATEWAY FUNCTIONS
+
 function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     checkargs_overlap(args...)
     block = args[1]
