@@ -27,7 +27,7 @@ function checkargs_overlap(args...)
 end
 
 function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
-    if (length(args) != 1) @ArgumentError("wrong number of positional arguments.") end
+    checkargs_overlap(args...)
     block = args[1]
     if     isgpu(package) overlap_gpu(block)
     elseif iscpu(package) overlap_cpu(block)
@@ -53,5 +53,5 @@ function overlap_gpu(block::Expr)
     end
 end
 
-# CPU backends fall back to synchronous execution with `stream = nothing`; reuse the same code path.
+# CPU backends execute synchronously regardless of the stream argument; reuse the same code path.
 overlap_cpu(block::Expr) = overlap_gpu(block)

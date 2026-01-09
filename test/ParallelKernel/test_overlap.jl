@@ -65,7 +65,7 @@ eval(:(
                     :(ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream(3))),
                 ]
                 @test length(stmts) == length(expected)
-                normalize(ex) = replace(string(rmlines(ex)), r"#= .*? =#\s*" => "")
+                normalize(ex) = replace(string(rmlines(ex)), r"#= .*? =#\s*" => "") # strip line number annotations
                 @test normalize.(stmts) == normalize.(expected)
             end;
             @parallel_indices (ix,iy,iz) function fill_value!(A, value)
@@ -75,12 +75,13 @@ eval(:(
             @testset "@overlap execution" begin
                 A = @zeros(4, 3, 2)
                 B = @zeros(4, 3, 2)
+                two = $FloatDefault(2)
                 @overlap begin
                     @parallel fill_value!(A, one(eltype(A)))
-                    @parallel fill_value!(B, $FloatDefault(2))
+                    @parallel fill_value!(B, two)
                 end
                 @test all(Array(A) .== one($FloatDefault))
-                @test all(Array(B) .== $FloatDefault(2))
+                @test all(Array(B) .== two)
             end;
             @reset_parallel_kernel()
         end;
