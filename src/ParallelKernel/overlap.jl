@@ -40,6 +40,9 @@ function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=ge
     end
 end
 
+
+## @OVERLAP FUNCTIONS
+
 function overlap_gpu(block::Expr)
     calls = collect_parallel_calls(block)
     async_calls = Expr[]
