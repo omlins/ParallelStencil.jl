@@ -294,42 +294,55 @@ function checkargs_vote(args...)
     if !(length(args) == 2) @ArgumentError("wrong number of arguments.") end
 end
 
+@inline function runtime_kernel_package(package::Symbol)
+    if package == PKG_KERNELABSTRACTIONS
+        target_package, _, _ = resolve_runtime_backend(package)
+        return target_package
+    else
+        return package
+    end
+end
+
 
 ## FUNCTIONS FOR INDEXING AND DIMENSIONS
 
 function gridDim(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
-    elseif (package == PKG_METAL)   return :(Metal.threadgroups_per_grid_3d($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(Metal.threadgroups_per_grid_3d($(args...)))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function blockIdx(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation relies on the fact that ranges are always of type UnitRange. If this changes, then this function needs to be adapted.
-    if     (package == PKG_CUDA)    return :(CUDA.blockIdx($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupIdx($(args...)))
-    elseif (package == PKG_METAL)   return :(Metal.threadgroup_position_in_grid_3d($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.blockIdx($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.workgroupIdx($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(Metal.threadgroup_position_in_grid_3d($(args...)))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function blockDim(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks.
-    if     (package == PKG_CUDA)    return :(CUDA.blockDim($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupDim($(args...)))
-    elseif (package == PKG_METAL)   return :(Metal.threads_per_threadgroup_3d($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.blockDim($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.workgroupDim($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(Metal.threads_per_threadgroup_3d($(args...)))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function threadIdx(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks.
-    if     (package == PKG_CUDA)    return :(CUDA.threadIdx($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.workitemIdx($(args...)))
-    elseif (package == PKG_METAL)   return :(Metal.thread_position_in_threadgroup_3d($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.threadIdx($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.workitemIdx($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(Metal.thread_position_in_threadgroup_3d($(args...)))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
@@ -337,11 +350,12 @@ end
 ## FUNCTIONS FOR SYNCHRONIZATION
 
 function sync_threads(caller::Module, args...; package::Symbol=get_package(caller)) #NOTE: the CPU implementation follows the model that no threads are grouped into blocks, i.e. that each block contains only 1 thread (with thread ID 1). The parallelization happens only over the blocks. Synchronization within a block is therefore not needed (as it contains only one thread).
-    if     (package == PKG_CUDA)    return :(CUDA.sync_threads($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.sync_workgroup($(args...)))
-    elseif (package == PKG_METAL)   return :(Metal.threadgroup_barrier($(args...); flag=Metal.MemoryFlagThreadGroup))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.sync_threads($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.sync_workgroup($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(Metal.threadgroup_barrier($(args...); flag=Metal.MemoryFlagThreadGroup))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
@@ -349,11 +363,12 @@ end
 ## FUNCTIONS FOR SHARED MEMORY ALLOCATION
 
 function sharedMem(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.@cuDynamicSharedMem($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.@sharedMem_metal($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.@cuDynamicSharedMem($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($(args...)))
+    elseif (dispatched == PKG_METAL)   return :(ParallelStencil.ParallelKernel.@sharedMem_metal($(args...)))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
@@ -368,20 +383,22 @@ macro sharedMem_metal(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sha
 ## FUNCTIONS FOR PRINTING
 
 function pk_show(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.@cushow($(args...)))
-    elseif (package == PKG_AMDGPU)  @KeywordArgumentError("this functionality is not yet supported in AMDGPU.jl.")
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(Base.@show($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.@cushow($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  @KeywordArgumentError("this functionality is not yet supported in AMDGPU.jl.")
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(Base.@show($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function pk_println(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.@cuprintln($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.@rocprintln($(args...)))
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(Base.println($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.@cuprintln($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.@rocprintln($(args...)))
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(Base.println($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
@@ -389,36 +406,40 @@ end
 ## FUNCTIONS FOR WARP-LEVEL PRIMITIVES (backend mapping)
 
 function warpsize(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.warpsize())
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.wavefrontsize())
-    elseif (package == PKG_METAL)   return :(Metal.threads_per_simdgroup())
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.warpsize_cpu())
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.warpsize())
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.Device.wavefrontsize())
+    elseif (dispatched == PKG_METAL)   return :(Metal.threads_per_simdgroup())
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.warpsize_cpu())
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function laneid(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.laneid() + 1)
-    elseif (package == PKG_AMDGPU)  return :(unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1))
-    elseif (package == PKG_METAL)   return :(unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.laneid_cpu())
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.laneid() + 1)
+    elseif (dispatched == PKG_AMDGPU)  return :(unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1))
+    elseif (dispatched == PKG_METAL)   return :(unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1))
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.laneid_cpu())
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function active_mask(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.active_mask())
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.activemask())
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.active_mask_cpu())
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.active_mask())
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.Device.activemask())
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.active_mask_cpu())
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function shfl_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)
         return :(CUDA.shfl_sync($(args...)))
-    elseif (package == PKG_AMDGPU)
+    elseif (dispatched == PKG_AMDGPU)
         if length(args) == 3
             # (mask, val, lane)
             return :(AMDGPU.Device.shfl_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1)))
@@ -426,109 +447,115 @@ function shfl_sync(caller::Module, args...; package::Symbol=get_package(caller))
             # (mask, val, lane, width)
             return :(AMDGPU.Device.shfl_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1), unsafe_trunc(Cuint, $(args[4]))))
         end
-    elseif (package == PKG_METAL)
+    elseif (dispatched == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)
+    elseif iscpu(dispatched)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
         else
             return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1), Int64($(args[4]))))
         end
     else
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function shfl_up_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)
         return :(CUDA.shfl_up_sync($(args...)))
-    elseif (package == PKG_AMDGPU)
+    elseif (dispatched == PKG_AMDGPU)
         if length(args) == 3
             return :(AMDGPU.Device.shfl_up_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3]))))
         else
             return :(AMDGPU.Device.shfl_up_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])), unsafe_trunc(Cuint, $(args[4]))))
         end
-    elseif (package == PKG_METAL)
+    elseif (dispatched == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)
+    elseif iscpu(dispatched)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
         else
             return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])), Int64($(args[4]))))
         end
     else
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function shfl_down_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)
         return :(CUDA.shfl_down_sync($(args...)))
-    elseif (package == PKG_AMDGPU)
+    elseif (dispatched == PKG_AMDGPU)
         if length(args) == 3
             return :(AMDGPU.Device.shfl_down_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3]))))
         else
             return :(AMDGPU.Device.shfl_down_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])), unsafe_trunc(Cuint, $(args[4]))))
         end
-    elseif (package == PKG_METAL)
+    elseif (dispatched == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)
+    elseif iscpu(dispatched)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
         else
             return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])), Int64($(args[4]))))
         end
     else
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function shfl_xor_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)
         return :(CUDA.shfl_xor_sync($(args...)))
-    elseif (package == PKG_AMDGPU)
+    elseif (dispatched == PKG_AMDGPU)
         if length(args) == 3
             return :(AMDGPU.Device.shfl_xor_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1)))
         else
             return :(AMDGPU.Device.shfl_xor_sync(UInt64($(args[1])), $(args[2]), unsafe_trunc(Cint, $(args[3])) - Cint(1), unsafe_trunc(Cuint, $(args[4]))))
         end
-    elseif (package == PKG_METAL)
+    elseif (dispatched == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)
+    elseif iscpu(dispatched)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
         else
             return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1), Int64($(args[4]))))
         end
     else
-        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function vote_any_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.vote_any_sync($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.any_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_any_sync_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.vote_any_sync($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.Device.any_sync(UInt64($(args[1])), $(args[2])))
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.vote_any_sync_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function vote_all_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.vote_all_sync($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.all_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_all_sync_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.vote_all_sync($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.Device.all_sync(UInt64($(args[1])), $(args[2])))
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.vote_all_sync_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
 function vote_ballot_sync(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(CUDA.vote_ballot_sync($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.ballot_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_ballot_sync_cpu($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    dispatched = runtime_kernel_package(package)
+    if     (dispatched == PKG_CUDA)    return :(CUDA.vote_ballot_sync($(args...)))
+    elseif (dispatched == PKG_AMDGPU)  return :(AMDGPU.Device.ballot_sync(UInt64($(args[1])), $(args[2])))
+    elseif (dispatched == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
+    elseif iscpu(dispatched)           return :(ParallelStencil.ParallelKernel.vote_ballot_sync_cpu($(args...)))
+    else                               @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $dispatched).")
     end
 end
 
