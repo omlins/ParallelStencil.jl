@@ -40,6 +40,8 @@ end
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
+normalize_expr(ex) = replace(string(rmlines(ex)), r"#= .*? =#\s*" => "") # strip line number annotations
+
 for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
     
@@ -65,8 +67,7 @@ eval(:(
                     :(ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream(3))),
                 ]
                 @test length(stmts) == length(expected)
-                normalize(ex) = replace(string(rmlines(ex)), r"#= .*? =#\s*" => "") # strip line number annotations
-                @test normalize.(stmts) == normalize.(expected)
+                @test normalize_expr.(stmts) == normalize_expr.(expected)
             end;
             @parallel_indices (ix,iy,iz) function fill_value!(A, value)
                 A[ix,iy,iz] = value

@@ -56,7 +56,7 @@ function collect_parallel_calls(block::Expr)
         if !is_parallel_call(statement) @ArgumentError(ERRMSG_OVERLAP) end
         parallel_args = extract_args(statement, Symbol("@parallel"))
         posargs, kwargs, kernelcall = split_parallel_args(parallel_args)
-        if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM_OVERLAP) end
+        if any(x.args[1]==:stream for x in kwargs) @ArgumentError(ERRMSG_INVALID_STREAM_OVERLAP) end
         push!(calls, (posargs=posargs, kwargs=kwargs, kernelcall=kernelcall))
     end
     return calls
