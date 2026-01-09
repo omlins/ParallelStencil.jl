@@ -53,4 +53,5 @@ function overlap_gpu(block::Expr)
     end
 end
 
+# CPU backends fall back to synchronous execution with `stream = nothing`; reuse the same code path.
 overlap_cpu(block::Expr) = overlap_gpu(block)
