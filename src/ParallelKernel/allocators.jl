@@ -276,79 +276,132 @@ end
 
 ## ALLOCATOR FUNCTIONS
 
+const ALLOCATOR_SUFFIXES = Dict(
+    PKG_CUDA => :cuda,
+    PKG_AMDGPU => :amdgpu,
+    PKG_METAL => :metal,
+    PKG_THREADS => :cpu,
+    PKG_POLYESTER => :cpu,
+)
+
+function allocator_function_symbol(kind::Symbol, suffix::Symbol)
+    name = String(kind)
+    if endswith(name, "!")
+        base = name[1:end-1]
+        return Symbol(base * "_" * String(suffix) * "!")
+    else
+        return Symbol(name * "_" * String(suffix))
+    end
+end
+
+function runtime_package_for_handle(handle_obj, hardware::Symbol)
+    ka = Base.require(:KernelAbstractions)
+    if isa(handle_obj, ka.CPU)
+        return PKG_THREADS
+    elseif isa(handle_obj, ka.CUDABackend)
+        return PKG_CUDA
+    elseif isa(handle_obj, ka.ROCBackend)
+        return PKG_AMDGPU
+    elseif isa(handle_obj, ka.MetalBackend)
+        return PKG_METAL
+    elseif isa(handle_obj, ka.oneAPIBackend)
+        @ArgumentError("KernelAbstractions runtime hardware $(hardware) is not supported by ParallelKernel runtime dispatch.")
+    else
+        @ArgumentError("KernelAbstractions runtime hardware $(hardware) generated unsupported handle $(typeof(handle_obj)).")
+    end
+end
+
+function allocator_suffix_for(package::Symbol)
+    return get(ALLOCATOR_SUFFIXES, package, nothing)
+end
+
+function resolve_runtime_backend(package::Symbol, hardware::Union{Symbol,Nothing}=nothing)
+    if package == PKG_KERNELABSTRACTIONS
+        symbol = hardware === nothing ? current_hardware() : hardware
+        handle_obj = handle(symbol)
+        target_package = runtime_package_for_handle(handle_obj, symbol)
+        return target_package, symbol, handle_obj
+    elseif package in SUPPORTED_PACKAGES
+        default_symbol = default_hardware_for(package)
+        symbol = hardware === nothing ? default_symbol : hardware
+        if symbol != default_symbol
+            @ArgumentError("unsupported hardware symbol $(symbol) for package $(package). Supported symbols: $(default_symbol).")
+        end
+        return package, symbol, nothing
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    end
+end
+
+# Shared runtime allocator entry used by macros and runtime wrappers.
+function dispatch_allocator(kind::Symbol, package::Symbol, celltype, blocklength, args...; hardware::Union{Symbol,Nothing}=nothing)
+    target_package, _, _ = resolve_runtime_backend(package, hardware)
+    suffix = allocator_suffix_for(target_package)
+    if suffix === nothing
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $target_package).")
+    end
+    fn_sym = allocator_function_symbol(kind, suffix)
+    fn = getfield(@__MODULE__, fn_sym)
+    return fn(celltype, blocklength, args...)
+end
+
+function dispatch_fill!(package::Symbol, args...; hardware::Union{Symbol,Nothing}=nothing)
+    target_package, _, _ = resolve_runtime_backend(package, hardware)
+    suffix = allocator_suffix_for(target_package)
+    if suffix === nothing
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $target_package).")
+    end
+    fn_sym = allocator_function_symbol(:fill!, suffix)
+    fn = getfield(@__MODULE__, fn_sym)
+    return fn(args...)
+end
+
+function allocator_expr(kind::Symbol, package::Symbol, celltype, blocklength, args...)
+    return :(ParallelStencil.ParallelKernel.dispatch_allocator($(QuoteNode(kind)), $(QuoteNode(package)), $celltype, $blocklength, $(args...)))
+end
+
+function fill_bang_expr(package::Symbol, args...)
+    return :(ParallelStencil.ParallelKernel.dispatch_fill!($(QuoteNode(package)), $(args...)))
+end
+
 function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:zeros, package, celltype, blocklength, args...)
 end
 
 function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:ones, package, celltype, blocklength, args...)
 end
 
 function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:rand, package, celltype, blocklength, args...)
 end
 
 function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:falses, package, celltype, blocklength, args...)
 end
 
 function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:trues, package, celltype, blocklength, args...)
 end
 
 function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return allocator_expr(:fill, package, celltype, blocklength, args...)
 end
 
 function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal!($(args...)))
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
-    else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
-    end
+    return fill_bang_expr(package, args...)
 end
 
 function _CellType(caller::Module, name; eltype=nothing, fieldnames=nothing, dims=nothing, parametric=nothing)
