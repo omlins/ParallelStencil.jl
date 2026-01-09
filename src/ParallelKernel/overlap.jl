@@ -33,7 +33,6 @@ end
 ## GATEWAY FUNCTIONS
 
 function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
-    checkargs_overlap(args...)
     block = args[1]
     if     isgpu(package) overlap_gpu(block)
     elseif iscpu(package) overlap_cpu(block)
