@@ -21,6 +21,8 @@ Enables writing parallel high-performance kernels and whole applications that ca
     - [`@parallel_indices`](@ref)
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
+    - [`@get_stream`](@ref)
+    - [`@get_priority_stream`](@ref)
 
 # Macros available for [`@parallel_indices`](@ref) kernels
 - [`@pk_show`](@ref)
@@ -83,7 +85,7 @@ include("reset_parallel_kernel.jl")
 include("FieldAllocators.jl")
 
 ## Exports
-export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
+export @init_parallel_kernel, @parallel, @hide_communication, @get_priority_stream, @get_stream, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PKNumber

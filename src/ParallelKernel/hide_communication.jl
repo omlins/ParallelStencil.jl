@@ -16,11 +16,11 @@ const HIDE_COMMUNICATION_DOC = """
 Hide the communication behind the computation within the code `block`.
 
 # Arguments
-- `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communcation performed.
+- `boundary_width::Tuple{Integer,Integer,Integer} | Tuple{Integer,Integer} | Tuple{Integer}`: width of the boundaries in each dimension. The boundaries must include (at least) all the data that is accessed in the communication performed.
 - `block`: code block wich starts with one [`@parallel`](@ref) call to perform computations (for exceptions, see keyword `computation_calls`), followed by code to set boundary conditions and to perform communication (as e.g. `update_halo!` from the package `ImplicitGlobalGrid`). The [`@parallel`](@ref) call to perform computations can normally not contain any positional arguments (ranges, nblocks or nthreads) nor the stream keyword argument (stream=...) (for exceptions, see keyword `computation_calls`). The code to set boundary conditions and to perform communication must only access the elements in the boundary ranges of the fields modified in the [`@parallel`](@ref) call; all elements can be acccessed from other fields. Moreover, this code must not include statements in array broadcasting notation, because they are always run on the default stream in CUDA (for CUDA.jl < v2.0), which makes CUDA stream overlapping impossible. Instead, boundary region elements can, e.g., be accessed with [`@parallel`](@ref) calls passing a ranges argument that ensures that no threads mapping to elements outside of the boundary regions are launched. Note that these [`@parallel`](@ref) `ranges` calls cannot contain any other positional arguments (nblocks or nthreads) nor the stream keyword argument (stream=...).
 
 !!! note "Advanced"
-    - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communcation and boundary conditions performed.
+    - `ranges_outer::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span (at least) all the data that is accessed in the communication and boundary conditions performed.
     - `ranges_inner::`Tuple with one or multiple `ranges` as required by the corresponding argument of [`@parallel`](@ref): the `ranges` must together span the data that is not included by `ranges_outer`.
 
 !!! note "Advanced keyword arguments"
@@ -83,15 +83,50 @@ Hide the communication behind the computation within the code `block`.
     end
 
 !!! note "Developers note"
-    The communcation should not perform any blocking operations to enable a maximal overlap of communication with computation.
+    The communication should not perform any blocking operations to enable a maximal overlap of communication with computation.
 
 See also: [`@parallel`](@ref)
 """
 @doc HIDE_COMMUNICATION_DOC
 macro hide_communication(args...) check_initialized(__module__); checkargs_hide_communication(args...); esc(hide_communication(__module__, args...)); end
 
-macro get_priority_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_priority_stream(__module__, args...)); end
-macro get_stream(args...) check_initialized(__module__); checkargs_get_stream(args...); esc(get_stream(__module__, args...)); end
+const GET_PRIORITY_STREAM_DOC = """
+    @get_priority_stream(id)
+
+Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
+
+If no stream with the given identifier exists yet, then a new stream is created for this identifier. All stream handles are stored package-internally and can be re-retrieved anytime at no cost.
+
+# Arguments
+- `id::Integer`: identifier of the stream (1-based, consecutive integer)
+
+See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
+"""
+@doc GET_PRIORITY_STREAM_DOC
+macro get_priority_stream(args...)
+    check_initialized(__module__);
+    checkargs_get_stream(args...);
+    esc(get_priority_stream(__module__, args...));
+end
+
+const GET_STREAM_DOC = """
+    @get_stream(id)
+
+Get the default-priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
+
+If no stream with the given identifier exists yet, then a new stream is created for this identifier. All stream handles are stored package-internally and can be re-retrieved anytime at no cost.
+
+# Arguments
+- `id::Integer`: identifier of the stream (1-based, consecutive integer)
+
+See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
+"""
+@doc GET_STREAM_DOC
+macro get_stream(args...)
+    check_initialized(__module__);
+    checkargs_get_stream(args...);
+    esc(get_stream(__module__, args...));
+end
 
 
 ## ARGUMENT CHECKS
@@ -122,7 +157,8 @@ function get_priority_stream(caller::Module, args::Union{Integer,Symbol,Expr}...
     if     (package == PKG_CUDA)    get_priority_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_priority_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_priority_stream_metal(args...)
-    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    elseif iscpu(package)           :(nothing)
+    else                            @ArgumentError("unsupported package type (obtained: $package).")
     end
 end
 
@@ -130,7 +166,8 @@ function get_stream(caller::Module, args::Union{Integer,Symbol,Expr}...; package
     if     (package == PKG_CUDA)    get_stream_cuda(args...)
     elseif (package == PKG_AMDGPU)  get_stream_amdgpu(args...)
     elseif (package == PKG_METAL)   get_stream_metal(args...)
-    else                            @ArgumentError("unsupported GPU package (obtained: $package).")
+    elseif iscpu(package)           :(nothing)
+    else                            @ArgumentError("unsupported package type (obtained: $package).")
     end
 end
 
