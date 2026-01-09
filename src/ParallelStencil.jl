@@ -49,7 +49,7 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@vote_all_sync`](@ref)
     - [`@vote_ballot_sync`](@ref)
     !!! note "Warp-level primitives support"
-        Warp-level primitives are only partially supported with the KernelAbstractions and Metal backends.
+        Warp-level primitives are not supported with the KernelAbstractions backend and only partially supported with the Metal backend.
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
@@ -62,7 +62,7 @@ https://github.com/omlins/ParallelStencil.jl
 - [`Data`](@ref)
 
 !! note "Activation of GPU support"
-    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU or Metal); this is automatically done by [`@init_parallel_stencil`](@ref).
+    The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). KernelAbstractions support likewise relies on loading KernelAbstractions.jl (and any optional GPU backends it dispatches to) so runtime hardware targets can be selected. Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU, Metal or KernelAbstractions); this is automatically done by [`@init_parallel_stencil`](@ref).
 
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
 """
