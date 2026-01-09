@@ -31,20 +31,15 @@ function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=ge
     block = args[1]
     if     isgpu(package) overlap_gpu(block)
     elseif iscpu(package) overlap_cpu(block)
-    else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+    else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") # ERRMSG_UNSUPPORTED_PACKAGE defined in shared.jl
     end
 end
 
 function overlap_gpu(block::Expr)
-    statements = filter(x->!isa(x, LineNumberNode), block.args)
-    if isempty(statements) @ArgumentError(ERRMSG_OVERLAP) end
+    calls = collect_parallel_calls(block)
     async_calls = Expr[]
-    for (i, statement) in enumerate(statements)
-        if !is_parallel_call(statement) @ArgumentError(ERRMSG_OVERLAP) end
-        parallel_args = extract_args(statement, Symbol("@parallel"))
-        posargs, kwargs, kernelcall = split_parallel_args(parallel_args)
-        if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM_OVERLAP) end
-        push!(async_calls, :(@parallel_async $(posargs...) stream=ParallelStencil.ParallelKernel.@get_stream($i) $(kwargs...) $kernelcall))
+    for (i, call) in enumerate(calls)
+        push!(async_calls, :(@parallel_async $(call.posargs...) stream=ParallelStencil.ParallelKernel.@get_stream($i) $(call.kwargs...) $(call.kernelcall)))
     end
     sync_calls = [:(ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream($i))) for i in 1:length(async_calls)]
     quote
@@ -53,5 +48,24 @@ function overlap_gpu(block::Expr)
     end
 end
 
-# CPU backends execute synchronously regardless of the stream argument; reuse the same code path.
-overlap_cpu(block::Expr) = overlap_gpu(block)
+function collect_parallel_calls(block::Expr)
+    statements = filter(x->!isa(x, LineNumberNode), block.args)
+    if isempty(statements) @ArgumentError(ERRMSG_OVERLAP) end
+    calls = []
+    for (i, statement) in enumerate(statements)
+        if !is_parallel_call(statement) @ArgumentError(ERRMSG_OVERLAP) end
+        parallel_args = extract_args(statement, Symbol("@parallel"))
+        posargs, kwargs, kernelcall = split_parallel_args(parallel_args)
+        if any([x.args[1]==:stream for x in kwargs]) @ArgumentError(ERRMSG_INVALID_STREAM_OVERLAP) end
+        push!(calls, (posargs=posargs, kwargs=kwargs, kernelcall=kernelcall))
+    end
+    return calls
+end
+
+function overlap_cpu(block::Expr)
+    calls = collect_parallel_calls(block)
+    seq_calls = [:(@parallel $(call.posargs...) $(call.kwargs...) $(call.kernelcall)) for call in calls]
+    quote
+        $(seq_calls...)
+    end
+end
