@@ -153,9 +153,23 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     if is_ad_highlevel
         parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
     else
-        if     isgpu(package) parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
-        elseif iscpu(package) parallel_call_cpu(posargs..., kernelarg, async, package; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
-        else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
+        if package == PKG_KERNELABSTRACTIONS
+            target_package, hardware_symbol, _ = resolve_runtime_backend(package)
+            if isgpu(target_package)
+                stream_expr = haskey(kwargs, :stream) ? kwargs.stream : default_stream(target_package)
+                shmem_expr  = haskey(kwargs, :shmem)  ? kwargs.shmem  : nothing
+                parallel_call_kernelabstractions(posargs..., kernelarg, backend_kwargs_expr, async, target_package; hardware=hardware_symbol, stream=stream_expr, shmem=shmem_expr, launch=launch, configcall=configcall)
+            elseif iscpu(target_package)
+                parallel_call_cpu(posargs..., kernelarg, async, target_package; launch=launch, configcall=configcall)
+            else
+                @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $target_package).")
+            end
+        elseif isgpu(package)
+            parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
+        elseif iscpu(package)
+            parallel_call_cpu(posargs..., kernelarg, async, package; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
+        else
+            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
     end
 end
@@ -166,7 +180,8 @@ function parallel_indices(caller::Module, args::Union{Symbol,Expr}...; package::
     kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:inbounds, :padding), "@parallel_indices <indices> <kernel>", true; eval_args=(:inbounds,))
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
-    parallel_kernel(caller, package, numbertype, inbounds, padding, posargs..., kernelarg)
+    kernel_package = (package == PKG_KERNELABSTRACTIONS) ? first(resolve_runtime_backend(package)) : package
+    parallel_kernel(caller, kernel_package, numbertype, inbounds, padding, posargs..., kernelarg)
 end
 
 function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
@@ -280,6 +295,36 @@ end
 function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
     parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+end
+
+
+function parallel_call_kernelabstractions(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, target_package::Symbol; hardware::Symbol, stream::Union{Symbol,Expr}=default_stream(target_package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
+    int_type = kernel_int_type(target_package)
+    push!(kernelcall.args, ranges)
+    push!(kernelcall.args, :($int_type(length($ranges[1]))))
+    push!(kernelcall.args, :($int_type(length($ranges[2]))))
+    push!(kernelcall.args, :($int_type(length($ranges[3]))))
+    return create_kernelabstractions_call(target_package, hardware, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
+end
+
+function parallel_call_kernelabstractions(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, target_package::Symbol; hardware::Symbol, stream::Union{Symbol,Expr}=default_stream(target_package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    maxsize = :( $nblocks .* $nthreads )
+    ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
+    parallel_call_kernelabstractions(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, target_package; hardware=hardware, stream=stream, shmem=shmem, launch=launch, configcall=configcall)
+end
+
+function parallel_call_kernelabstractions(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, target_package::Symbol; hardware::Symbol, stream::Union{Symbol,Expr}=default_stream(target_package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    nthreads_x_max = determine_nthreads_x_max(target_package)
+    maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
+    nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize; nthreads_x_max=$nthreads_x_max) )
+    nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
+    parallel_call_kernelabstractions(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, target_package; hardware=hardware, stream=stream, shmem=shmem, launch=launch, configcall=configcall)
+end
+
+function parallel_call_kernelabstractions(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, target_package::Symbol; hardware::Symbol, stream::Union{Symbol,Expr}=default_stream(target_package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+    ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
+    parallel_call_kernelabstractions(ranges, kernelcall, backend_kwargs_expr, async, target_package; hardware=hardware, stream=stream, shmem=shmem, launch=launch, configcall=configcall)
 end
 
 
@@ -744,6 +789,76 @@ function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads:
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
+end
+
+function create_kernelabstractions_call(target_package::Symbol, hardware::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
+    backend_kwargs_tuple = (backend_kwargs_expr...,)
+    shmem_kw = isnothing(shmem) ? :nothing : shmem
+    return :(ParallelStencil.ParallelKernel.@ka package=$(QuoteNode(target_package)) hardware=$(QuoteNode(hardware)) blocks=$nblocks threads=$nthreads stream=$stream shmem=$shmem_kw async=$(async) launch=$(launch) $(backend_kwargs_tuple...) $kernelcall)
+end
+
+function ka_macro_impl(args::Vararg{Any})
+    if length(args) == 0
+        @ArgumentError("@ka: arguments missing.")
+    end
+    kernelcall = args[end]
+    kw_exprs = args[1:end-1]
+    package_expr = nothing
+    hardware_expr = nothing
+    nblocks_expr = nothing
+    nthreads_expr = nothing
+    stream_expr = nothing
+    shmem_expr = :nothing
+    async_expr = false
+    launch_expr = true
+    backend_kwargs = Expr[]
+    for kw in kw_exprs
+        if !(kw isa Expr && kw.head == :(=))
+            @ArgumentError("@ka: keyword arguments expected.")
+        end
+        key = kw.args[1]
+        val = kw.args[2]
+        if key == :package
+            package_expr = val
+        elseif key == :hardware
+            hardware_expr = val
+        elseif key == :blocks
+            nblocks_expr = val
+        elseif key == :threads
+            nthreads_expr = val
+        elseif key == :stream
+            stream_expr = val
+        elseif key == :shmem
+            shmem_expr = val
+        elseif key == :async
+            async_expr = val
+        elseif key == :launch
+            launch_expr = val
+        else
+            push!(backend_kwargs, kw)
+        end
+    end
+    if package_expr === nothing || nblocks_expr === nothing || nthreads_expr === nothing || stream_expr === nothing
+        @ArgumentError("@ka: missing required keyword arguments.")
+    end
+    package_val = package_expr isa QuoteNode ? package_expr.value : package_expr
+    if !(package_val isa Symbol)
+        @ArgumentError("@ka: keyword `package` must evaluate to a Symbol.")
+    end
+    async_flag = async_expr isa Bool ? async_expr : async_expr === :true ? true : async_expr === :false ? false : @ArgumentError("@ka: keyword `async` must be Bool.")
+    launch_flag = launch_expr isa Bool ? launch_expr : launch_expr === :true ? true : launch_expr === :false ? false : @ArgumentError("@ka: keyword `launch` must be Bool.")
+    shmem_arg = if shmem_expr === nothing || shmem_expr === :nothing
+        nothing
+    elseif shmem_expr isa QuoteNode && shmem_expr.value === nothing
+        nothing
+    else
+        shmem_expr
+    end
+    return esc(ParallelStencil.ParallelKernel.create_gpu_call(package_val, nblocks_expr, nthreads_expr, kernelcall, backend_kwargs, async_flag, stream_expr, shmem_arg, launch_flag))
+end
+
+macro ka(args...)
+    ParallelStencil.ParallelKernel.ka_macro_impl(args...)
 end
 
 function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
