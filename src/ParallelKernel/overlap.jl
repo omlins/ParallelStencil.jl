@@ -21,6 +21,9 @@ See also: [`@parallel`](@ref), [`@parallel_async`](@ref), [`@synchronize`](@ref)
 @doc OVERLAP_DOC
 macro overlap(args...) check_initialized(__module__); checkargs_overlap(args...); esc(overlap(__module__, args...)); end
 
+
+## ARGUMENT CHECKS
+
 function checkargs_overlap(args...)
     if (length(args) != 1) @ArgumentError("wrong number of arguments.") end
     if !is_block(args[1]) @ArgumentError("the argument must be a code block (obtained: $(args[1])).") end
