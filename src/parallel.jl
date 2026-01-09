@@ -1,4 +1,4 @@
-import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
+import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize, resolve_runtime_backend
 
 # NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore re-defined here in parallel.jl
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
@@ -111,6 +111,16 @@ macro parallel_async_threads(args...)     check_initialized(__module__); checkar
 macro parallel_async_polyester(args...)   check_initialized(__module__); checkargs_parallel(args...); esc(parallel_async(__source__, __module__, args...; package=PKG_POLYESTER)); end
 
 
+@inline function runtime_kernel_package(package::Symbol)
+    if package == PKG_KERNELABSTRACTIONS
+        target_package, _, _ = resolve_runtime_backend(package)
+        return target_package
+    else
+        return package
+    end
+end
+
+
 ## ARGUMENT CHECKS
 
 function checkargs_parallel(args...)
@@ -152,13 +162,14 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                 substitute_N(caller, ndims, is_parallel_kernel, kernelarg, kwargs, posargs...)
             else
                 numbertype = get_numbertype(caller)
+                kernel_package = runtime_kernel_package(package)
                 if !haskey(kwargs, :metadata_module)
                     get_name(kernelarg)
                     metadata_module, metadata_function = create_metadata_storage(source, caller, kernelarg)
                 else
                     metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
                 end
-                parallel_kernel(metadata_module, metadata_function, caller, package, ndims, numbertype, kernelarg, posargs...; kwargs)
+                parallel_kernel(metadata_module, metadata_function, caller, kernel_package, ndims, numbertype, kernelarg, posargs...; kwargs)
             end
         end
     elseif is_call(args[end])
@@ -206,8 +217,9 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
             memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
             if memopt
+                runtime_package = runtime_kernel_package(package)
                 quote
-                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, runtime_package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                     $metadata_function
                 end
             else
@@ -326,8 +338,9 @@ end
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
-    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
-    nthreads_max_memopt = determine_nthreads_max_memopt(package)
+    runtime_package     = runtime_kernel_package(package)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(runtime_package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(runtime_package)
     configcall_kwarg_expr = :(configcall=$configcall)
     metadata_call   = create_metadata_call(configcall)
     metadata_module = metadata_call
@@ -352,8 +365,9 @@ end
 
 function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     package             = get_package(caller)
-    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
-    nthreads_max_memopt = determine_nthreads_max_memopt(package)
+    runtime_package     = runtime_kernel_package(package)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(runtime_package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(runtime_package)
     metadata_call       = create_metadata_call(configcall)
     metadata_module     = metadata_call
     loopdim             = :($(metadata_module).loopdim)
@@ -372,11 +386,32 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : NTHREADS_MAX_MEMOPT_METAL)
+function determine_nthreads_max_memopt(package::Symbol)
+    runtime_package = package
+    if package == PKG_KERNELABSTRACTIONS
+        runtime_package, _, _ = resolve_runtime_backend(package)
+        if runtime_package == PKG_THREADS || runtime_package == PKG_KERNELABSTRACTIONS
+            return NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS
+        end
+    end
+    if runtime_package == PKG_AMDGPU
+        return NTHREADS_MAX_MEMOPT_AMDGPU
+    elseif runtime_package == PKG_CUDA
+        return NTHREADS_MAX_MEMOPT_CUDA
+    elseif runtime_package == PKG_THREADS
+        return NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS
+    else
+        return NTHREADS_MAX_MEMOPT_METAL
+    end
+end
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
 
 function compute_loopsize(package::Symbol)
-    compute_capability = get_compute_capability(package)
+    capability_package = package
+    if package == PKG_KERNELABSTRACTIONS
+        capability_package, _, _ = resolve_runtime_backend(package)
+    end
+    compute_capability = get_compute_capability(capability_package)
     if compute_capability == v"∞" # if not set (could also be not CUDA), choose a value that should work well for all architectures, favouring newer ones.
         return 32
     elseif compute_capability < v"8"
