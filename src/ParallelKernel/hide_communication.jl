@@ -117,7 +117,7 @@ Get the default-priority stream with identifier `id` for the package selected wi
 If no stream with the given identifier exists yet, then a new stream is created for this identifier. All stream handles are stored package-internally and can be re-retrieved anytime at no cost.
 
 # Arguments
-- `id::Integer`: identifier of the stream
+- `id::Integer`: identifier of the stream (1-based, consecutive integer)
 
 See also: [`@parallel_async`](@ref), [`@synchronize`](@ref)
 """
