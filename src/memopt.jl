@@ -1,5 +1,7 @@
 #TODO: add ParallelStencil.ParallelKernel. in front of all kernel lang in macros! Later: generalize more for z?
 
+import .ParallelKernel: resolve_runtime_backend, PKG_KERNELABSTRACTIONS, INT_KERNELABSTRACTIONS
+
 ##
 macro loop(args...) check_initialized(__module__); checkargs_loop(args...); esc(loop(__module__, args...)); end
 
@@ -69,16 +71,22 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
         end
     end
     if (package ∉ SUPPORTED_PACKAGES) @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") end
-    if     (package == PKG_CUDA)    int_type = INT_CUDA
-    elseif (package == PKG_AMDGPU)  int_type = INT_AMDGPU
-    elseif (package == PKG_METAL)   int_type = INT_METAL
-    elseif (package == PKG_THREADS) int_type = INT_THREADS
+    runtime_package = package
+    if package == PKG_KERNELABSTRACTIONS
+        runtime_package, _, _ = resolve_runtime_backend(package)
+    end
+    if     (runtime_package == PKG_CUDA)    int_type = INT_CUDA
+    elseif (runtime_package == PKG_AMDGPU)  int_type = INT_AMDGPU
+    elseif (runtime_package == PKG_METAL)   int_type = INT_METAL
+    elseif (runtime_package == PKG_THREADS) int_type = (package == PKG_KERNELABSTRACTIONS) ? INT_KERNELABSTRACTIONS : INT_THREADS
+    else
+        @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $runtime_package).")
     end
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, loopdim)
     optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
     if (length(optvars)==0) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set memopt=false for this kernel.") end
-    optranges             = define_optranges(optranges, optvars, offsets, int_type, package)
+    optranges             = define_optranges(optranges, optvars, offsets, int_type, runtime_package)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, loopdim)
 
     if loopdim == 3
