@@ -95,6 +95,8 @@ const GET_PRIORITY_STREAM_DOC = """
 
 Get the priority stream with identifier `id` for the package selected with [`@init_parallel_kernel`](@ref). Returns `nothing` for CPU backends.
 
+If no stream with the given identifier exists yet, then a new stream is created for this identifier. All stream handles are stored package-internally and can be re-retrieved anytime at no cost.
+
 # Arguments
 - `id::Integer`: identifier of the stream
 
