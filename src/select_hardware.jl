@@ -1,11 +1,11 @@
 ##
 @doc replace(ParallelKernel.SELECT_HARDWARE_DOC, "ParallelKernel" => "ParallelStencil"
-) function select_hardware(hardware::Symbol)
-    ParallelKernel.select_hardware(hardware)
+) function select_hardware(caller::Module, hardware::Symbol)
+    ParallelKernel.select_hardware(caller, hardware)
 end
 
 ##
 @doc replace(ParallelKernel.CURRENT_HARDWARE_DOC, "ParallelKernel" => "ParallelStencil"
-) function current_hardware()
-    ParallelKernel.current_hardware()
+) function current_hardware(caller::Module)
+    ParallelKernel.current_hardware(caller)
 end
