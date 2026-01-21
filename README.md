@@ -318,7 +318,7 @@ import ParallelStencil.AD
 using Enzyme
 #(...)
 @parallel f!(A, B, a)                                                                                                                 # normal call of f!
-@parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
+@parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
 ```
 The submodule `ParallelStencil.AD` contains GPU-compatible wrappers of Enzyme functions (returning always `nothing` as required by the backend packages [CUDA.jl] and [AMDGPU.jl]); the wrapper `AD.autodiff_deferred!` maps, e.g., `Enzyme.autodiff_deferred`. The keyword argument `configcall` makes it trivial to call these generic functions for automatic differentiation with the right launch parameters.
 
