@@ -25,17 +25,19 @@ function promote_to_const(args::Vararg{Any,N}) where N
     end
 end
 
-function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
-    args = promote_to_const(args...)
-    Enzyme.autodiff_deferred(arg, args...)
-    return
-end
-
-function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
-    args = promote_to_const(args...)
-    Enzyme.autodiff_deferred_thunk(arg, args...)
-    return
-end
+ function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(mode, f, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
+     f    = promote_to_const(f)
+     args = promote_to_const(args...)
+     Enzyme.autodiff_deferred(mode, f, Const, args...)
+     return
+ end
+ 
+ function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(mode, f, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
+     f    = promote_to_const(f)
+     args = promote_to_const(args...)
+     Enzyme.autodiff_deferred_thunk(mode, f, Const, args...)
+     return
+ end
 
 
 ## FUNCTIONS TO CHECK EXTENSIONS SUPPORT
