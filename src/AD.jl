@@ -36,7 +36,7 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 
         @info "running on CPU/GPU"
         @parallel f!(A, B, a) # normal call of f!
-        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, Duplicated(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # automatic differentiation of f!
+        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # automatic differentiation of f!
         
         return
     end
