@@ -233,7 +233,7 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
         end
     end
     annotated_args        = (:($(ad_annotations_byvar[var][1])($((var ∈ keys(ad_vars) ? (var, ad_vars[var]) : (var,))...))) for var in f_posargs)
-    ad_call               = :(ParallelStencil.ParallelKernel.AD.autodiff_deferred!($ad_mode, $f_name, $(annotated_args...)))
+    ad_call               = :(ParallelStencil.ParallelKernel.AD.autodiff_deferred!($ad_mode, $f_name, Const, $(annotated_args...)))  # NOTE: it is safe to inject the return type as Const as @parallel[_indices] functions must always return nothing
     kwargs_remaining      = filter(x->!(x in (:∇, :ad_mode, :ad_annotations)), keys(kwargs))
     kwargs_remaining_expr = [:($key=$val) for (key,val) in kwargs_remaining]
     if (async) return :( @parallel_async $(posargs...) $(backend_kwargs_expr...) $(kwargs_remaining_expr...) configcall=$kernelcall $ad_call ) #TODO: the package needs to be passed further here later.
