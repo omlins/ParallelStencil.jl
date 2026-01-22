@@ -28,14 +28,14 @@ end
  function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(mode, f, args...) # NOTE: minimal specialization is required to avoid overwriting the default method
      f    = promote_to_const(f)
      args = promote_to_const(args...)
-     Enzyme.autodiff_deferred(mode, f, Const, args...)
+     Enzyme.autodiff_deferred(mode, f, Enzyme.Const, args...)
      return
  end
  
  function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(mode, f, args...) # NOTE: minimal specialization is required to avoid overwriting the default method
      f    = promote_to_const(f)
      args = promote_to_const(args...)
-     Enzyme.autodiff_deferred_thunk(mode, f, Const, args...)
+     Enzyme.autodiff_deferred_thunk(mode, f, Enzyme.Const, args...)
      return
  end
 
