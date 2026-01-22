@@ -111,38 +111,50 @@ eval(:(
                 @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.Duplicated(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a), Enzyme.Active(b))"
                 @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))"
             end;
-            @testset "AD.autodiff_deferred! | @parallel ∇ (numerical)" begin
-                @static if $package == $PKG_THREADS
-                    N = 16
-                    a = 6.5
-                    A = @rand(N)
-                    B = @rand(N)
-                    Ā = @ones(N)
-                    B̄ = @ones(N)
-                    A_ref = Array(A)
-                    B_ref = Array(B)
-                    Ā_ref = ones($FloatDefault, N)
-                    B̄_ref = ones($FloatDefault, N)
-                    @parallel_indices (ix) function f!(A, B, a)
-                        A[ix] += a * B[ix] * 100.65
-                        return
-                    end
-                    function g!(A, B, a)
-                        for ix in 1:length(A)
-                            A[ix] += a * B[ix] * 100.65
-                        end
-                        return
-                    end
-                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const.
-                    Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!), Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
-                    @test Array(Ā) ≈ Ā_ref
-                    @test Array(B̄) ≈ B̄_ref
-                    Ā = @ones(N)
-                    B̄ = @ones(N)
-                    @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)
-                    @test Array(Ā) ≈ Ā_ref
-                    @test Array(B̄) ≈ B̄_ref
+            @testset "ad numerical" begin
+                N = 16
+                a = 6.5
+                A = @rand(N)
+                B = @rand(N)
+                Ā = @ones(N)
+                B̄ = @ones(N)
+                A_ref = Array(A)
+                B_ref = Array(B)
+                Ā_ref = ones($FloatDefault, N)
+                B̄_ref = ones($FloatDefault, N)
+                @parallel_indices (ix) function f!(A, B, a)
+                    A[ix] += a * B[ix] * 100.65
+                    return
                 end
+                function g!(A, B, a)
+                    for ix in 1:length(A)
+                        A[ix] += a * B[ix] * 100.65
+                    end
+                    return
+                end
+                Enzyme.autodiff_deferred(Enzyme.Reverse, Const(g!), Const, DuplicatedNoNeed(A_ref, Ā_ref), DuplicatedNoNeed(B_ref, B̄_ref), Const(a))
+                @testset "AD.autodiff_deferred!" begin
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const(f!) and the return type Const is inserted.
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
+                    Ā = @ones(N)
+                    B̄ = @ones(N)
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const(f!)
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
+                    Ā = @ones(N)
+                    B̄ = @ones(N)
+                    @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: no automatic promotion or insertion here.
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
+                end;
+                @testset "@parallel ∇ (numerical)" begin
+                    Ā = @ones(N)
+                    B̄ = @ones(N)
+                    @parallel ∇=(A->Ā, B->B̄) f!(A, B, a) # NOTE: expands to the same as above
+                    @test Array(Ā) ≈ Ā_ref
+                    @test Array(B̄) ≈ B̄_ref
+                end;
             end;
             @testset "@parallel_indices" begin
                 @testset "inbounds" begin
