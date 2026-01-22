@@ -8,7 +8,7 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 
 # Functions
 - `autodiff_deferred!(mode, f, args...)`: wraps function `Enzyme.autodiff_deferred`, calling it as `Enzyme.autodiff_deferred(mode, f, Const, args...)`, promoting all arguments of `args` and `f` that are not `Enzyme.Annotation` to Enzyme.Const (the return type activity is always `Enzyme.Const`, as @parallel and @parallel_indices functions must return nothing).
-- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`, promoting all arguments that are not Enzyme.Annotations to Enzyme.Const. The function signature is `autodiff_deferred_thunk!(mode, f, args...)` and the return type must not be fixed to `Const` as @parallel and @parallel_indices functions must return `nothing`.
+- `autodiff_deferred_thunk!(mode, f, args...)`: wraps function `Enzyme.autodiff_deferred_thunk`, calling it as `Enzyme.autodiff_deferred_thunk(mode, f, Const, args...)`, promoting all arguments of `args` and `f` that are not `Enzyme.Annotation` to Enzyme.Const (the return type activity is always `Enzyme.Const`, as @parallel and @parallel_indices functions must return nothing).
 
 # Examples
     const USE_GPU = true
