@@ -46,8 +46,15 @@ function runtests(testfiles=String[])
         try
             open(stdout_path, "w") do stdout_io
                 open(stderr_path, "w") do stderr_io
-                    proc = run(pipeline(Cmd(cmd; ignorestatus=true), stdout=stdout_io, stderr=stderr_io); wait=false)
-                    wait(proc)
+                    try
+                        proc = run(pipeline(Cmd(cmd), stdout=stdout_io, stderr=stderr_io); wait=false)
+                        wait(proc) 
+                    catch ex
+                        println("Test Error: an exception occurred while running the test file $f :")
+                        println(ex)
+                        nerror += 1
+                        push!(errorfiles, f)
+                    end
                 end
             end
             stdout_content = read(stdout_path, String)
