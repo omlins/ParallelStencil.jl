@@ -197,7 +197,7 @@ eval(:(
                     end
                 end;
                 @testset "Semantic smoke tests" begin
-                    @static if @iscpu($package)
+                    @static if @iscpu($package) && $package != $PKG_POLYESTER # Polyester does not support @test inside @parallel kernels
                         N = 8
                         A  = @rand(N)
                         P  = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]  # simple predicate
