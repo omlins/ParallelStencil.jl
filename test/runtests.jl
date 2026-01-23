@@ -43,18 +43,11 @@ function runtests(testfiles=String[])
         stderr_path = tempname()
         stdout_content = ""
         stderr_content = ""
+        proc = nothing
         try
             open(stdout_path, "w") do stdout_io
                 open(stderr_path, "w") do stderr_io
-                    try
-                        proc = run(pipeline(Cmd(cmd), stdout=stdout_io, stderr=stderr_io); wait=false)
-                        wait(proc) 
-                    catch ex
-                        println("Test Error: an exception occurred while running the test file $f :")
-                        println(ex)
-                        nerror += 1
-                        push!(errorfiles, f)
-                    end
+                    proc = run(pipeline(Cmd(cmd; ignorestatus=true), stdout=stdout_io, stderr=stderr_io); wait=true)
                 end
             end
             stdout_content = read(stdout_path, String)
@@ -64,6 +57,8 @@ function runtests(testfiles=String[])
         catch ex
             println("Test Error: an exception occurred while running the test file $f :")
             println(ex)
+            nerror += 1
+            push!(errorfiles, f)
         finally
             if ispath(stdout_path)
                 rm(stdout_path; force=true)
@@ -72,7 +67,10 @@ function runtests(testfiles=String[])
                 rm(stderr_path; force=true)
             end
         end
-        if !occursin(r"(?i)test summary", stdout_content)
+        if proc !== nothing && !success(proc)
+            nerror += 1
+            push!(errorfiles, f)
+        elseif !occursin(r"(?i)test summary", stdout_content)
             nerror += 1
             push!(errorfiles, f)
         end
