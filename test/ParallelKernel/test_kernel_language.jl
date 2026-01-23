@@ -57,7 +57,7 @@ eval(:(
                     @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "CUDA.@cuDynamicSharedMem $(nameof($FloatDefault)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
-                elseif $package == $AMDGPU
+                elseif $package == $PKG_AMDGPU
                     @test @prettystring(1, @gridDim()) == "AMDGPU.gridGroupDim()"
                     @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
                     @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
