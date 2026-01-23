@@ -40,7 +40,7 @@ function runtests(testfiles=String[])
             println("$f")
             continue
         end
-        cmd = `$exename -O3 --startup-file=no $(joinpath(testdir, f))`
+        cmd = `$exename --color=yes -O3 --startup-file=no $(joinpath(testdir, f))`
         stdout_path = tempname()
         stderr_path = tempname()
         stdout_content = ""
