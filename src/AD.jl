@@ -7,8 +7,8 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
     import ParallelStencil.AD
 
 # Functions
-- `autodiff_deferred!(mode, f, args...)`: wraps function `Enzyme.autodiff_deferred`, calling it as `Enzyme.autodiff_deferred(mode, f, Const, args...)`, promoting all arguments of `args` and `f` that are not `Enzyme.Annotation` to `Enzyme.Const`. Important: the return type activity is automatically inserted as 3rd argument as it is always `Enzyme.Const`, given that `@parallel` and `@parallel_indices` functions must return nothing.
-- `autodiff_deferred_thunk!(mode, f, args...)`: wraps function `Enzyme.autodiff_deferred_thunk`, calling it as `Enzyme.autodiff_deferred_thunk(mode, f, Const, args...)`, promoting all arguments of `args` and `f` that are not `Enzyme.Annotation` to `Enzyme.Const`. Important: the return type activity is automatically inserted as 3rd argument as it is always `Enzyme.Const`, given that `@parallel` and `@parallel_indices` functions must return nothing.
+- `autodiff_deferred!`: wraps function `Enzyme.autodiff_deferred`, and supports the same arguments. Additionally, it promotes all arguments that are not `Enzyme.Annotation` to `Enzyme.Const` and automatically inserts the return type activity as 3rd argument if omitted; as a result, the function can be called also as, e.g., `autodiff_deferred!(Enzyme.Reverse, f!,...)`, besides the fully explicit form, e.g., `autodiff_deferred!(Enzyme.Reverse, Enzyme.Const(f!), Enzyme.Const,...)`.
+- `autodiff_deferred_thunk!`: wraps function `Enzyme.autodiff_deferred_thunk`, and supports the same arguments. Additionally, it applies the same argument promotion and return type activity insertion as `autodiff_deferred!` (see above).
 
 # Examples
     const USE_GPU = true
