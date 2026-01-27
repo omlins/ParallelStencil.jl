@@ -16,21 +16,31 @@ A particularity of ParallelStencil is that it enables writing a single high-leve
 Beyond traditional high-performance computing, ParallelStencil supports automatic differentiation of architecture-agnostic parallel kernels relying on [Enzyme.jl], enabling both high-level and generic syntax for maximal flexibility.
 
 ## Contents
-* [Parallelization and optimization with one macro call](#parallelization-with-one-macro-call)
-* [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
-* [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-GPU-and-CPU)
-* [50-lines multi-xPU example](#50-lines-multi-xpu-example)
-* [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
-* [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
-* [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
-* [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
-* [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
-* [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
-* [Dependencies](#dependencies)
-* [Installation](#installation)
-* [Questions, comments and discussions](#questions-comments-and-discussions)
-* [Your contributions](#your-contributions)
-* [References](#references)
+- [Contents](#contents)
+- [Parallelization and optimization with one macro call](#parallelization-and-optimization-with-one-macro-call)
+- [Stencil computations with math-close notation](#stencil-computations-with-math-close-notation)
+- [50-lines example deployable on GPU and CPU](#50-lines-example-deployable-on-gpu-and-cpu)
+- [50-lines multi-xPU example](#50-lines-multi-xpu-example)
+- [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
+- [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
+- [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
+- [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
+- [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
+- [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
+    - [Performance metric](#performance-metric)
+    - [Miniapp content](#miniapp-content)
+    - [Thermo-mechanical convection 2-D app](#thermo-mechanical-convection-2-d-app)
+    - [Viscous Stokes 2-D app](#viscous-stokes-2-d-app)
+    - [Viscous Stokes 3-D app](#viscous-stokes-3-d-app)
+    - [Acoustic wave 2-D app](#acoustic-wave-2-d-app)
+    - [Acoustic wave 3-D app](#acoustic-wave-3-d-app)
+    - [Scalar porosity waves 2-D app](#scalar-porosity-waves-2-d-app)
+    - [Hydro-mechanical porosity waves 2-D app](#hydro-mechanical-porosity-waves-2-d-app)
+- [Dependencies](#dependencies)
+- [Installation](#installation)
+- [Questions, comments and discussions](#questions-comments-and-discussions)
+- [Your contributions](#your-contributions)
+- [References](#references)
 
 ## Parallelization and optimization with one macro call
 A simple call to `@parallel` is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to `@init_parallel_stencil` beforehand. Supported are [CUDA.jl], [AMDGPU.jl] and [Metal.jl] for running on GPU and [Base.Threads] for CPU. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl] underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
@@ -318,7 +328,7 @@ import ParallelStencil.AD
 using Enzyme
 #(...)
 @parallel f!(A, B, a)                                                                                                                 # normal call of f!
-@parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a))  # call to the gradient of f!, differentiated with respect to A and B
+@parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), a)  # call to the gradient of f!, differentiated with respect to A and B
 ```
 The submodule `ParallelStencil.AD` contains GPU-compatible wrappers of Enzyme functions (returning always `nothing` as required by the backend packages [CUDA.jl] and [AMDGPU.jl]); the wrapper `AD.autodiff_deferred!` maps, e.g., `Enzyme.autodiff_deferred`. The keyword argument `configcall` makes it trivial to call these generic functions for automatic differentiation with the right launch parameters.
 
