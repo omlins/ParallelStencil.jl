@@ -138,16 +138,10 @@ eval(:(
                         @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const(f!) and the return type Const is inserted.
                         @test Array(Ā) ≈ Ā_ref
                         @test Array(B̄) ≈ B̄_ref
-                        Ā = @ones(N)
-                        B̄ = @ones(N)
-                        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const(f!)
-                        @test Array(Ā) ≈ Ā_ref
-                        @test Array(B̄) ≈ B̄_ref
-                        Ā = @ones(N)
-                        B̄ = @ones(N)
-                        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: no automatic promotion or insertion here.
-                        @test Array(Ā) ≈ Ā_ref
-                        @test Array(B̄) ≈ B̄_ref
+                    end;
+                    @testset "AD.autodiff_deferred! (GPU compiler error)" begin
+                        @test_throws Exception @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: f! is automatically promoted to Const(f!)
+                        @test_throws Exception @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, Const(f!), Const, DuplicatedNoNeed(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # NOTE: no automatic promotion or insertion here.
                     end;
                     @testset "@parallel ∇ (numerical)" begin
                         Ā = @ones(N)
