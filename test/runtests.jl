@@ -57,7 +57,7 @@ function runtests(testfiles=String[])
             print(stdout_content)
             print(Base.stderr, stderr_content)
         catch ex
-            println("Test Abort: an system-level exception occurred while running the test file $f :")
+            println("Test Abort: a system-level exception occurred while running the test file $f :")
             println(ex)
             nabort += 1
             push!(abortfiles, f)
