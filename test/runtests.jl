@@ -80,7 +80,7 @@ function runtests(testfiles=String[])
     end
     println("")
     if nabort == 0 && nfail == 0
-        printstyled("Test suite: all selected test files executed and passed all tests.\n"; bold=true, color=:green)
+        printstyled("Test suite: all selected test files executed and all tests passed.\n"; bold=true, color=:green)
     else
         if nfail > 0
             printstyled("Test suite: $nfail test files(s) have tests that failed or errored (see above for results); files with failed/errored tests:\n"; bold=true, color=:red)
