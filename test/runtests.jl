@@ -15,8 +15,10 @@ function runtests(testfiles=String[])
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
     testfiles = isempty(testfiles) ? sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...))) : testfiles
 
-    nerror = 0
-    errorfiles = String[]
+    nabort = 0
+    nfail  = 0
+    abortfiles = String[]
+    failfiles  = String[]
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
@@ -38,16 +40,16 @@ function runtests(testfiles=String[])
             println("$f")
             continue
         end
-        cmd = `$exename -O3 --startup-file=no $(joinpath(testdir, f))`
+        cmd = `$exename --color=yes -O3 --startup-file=no $(joinpath(testdir, f))`
         stdout_path = tempname()
         stderr_path = tempname()
         stdout_content = ""
         stderr_content = ""
+        proc = nothing
         try
             open(stdout_path, "w") do stdout_io
                 open(stderr_path, "w") do stderr_io
-                    proc = run(pipeline(Cmd(cmd; ignorestatus=true), stdout=stdout_io, stderr=stderr_io); wait=false)
-                    wait(proc)
+                    proc = run(pipeline(Cmd(cmd; ignorestatus=true), stdout=stdout_io, stderr=stderr_io); wait=true)
                 end
             end
             stdout_content = read(stdout_path, String)
@@ -55,8 +57,11 @@ function runtests(testfiles=String[])
             print(stdout_content)
             print(Base.stderr, stderr_content)
         catch ex
-            println("Test Error: an exception occurred while running the test file $f :")
+            println("Test Abort: a system-level exception occurred while running the test file $f :")
             println(ex)
+            nabort += 1
+            push!(abortfiles, f)
+            continue
         finally
             if ispath(stdout_path)
                 rm(stdout_path; force=true)
@@ -66,21 +71,32 @@ function runtests(testfiles=String[])
             end
         end
         if !occursin(r"(?i)test summary", stdout_content)
-            nerror += 1
-            push!(errorfiles, f)
+            nabort += 1
+            push!(abortfiles, f)
+        elseif proc !== nothing && !success(proc)
+            nfail += 1
+            push!(failfiles, f)
         end
     end
     println("")
-    if nerror == 0
-        printstyled("Test suite: all selected test files executed (see above for results).\n"; bold=true, color=:green)
+    if nabort == 0 && nfail == 0
+        printstyled("Test suite: all selected test files executed and all tests passed.\n"; bold=true, color=:green)
     else
-        printstyled("Test suite: $nerror test file(s) aborted execution due to error (see above for details); files aborting execution:\n"; bold=true, color=:red)
-        for f in errorfiles
-            println(" - $f")
+        if nfail > 0
+            printstyled("Test suite: $nfail test files(s) have tests that failed or errored (see above for results); files with failed/errored tests:\n"; bold=true, color=:red)
+            for f in failfiles
+                println(" - $f")
+            end
+        end
+        if nabort > 0
+            printstyled("Test suite: $nabort test file(s) aborted execution due to fatal error (see above for details); files aborting execution:\n"; bold=true, color=:red)
+            for f in abortfiles
+                println(" - $f")
+            end
         end
     end
     println("")
-    return nerror
+    return nabort+nfail
 end
 
 exit(runtests(ARGS))
