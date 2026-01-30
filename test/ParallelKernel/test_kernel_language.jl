@@ -1,8 +1,8 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER
-import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu, select_hardware, current_hardware, handle
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -17,6 +17,10 @@ end
 @static if PKG_METAL in TEST_PACKAGES
     import Metal # Import also on non-Apple systems to test macro expansions
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    import KernelAbstractions
+    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -75,6 +79,30 @@ eval(:(
                     @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal $(nameof($FloatDefault)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"        #TODO: not yet supported for Metal
                     # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"  #TODO: not yet supported for Metal
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    call = @prettystring(1, @gridDim())
+                    @test occursin("KernelAbstractions.@ndrange", call)
+                    @test occursin("KernelAbstractions.@groupsize", call)
+
+                    call = @prettystring(1, @blockIdx())
+                    @test occursin("KernelAbstractions.@index", call)
+                    @test occursin("Group", call)
+                    @test occursin("NTuple", call)
+
+                    call = @prettystring(1, @blockDim())
+                    @test occursin("KernelAbstractions.@groupsize", call)
+
+                    call = @prettystring(1, @threadIdx())
+                    @test occursin("KernelAbstractions.@index", call)
+                    @test occursin("Local", call)
+                    @test occursin("NTuple", call)
+
+                    call = @prettystring(1, @sync_threads())
+                    @test occursin("KernelAbstractions.@synchronize", call)
+
+                    call = @prettystring(1, @sharedMem($FloatDefault, (2,3)))
+                    @test occursin("KernelAbstractions.@localmem", call)
+                    @test occursin("$(nameof($FloatDefault))", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
@@ -148,6 +176,24 @@ eval(:(
                         @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
                         @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
 
+                    elseif $package == $PKG_KERNELABSTRACTIONS
+                        @test_throws Exception @prettystring(1, @warpsize())
+                        @test_throws Exception @prettystring(1, @laneid())
+                        @test_throws Exception @prettystring(1, @active_mask())
+
+                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
+                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane, width))
+                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask, val, delta))
+                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask, val, delta, width))
+                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask, val, delta))
+                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask, val, delta, width))
+                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask, val, lane_mask))
+                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask, val, lane_mask, width))
+
+                        @test_throws Exception @prettystring(1, @vote_any_sync(mask, predicate))
+                        @test_throws Exception @prettystring(1, @vote_all_sync(mask, predicate))
+                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
+
                     elseif @iscpu($package)
                         @test @prettystring(1, @warpsize())     == "ParallelStencil.ParallelKernel.warpsize_cpu()"
                         @test @prettystring(1, @laneid())       == "ParallelStencil.ParallelKernel.laneid_cpu()"
@@ -197,7 +243,10 @@ eval(:(
                     end
                 end;
                 @testset "Semantic smoke tests" begin
-                    @static if @iscpu($package)
+                    @static if $package == $PKG_KERNELABSTRACTIONS
+                        select_hardware(@__MODULE__, :cpu)
+                    end
+                    @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
                         N = 8
                         A  = @rand(N)
                         P  = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]  # simple predicate
@@ -240,7 +289,7 @@ eval(:(
                     end
                 end;
                 @testset "Unsupported primitives" begin
-                    @static if $package == $PKG_METAL
+                    @static if $package == $PKG_METAL || $package == $PKG_KERNELABSTRACTIONS
                         mask      = UInt64(0x1)
                         mask32    = UInt32(0x1)
                         valf      = one($FloatDefault)
