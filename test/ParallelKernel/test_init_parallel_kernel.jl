@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, SCALARTYPES, ARRAYTYPES, FIELDTYPES
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, SCALARTYPES, ARRAYTYPES, FIELDTYPES, select_hardware, current_hardware, handle
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -22,6 +22,10 @@ end
         TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
     end
 end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    import KernelAbstractions
+    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
+end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
@@ -40,58 +44,83 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_inbounds() == false
                 @test @get_padding() == false
             end;
-            @testset "Data" begin
-                @test @isdefined(Data)
-                mods = (:Data, :Device, :Fields)
-                syms = @symbols($(@__MODULE__), Data)
-                @test length(syms) > 1
-                @test length(syms) >= length(mods) + length(SCALARTYPES) + length(ARRAYTYPES) # +1|2 for metadata symbols
-                @test all(T ∈ syms for T in mods)
-                @test all(T ∈ syms for T in SCALARTYPES)
-                @test all(T ∈ syms for T in ARRAYTYPES)
-                @testset "Data.Device" begin
-                    syms = @symbols($(@__MODULE__), Data.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in ARRAYTYPES)
-                end;
-                @testset "Data.Fields" begin
-                    mods = (:Fields, :Device)
-                    syms = @symbols($(@__MODULE__), Data.Fields)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in mods)
-                    @test all(T ∈ syms for T in FIELDTYPES)
-                end;
-                @testset "Data.Fields.Device" begin
-                    syms = @symbols($(@__MODULE__), Data.Fields.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in FIELDTYPES)
-                end;
+            @testset "default hardware" begin
+                default_hw = current_hardware(@__MODULE__)
+                if $package == PKG_KERNELABSTRACTIONS
+                    @test default_hw == :cpu
+                elseif $package == PKG_CUDA
+                    @test default_hw == :gpu_cuda
+                elseif $package == PKG_AMDGPU
+                    @test default_hw == :gpu_amd
+                elseif $package == PKG_METAL
+                    @test default_hw == :gpu_metal
+                else
+                    @test default_hw == :cpu
+                end
             end;
-            @testset "TData" begin # NOTE: no scalar types
-                @test @isdefined(TData)
-                mods = (:TData, :Device, :Fields)
-                syms = @symbols($(@__MODULE__), TData)
-                @test length(syms) > 1
-                @test all(T ∈ syms for T in mods)
-                @test all(T ∈ syms for T in ARRAYTYPES)
-                @testset "TData.Device" begin
-                    syms = @symbols($(@__MODULE__), TData.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in ARRAYTYPES)
+            if $package == PKG_KERNELABSTRACTIONS
+                @testset "KernelAbstractions exposes no Data modules" begin
+                    @test !@isdefined(Data)
+                    @test !@isdefined(TData)
+                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
+                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
                 end;
-                @testset "TData.Fields" begin
-                    mods = (:Fields, :Device)
-                    syms = @symbols($(@__MODULE__), TData.Fields)
-                    @test length(syms) > 0
+                select_hardware(@__MODULE__, :cpu)
+                @test current_hardware(@__MODULE__) == :cpu
+            else
+                @testset "Data" begin
+                    @test @isdefined(Data)
+                    mods = (:Data, :Device, :Fields)
+                    syms = @symbols($(@__MODULE__), Data)
+                    @test length(syms) > 1
+                    @test length(syms) >= length(mods) + length(SCALARTYPES) + length(ARRAYTYPES) # +1|2 for metadata symbols
                     @test all(T ∈ syms for T in mods)
-                    @test all(T ∈ syms for T in FIELDTYPES)
+                    @test all(T ∈ syms for T in SCALARTYPES)
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                    @testset "Data.Device" begin
+                        syms = @symbols($(@__MODULE__), Data.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in ARRAYTYPES)
+                    end;
+                    @testset "Data.Fields" begin
+                        mods = (:Fields, :Device)
+                        syms = @symbols($(@__MODULE__), Data.Fields)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in mods)
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
+                    @testset "Data.Fields.Device" begin
+                        syms = @symbols($(@__MODULE__), Data.Fields.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
                 end;
-                @testset "TData.Fields.Device" begin
-                    syms = @symbols($(@__MODULE__), TData.Fields.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in FIELDTYPES)
+                @testset "TData" begin # NOTE: no scalar types
+                    @test @isdefined(TData)
+                    mods = (:TData, :Device, :Fields)
+                    syms = @symbols($(@__MODULE__), TData)
+                    @test length(syms) > 1
+                    @test all(T ∈ syms for T in mods)
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                    @testset "TData.Device" begin
+                        syms = @symbols($(@__MODULE__), TData.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in ARRAYTYPES)
+                    end;
+                    @testset "TData.Fields" begin
+                        mods = (:Fields, :Device)
+                        syms = @symbols($(@__MODULE__), TData.Fields)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in mods)
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
+                    @testset "TData.Fields.Device" begin
+                        syms = @symbols($(@__MODULE__), TData.Fields.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
                 end;
-            end;
+            end
             @reset_parallel_kernel()
         end;
         @testset "2. initialization of ParallelKernel without numbertype, with inbounds and padding" begin
@@ -104,32 +133,57 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_inbounds() == true
                 @test @get_padding() == true
             end;
-            @testset "Data" begin # NOTE: no scalar types
-                @test @isdefined(Data)
-                mods = (:Data, :Device, :Fields)
-                syms = @symbols($(@__MODULE__), Data)
-                @test length(syms) > 1
-                @test all(T ∈ syms for T in mods)
-                @test !(Symbol("Number") in syms)
-                @test all(T ∈ syms for T in ARRAYTYPES)
-                @testset "Data.Device" begin
-                    syms = @symbols($(@__MODULE__), Data.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in ARRAYTYPES)
-                end;
-                @testset "Data.Fields" begin
-                    mods = (:Fields, :Device)
-                    syms = @symbols($(@__MODULE__), Data.Fields)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in mods)
-                    @test all(T ∈ syms for T in FIELDTYPES)
-                end;
-                @testset "Data.Fields.Device" begin
-                    syms = @symbols($(@__MODULE__), Data.Fields.Device)
-                    @test length(syms) > 0
-                    @test all(T ∈ syms for T in FIELDTYPES)
-                end;
+            @testset "default hardware" begin
+                default_hw = current_hardware(@__MODULE__)
+                if $package == PKG_KERNELABSTRACTIONS
+                    @test default_hw == :cpu
+                elseif $package == PKG_CUDA
+                    @test default_hw == :gpu_cuda
+                elseif $package == PKG_AMDGPU
+                    @test default_hw == :gpu_amd
+                elseif $package == PKG_METAL
+                    @test default_hw == :gpu_metal
+                else
+                    @test default_hw == :cpu
+                end
             end;
+            if $package == PKG_KERNELABSTRACTIONS
+                @testset "KernelAbstractions exposes no Data modules" begin
+                    @test !@isdefined(Data)
+                    @test !@isdefined(TData)
+                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
+                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
+                end;
+                select_hardware(@__MODULE__, :cpu)
+                @test current_hardware(@__MODULE__) == :cpu
+            else
+                @testset "Data" begin # NOTE: no scalar types
+                    @test @isdefined(Data)
+                    mods = (:Data, :Device, :Fields)
+                    syms = @symbols($(@__MODULE__), Data)
+                    @test length(syms) > 1
+                    @test all(T ∈ syms for T in mods)
+                    @test !(Symbol("Number") in syms)
+                    @test all(T ∈ syms for T in ARRAYTYPES)
+                    @testset "Data.Device" begin
+                        syms = @symbols($(@__MODULE__), Data.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in ARRAYTYPES)
+                    end;
+                    @testset "Data.Fields" begin
+                        mods = (:Fields, :Device)
+                        syms = @symbols($(@__MODULE__), Data.Fields)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in mods)
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
+                    @testset "Data.Fields.Device" begin
+                        syms = @symbols($(@__MODULE__), Data.Fields.Device)
+                        @test length(syms) > 0
+                        @test all(T ∈ syms for T in FIELDTYPES)
+                    end;
+                end;
+            end
             @reset_parallel_kernel()
         end;
         @testset "3. Exceptions" begin
