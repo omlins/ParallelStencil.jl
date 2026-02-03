@@ -47,6 +47,9 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         indextype          = INT_METAL
         data_module        = Data_metal(numbertype, indextype)
         tdata_module       = TData_metal()
+    elseif package == PKG_KERNELABSTRACTIONS
+        if (isinteractive() && !is_installed("KernelAbstractions")) @NotInstalledError("KernelAbstractions was selected as package for parallelization, but KernelAbstractions.jl is not installed. KernelAbstractions functionality is provided as an extension of $parent_module and KernelAbstractions.jl needs therefore to be installed independently (type `add KernelAbstractions` in the julia package manager).") end
+        indextype          = INT_KERNELABSTRACTIONS
     elseif package == PKG_POLYESTER
         if (isinteractive() && !is_installed("Polyester")) @NotInstalledError("Polyester was selected as package for parallelization, but Polyester.jl is not installed. Multi-threading using Polyester is provided as an extension of $parent_module and Polyester.jl needs therefore to be installed independently (type `add Polyester` in the julia package manager).") end
         indextype          = INT_POLYESTER
@@ -61,28 +64,31 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be
     ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD($package))
     @eval(caller, $pkg_import_cmd)
-    if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
-        if (datadoc_call==:())
-            if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
-            else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+    if !supports_multi_architecture(package)
+        if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
+            if (datadoc_call==:())
+                if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
+                else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+                end
             end
+            @eval(caller, $data_module)
+            @eval(caller, $datadoc_call)
+        elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
+            if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
+        else
+            @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
         end
-        @eval(caller, $data_module)
-        @eval(caller, $datadoc_call)
-    elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
-        if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
-    else
-        @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
+        if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
+            @eval(caller, $tdata_module)
+        elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
+            if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
+        else
+            @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
+        end
     end
-    if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
-        @eval(caller, $tdata_module)
-    elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
-        if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
-    else
-        @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
-    end              
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
+    set_hardware(caller, hardware_default(package))
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
     set_padding(caller, padding)
