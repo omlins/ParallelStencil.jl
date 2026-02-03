@@ -17,15 +17,17 @@ const MOD_METADATA_PK              = gensym_world("__metadata_PK__", @__MODULE__
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_METAL                    = :Metal
+const PKG_KERNELABSTRACTIONS       = :KernelAbstractions
 const PKG_THREADS                  = :Threads
 const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL]
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
 const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
+const INT_KERNELABSTRACTIONS       = INT_THREADS
 const COMPUTE_CAPABILITY_DEFAULT   = v"∞" # having it infinity if it is not set allows to directly use statements like `if compute_capability < v"8"`, assuming a recent architecture if it is not set.
 const NTHREADS_X_MAX               = 32
 const NTHREADS_X_MAX_AMDGPU        = 64
@@ -77,12 +79,29 @@ const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse ti
 const ERRMSG_CHECK_PADDING         = "padding must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
-const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
-                                   PKG_CUDA      => 0,
-                                   PKG_AMDGPU    => 0,
-                                   PKG_METAL     => 0,
-                                   PKG_THREADS   => 1,
-                                   PKG_POLYESTER => 1)
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE                 => 0,
+                                   PKG_CUDA                 => 0,
+                                   PKG_AMDGPU               => 0,
+                                   PKG_METAL                => 0,
+                                   PKG_THREADS              => 1,
+                                   PKG_POLYESTER            => 1,
+                                   PKG_KERNELABSTRACTIONS   => 1)
+
+const HARDWARE_DEFAULTS = Dict(PKG_NONE                 => :hw_none,
+                               PKG_THREADS              => :cpu,
+                               PKG_POLYESTER            => :cpu,
+                               PKG_CUDA                 => :gpu_cuda,
+                               PKG_AMDGPU               => :gpu_amd,
+                               PKG_METAL                => :gpu_metal,
+                               PKG_KERNELABSTRACTIONS   => :cpu)
+
+function hardware_default(package::Symbol)
+    value = get(HARDWARE_DEFAULTS, package, nothing)
+    if isnothing(value) @ModuleInternalError("unknown package: $package") end
+    return value
+end
+
+supports_multi_architecture(package::Symbol) = package == PKG_KERNELABSTRACTIONS
 
 struct Dim3
     x::INT_THREADS
@@ -99,6 +118,8 @@ function kernel_int_type(package::Symbol)
     elseif (package == PKG_METAL)     int_type = INT_METAL
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
     elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
+    elseif (package == PKG_KERNELABSTRACTIONS) int_type = INT_KERNELABSTRACTIONS
+    else @ModuleInternalError("unknown package: $package")
     end
     return int_type
 end
