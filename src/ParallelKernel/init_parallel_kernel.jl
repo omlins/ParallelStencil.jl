@@ -94,12 +94,13 @@ end
 function Metadata_PK()
     :(module $MOD_METADATA_PK # NOTE: there cannot be any newline before 'module $MOD_METADATA_PK' or it will create a begin end block and the module creation will fail.
         let
-            global set_initialized, is_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding
+            global set_initialized, is_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, set_hardware, get_hardware
             _is_initialized::Bool       = false
             package::Symbol             = $(quote_expr(PKG_NONE))
             numbertype::DataType        = $NUMBERTYPE_NONE
             inbounds::Bool              = $INBOUNDS_DEFAULT
             padding::Bool               = $PADDING_DEFAULT
+            hardware::Symbol            = hardware_default(PKG_NONE)
             set_initialized(flag::Bool) = (_is_initialized = flag)
             is_initialized()            = _is_initialized
             set_package(pkg::Symbol)    = (package = pkg)
@@ -110,6 +111,8 @@ function Metadata_PK()
             get_inbounds()              = inbounds
             set_padding(flag::Bool)     = (padding = flag)
             get_padding()               = padding
+            set_hardware(hw::Symbol)     = (hardware = hw)
+            get_hardware()               = hardware
         end
     end)
 end
@@ -123,7 +126,7 @@ macro get_numbertype() get_numbertype(__module__) end
 macro get_inbounds() get_inbounds(__module__) end
 macro get_padding() get_padding(__module__) end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, check_initialized, check_already_initialized    
+    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, set_hardware, get_hardware, reset_hardware!, check_initialized, check_already_initialized    
     set_initialized(caller::Module, flag::Bool) = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_initialized($flag)))
     is_initialized(caller::Module)              = hasmeta_PK(caller) && @eval(caller, $MOD_METADATA_PK.is_initialized())
     set_package(caller::Module, pkg::Symbol)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_package($(quote_expr(pkg)))))
@@ -134,6 +137,9 @@ let
     get_inbounds(caller::Module)                = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_inbounds()) : INBOUNDS_DEFAULT
     set_padding(caller::Module, flag::Bool)     = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_padding($flag)))
     get_padding(caller::Module)                 = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_padding()) : PADDING_DEFAULT
+    set_hardware(caller::Module, hw::Symbol)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_hardware($(quote_expr(hw)))))
+    get_hardware(caller::Module)                = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_hardware()) : hardware_default(get_package(caller))
+    reset_hardware!(caller::Module)             = set_hardware(caller, hardware_default(PKG_NONE))
     check_initialized(caller::Module)           = if !is_initialized(caller) @NotInitializedError("no ParallelKernel macro or function can be called before @init_parallel_kernel in each module (missing call in $caller).") end
     check_already_initialized(caller::Module)   = if is_initialized(caller) @IncoherentCallError("ParallelKernel has already been initialized for the module $caller.") end
 end
