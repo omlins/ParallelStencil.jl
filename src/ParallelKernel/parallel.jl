@@ -153,7 +153,7 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     if is_ad_highlevel
         parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
     else
-        if     isgpu(package) parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
+        if     isgpu(package) || isxpu(package) parallel_call_gpu_or_xpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
         elseif iscpu(package) parallel_call_cpu(posargs..., kernelarg, async, package; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
         else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
@@ -197,7 +197,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package) kernel = insert_device_types(caller, kernel) end
+    if isgpu(package) || isxpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
     body   = handle_padding(caller, body, padding, indices)
     body   = handle_inverses(body)
@@ -250,36 +250,37 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
     end
 end
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu_or_xpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
     elseif (package == PKG_METAL)  int_type = INT_METAL
+    elseif (package == PKG_KERNELABSTRACTIONS) int_type = INT_KERNELABSTRACTIONS
     end
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
     push!(kernelcall.args, :($int_type(length($ranges[2]))))
     push!(kernelcall.args, :($int_type(length($ranges[3]))))
-    return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
+    return create_gpu_or_xpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
 end
 
-function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu_or_xpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu_or_xpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu_or_xpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     nthreads_x_max = determine_nthreads_x_max(package)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize; nthreads_x_max=$nthreads_x_max) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu_or_xpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu_or_xpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
-    parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu_or_xpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
 
@@ -531,7 +532,7 @@ end
 function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)
     int_type = kernel_int_type(package)
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-    if isgpu(package)
+    if isgpu(package) || isxpu(package)
         body = add_threadids(indices, ranges, body)        
         body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
@@ -718,7 +719,38 @@ determine_nthreads_x_max(package::Symbol) = (package == PKG_AMDGPU) ? NTHREADS_X
 
 ## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
 
-function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
+macro ka(args...)
+    posargs, kwargs_expr = split_args(args)
+    if length(posargs) != 2 @ArgumentError("wrong number of positional arguments.") end
+    handle_expr = posargs[1]
+    kernelcall = posargs[2]
+    if !is_call(kernelcall) @ArgumentError("the last argument must be a kernel call (obtained: $kernelcall).") end
+    kwargs, backend_kwargs_expr = extract_kwargs(__module__, kwargs_expr, (:ndrange, :workgroupsize, :queue, :launch), "@ka <handle> <kernelcall>", true; eval_args=(:launch,))
+    launch        = haskey(kwargs, :launch) ? kwargs.launch : true
+    ndrange       = haskey(kwargs, :ndrange) ? kwargs.ndrange : nothing
+    workgroupsize = haskey(kwargs, :workgroupsize) ? kwargs.workgroupsize : nothing
+    queue         = haskey(kwargs, :queue) ? kwargs.queue : nothing
+    kernel_name = extract_kernelcall_name(kernelcall)
+    kernel_args, kernel_kwargs = extract_kernelcall_args(kernelcall)
+    if length(kernel_kwargs) > 0 @ArgumentError("keyword arguments are not allowed in @ka kernel calls.") end
+    kernel_handle_call = isnothing(workgroupsize) ? :($kernel_name($handle_expr)) : :($kernel_name($handle_expr, $workgroupsize))
+    if launch
+        kwexprs = Expr[]
+        if !isnothing(ndrange) push!(kwexprs, :(ndrange = $ndrange)) end
+        if !isnothing(queue) push!(kwexprs, :(queue = $queue)) end
+        append!(kwexprs, backend_kwargs_expr)
+        call_expr = isempty(kwexprs) ? :($kernel_handle_call($(kernel_args...))) : :($kernel_handle_call($(kernel_args...); $(kwexprs...)))
+        return esc(call_expr)
+    else
+        return esc(kernel_handle_call)
+    end
+end
+
+macro ka_auto(args...)
+    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)), $(args...))))
+end
+
+function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
     synccall = async ? :(begin end) : create_synccall(package, stream)
     backend_kwargs_expr = (backend_kwargs_expr...,)
     if launch
@@ -726,6 +758,7 @@ function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads:
             if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_AMDGPU) shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_METAL)  shmem_expr = nothing # No need to pass shared memory to Metal kernels.
+            elseif (package == PKG_KERNELABSTRACTIONS) shmem_expr = nothing # KernelAbstractions does not accept dynamic shared-memory sizes here.
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
             if package != PKG_METAL
@@ -735,12 +768,17 @@ function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads:
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=$nblocks groupsize=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_METAL)  return :( Metal.@metal groups=$nblocks threads=$nthreads queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+        elseif (package == PKG_KERNELABSTRACTIONS)
+            ndrange_expr = :($nblocks .* $nthreads)
+            queue_expr = (stream == :(nothing)) ? nothing : :(queue = $stream)
+            return :( @ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(queue_expr === nothing ? () : (queue_expr,)) $(backend_kwargs_expr...) $kernelcall; $synccall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
         if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
         elseif (package == PKG_METAL)  return :( Metal.@metal launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
+        elseif (package == PKG_KERNELABSTRACTIONS) return :( @ka_auto launch=false $(backend_kwargs_expr...) $kernelcall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
@@ -750,6 +788,8 @@ function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     if     (package == PKG_CUDA)   synchronize_cuda(stream)
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
     elseif (package == PKG_METAL)  synchronize_metal(stream)
+    elseif (package == PKG_KERNELABSTRACTIONS) 
+        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -758,6 +798,7 @@ function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
     elseif (package == PKG_METAL)   return :(Metal.global_queue(Metal.device())) # Use the default queue of the task.
+    elseif (package == PKG_KERNELABSTRACTIONS) return :(nothing)
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
