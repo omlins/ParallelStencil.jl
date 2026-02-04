@@ -37,6 +37,7 @@ function init_parallel_stencil(caller::Module, package::Symbol, numbertype::Data
     if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE, "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     else                               datadoc_call = :(@doc replace(ParallelStencil.ParallelKernel.DATA_DOC,                 "ParallelKernel" => "ParallelStencil", "@init_parallel_kernel" => "@init_parallel_stencil") Data)
     end
+    datadoc_call = ParallelKernel.supports_multi_architecture(package) ? :() : datadoc_call
     return_expr = ParallelKernel.init_parallel_kernel(caller, package, numbertype, inbounds, padding; datadoc_call=datadoc_call, parent_module="ParallelStencil")
     set_package(caller, package)
     set_numbertype(caller, numbertype)
