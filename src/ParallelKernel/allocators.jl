@@ -282,6 +282,10 @@ function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, cellt
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.zeros_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -293,6 +297,10 @@ function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.ones_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -304,6 +312,10 @@ function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.rand_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -315,6 +327,10 @@ function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing,
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.falses_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -326,6 +342,10 @@ function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, 
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.trues_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -337,6 +357,10 @@ function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, cellty
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.fill_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $celltype, $blocklength, $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -346,6 +370,10 @@ function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda!($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu!($(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal!($(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                                  ParallelStencil.ParallelKernel.fill!_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware), $(args...))
+                                              end)
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu!($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -453,6 +481,41 @@ end
 
 fill_cpu!(A, x) = Base.fill!(A, construct_cell(A, x))
 
+## KERNELABSTRACTIONS ALLOCATOR FUNCTIONS
+
+zeros_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Number}             = (check_datatype_kernelabstractions(T); KernelAbstractions.zeros(backend, T, args...))
+ones_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Number}              = (check_datatype_kernelabstractions(T); KernelAbstractions.ones(backend, T, args...))
+rand_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = (check_datatype_kernelabstractions(T, Bool, Enum); KernelAbstractions.rand(backend, T, args...))
+falses_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}              = KernelAbstractions.fill(backend, false, args...)
+trues_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}               = KernelAbstractions.fill(backend, true, args...)
+fill_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = KernelAbstractions.fill(backend, convert(T, args[1]), args[2:end]...)
+
+zeros_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype_kernelabstractions(T); fill_kernelabstractions(backend, T, blocklength, 0, args...))
+ones_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}  = (check_datatype_kernelabstractions(T); fill_kernelabstractions(backend, T, blocklength, 1, args...))
+rand_kernelabstractions(backend, ::Type{T}, ::Val{B}, dims) where {T<:Union{SArray,FieldArray}, B} = begin
+    check_datatype_kernelabstractions(T, Bool, Enum)
+    blocklen = (B == 0) ? prod(dims) : B
+    storage = KernelAbstractions.rand(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(dims) / blocklen))
+    CellArray{T,length(dims),B, typeof(storage)}(storage, dims)
+end
+rand_kernelabstractions(backend, ::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}} = rand_kernelabstractions(backend, T, blocklength, dims)
+falses_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}} = fill_kernelabstractions(backend, T, blocklength, false, args...)
+trues_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}  = fill_kernelabstractions(backend, T, blocklength, true, args...)
+
+function fill_kernelabstractions(backend, ::Type{T}, ::Val{B}, x, args...) where {T <: Union{SArray,FieldArray}, B}
+    if (!(eltype(x) <: Number) || (eltype(x) == Bool)) && (eltype(x) != eltype(T)) @ArgumentError("fill: the (element) type of argument 'x' is not a normal number type ($(eltype(x))), but does not match the obtained (default) 'eltype' ($(eltype(T))); automatic conversion to $(eltype(T)) is therefore not attempted. Set the keyword argument 'eltype' accordingly to the element type of 'x' or pass an 'x' of a different (element) type.") end
+    check_datatype_kernelabstractions(T, Bool, Enum)
+    if     (length(x) == 1)         cell = convert(T, fill(convert(eltype(T), x), size(T)))
+    elseif (length(x) == length(T)) cell = convert(T, x)
+    else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
+    end
+    blocklen = (B == 0) ? prod(size(T)) : B
+    storage = KernelAbstractions.zeros(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(args) / blocklen))
+    return CellArrays.fill!(CellArray{T,length(args),B, typeof(storage)}(storage, args...), cell)
+end
+
+fill!_kernelabstractions(backend, A, x) = KernelAbstractions.fill!(backend, A, construct_cell(A, x))
+
 #TODO: eliminate nearly duplicate code starting from if T_cell I think...
 function construct_cell(A, x)
     T_cell = eltype(A)
@@ -475,6 +538,7 @@ function check_datatype(T::DataType, valid_non_numbertypes::Union{DataType, Unio
 end
 
 check_datatype_cpu(args...)    = check_datatype(args..., INT_THREADS) # NOTE: if it differs at some point from INT_POLYESTER, then it should be handled differently. For simplicity sake it is kept that way for now.
+check_datatype_kernelabstractions(args...) = check_datatype(args..., INT_KERNELABSTRACTIONS)
 
 import Base.length
 length(x::Enum) = 1
