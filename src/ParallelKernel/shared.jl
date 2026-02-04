@@ -533,6 +533,7 @@ macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; al
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro isgpu(package)                   isgpu(package) end
 macro iscpu(package)                   iscpu(package) end
+macro isxpu(package)                   isxpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -615,6 +616,7 @@ get_cpu_compute_capability(default::VersionNumber) = return default
 
 iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL))
+isxpu(package) = return (package == PKG_KERNELABSTRACTIONS)
 
 hasmeta_PK(caller::Module) = isdefined(caller, MOD_METADATA_PK)
 
