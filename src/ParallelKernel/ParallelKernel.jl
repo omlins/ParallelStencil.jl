@@ -72,6 +72,7 @@ include(joinpath("EnzymeExt", "AD.jl"))
 ## Alphabetical include of defaults for extensions
 include(joinpath("AMDGPUExt", "defaults.jl"))
 include(joinpath("CUDAExt", "defaults.jl"))
+include(joinpath("KernelAbstractionsExt", "defaults.jl"))
 include(joinpath("MetalExt", "defaults.jl"))
 
 ## Include of constant parameters, types and syntax sugar shared in ParallelKernel module only
