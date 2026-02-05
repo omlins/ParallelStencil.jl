@@ -88,9 +88,8 @@ Base.retry_load_extensions()
 					@test pk_current_hardware(@__MODULE__) == symbol
 					@require @is_initialized()
 					@test @is_initialized()
-					if @isdefined(Data) && isdefined(ParallelStencil.ParallelKernel, :Data)
-						@test @symbols($(@__MODULE__), Data) == @symbols(ParallelStencil.ParallelKernel, Data)
-					end
+					@test !isdefined(Data)
+					@test !isdefined(TData)
 				end
 
 				if $package == PKG_KERNELABSTRACTIONS
