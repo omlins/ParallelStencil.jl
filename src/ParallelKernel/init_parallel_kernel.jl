@@ -106,7 +106,7 @@ function Metadata_PK()
             numbertype::DataType        = $NUMBERTYPE_NONE
             inbounds::Bool              = $INBOUNDS_DEFAULT
             padding::Bool               = $PADDING_DEFAULT
-            hardware::Symbol            = hardware_default(PKG_NONE)
+            hardware::Symbol            = $(quote_expr(hardware_default(PKG_NONE)))
             set_initialized(flag::Bool) = (_is_initialized = flag)
             is_initialized()            = _is_initialized
             set_package(pkg::Symbol)    = (package = pkg)
