@@ -1,7 +1,7 @@
 using Test
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @init_parallel_kernel, @is_initialized, select_hardware, current_hardware, handle, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
-import ParallelStencil.ParallelKernel: @require, @symbols, @prettystring
+import ParallelStencil.ParallelKernel: @require, @prettystring
 @static if PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES
     import KernelAbstractions: CPU, CUDABackend, ROCBackend, MetalBackend, oneAPIBackend
 end
