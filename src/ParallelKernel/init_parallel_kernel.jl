@@ -62,13 +62,21 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     end
     pkg_import_cmd = define_import(caller, package, parent_module)
     # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be
-    ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD($package))
+    ad_init_cmd = parent_module == "ParallelKernel" ?
+        :(ParallelKernel.AD.init_AD($package)) :
+        :(ParallelStencil.ParallelKernel.AD.init_AD($package))
     @eval(caller, $pkg_import_cmd)
     if !supports_multi_architecture(package)
         if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
             if (datadoc_call==:())
-                if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
-                else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+                if parent_module == "ParallelKernel"
+                    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data)
+                    else                               datadoc_call = :(@doc ParallelKernel.DATA_DOC Data)
+                    end
+                else
+                    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data)
+                    else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
+                    end
                 end
             end
             @eval(caller, $data_module)
