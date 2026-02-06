@@ -98,6 +98,8 @@ function runtests(testfiles=String[])
             for f in abortfiles
                 println(" - $f")
             end
+        else
+            printstyled("Test suite: all selected test files executed, but some test file(s) have tests that failed or errored (see message above).\n"; bold=true, color=:red)
         end
     end
     println("")
