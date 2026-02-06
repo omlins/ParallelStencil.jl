@@ -35,11 +35,11 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             @testset "Reset if not initialized" begin
                 @require !@is_initialized()
                 @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test current_hardware(@__MODULE__) == :cpu
+                    @test current_hardware(@__MODULE__) == :hw_none
                 end
                 @reset_parallel_stencil()
                 @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test current_hardware(@__MODULE__) == :cpu
+                    @test current_hardware(@__MODULE__) == :hw_none
                 end
                 @test !@is_initialized()
                 @test @get_package() == $PKG_NONE
@@ -65,11 +65,11 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         push!(valid_symbols, :gpu_oneapi)
                     end
                     for symbol in valid_symbols
-                        select_hardware(symbol)
+                        select_hardware(@__MODULE__, symbol)
                         @require current_hardware(@__MODULE__) == symbol
                     end
                     @reset_parallel_stencil()
-                    @test current_hardware(@__MODULE__) == :cpu
+                    @test current_hardware(@__MODULE__) == :hw_none
                     @test isempty(@symbols($(@__MODULE__), Data)) # KernelAbstractions intentionally lacks convenience modules.
                 else
                     @reset_parallel_stencil()
