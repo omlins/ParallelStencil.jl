@@ -301,6 +301,17 @@ function gridDim(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroups_per_grid_3d($(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+        return quote
+            let ndrange = KernelAbstractions.@ndrange(),
+                groupsize = KernelAbstractions.@groupsize()
+                ParallelStencil.ParallelKernel.Dim3(
+                    cld(ndrange[1], groupsize[1]),
+                    length(ndrange) >= 2 ? cld(ndrange[2], groupsize[2]) : 1,
+                    length(ndrange) >= 3 ? cld(ndrange[3], groupsize[3]) : 1
+                )
+            end
+        end
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -310,6 +321,16 @@ function blockIdx(caller::Module, args...; package::Symbol=get_package(caller)) 
     if     (package == PKG_CUDA)    return :(CUDA.blockIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupIdx($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroup_position_in_grid_3d($(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+        return quote
+            let group = KernelAbstractions.@index(Group, NTuple)
+                ParallelStencil.ParallelKernel.Dim3(
+                    group[1],
+                    length(group) >= 2 ? group[2] : 1,
+                    length(group) >= 3 ? group[3] : 1
+                )
+            end
+        end
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -319,6 +340,16 @@ function blockDim(caller::Module, args...; package::Symbol=get_package(caller)) 
     if     (package == PKG_CUDA)    return :(CUDA.blockDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupDim($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threads_per_threadgroup_3d($(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+        return quote
+            let groupsize = KernelAbstractions.@groupsize()
+                ParallelStencil.ParallelKernel.Dim3(
+                    groupsize[1],
+                    length(groupsize) >= 2 ? groupsize[2] : 1,
+                    length(groupsize) >= 3 ? groupsize[3] : 1
+                )
+            end
+        end
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -328,6 +359,16 @@ function threadIdx(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.threadIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workitemIdx($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.thread_position_in_threadgroup_3d($(args...)))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+        return quote
+            let local_idx = KernelAbstractions.@index(Local, NTuple)
+                ParallelStencil.ParallelKernel.Dim3(
+                    local_idx[1],
+                    length(local_idx) >= 2 ? local_idx[2] : 1,
+                    length(local_idx) >= 3 ? local_idx[3] : 1
+                )
+            end
+        end
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -340,6 +381,8 @@ function sync_threads(caller::Module, args...; package::Symbol=get_package(calle
     if     (package == PKG_CUDA)    return :(CUDA.sync_threads($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.sync_workgroup($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroup_barrier($(args...); flag=Metal.MemoryFlagThreadGroup))
+    elseif (package == PKG_KERNELABSTRACTIONS)
+        return :(KernelAbstractions.@synchronize($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
