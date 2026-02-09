@@ -10,7 +10,7 @@ import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_revise.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
-function runtests(testfiles=String[])
+function runtests(testfiles=String[]; stop_on_fail=false)
     exename   = joinpath(Sys.BINDIR, Base.julia_exename())
     testdir   = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
@@ -20,6 +20,7 @@ function runtests(testfiles=String[])
     nfail  = 0
     abortfiles = String[]
     failfiles  = String[]
+    first_fail_file = ""
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
@@ -81,6 +82,10 @@ function runtests(testfiles=String[])
         elseif proc !== nothing && !success(proc)
             nfail += 1
             push!(failfiles, f)
+            if stop_on_fail
+                first_fail_file = f
+                break
+            end
         end
     end
     println("")
@@ -98,12 +103,17 @@ function runtests(testfiles=String[])
             for f in abortfiles
                 println(" - $f")
             end
-        else
+        elseif !stop_on_fail
             printstyled("Test suite: all selected test files executed, but some test file(s) have tests that failed or errored (see message above).\n"; bold=true, color=:red)
         end
+    end
+    if stop_on_fail && !isempty(first_fail_file)
+        printstyled("Test suite: stopped at first test file with tests that failed or errored: $first_fail_file\n"; bold=true, color=:red)
     end
     println("")
     return nabort+nfail
 end
 
-exit(runtests(ARGS))
+stop_on_fail = any(==("--stop-on-fail"), ARGS)
+testfiles = filter(!=("--stop-on-fail"), ARGS)
+exit(runtests(testfiles; stop_on_fail=stop_on_fail))
