@@ -771,14 +771,14 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
         elseif (package == PKG_KERNELABSTRACTIONS)
             ndrange_expr = :($nblocks .* $nthreads)
             queue_expr = (stream == :(nothing)) ? nothing : :(queue = $stream)
-            return :( @ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(queue_expr === nothing ? () : (queue_expr,)) $(backend_kwargs_expr...) $kernelcall; $synccall )
+            return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(queue_expr === nothing ? () : (queue_expr,)) $(backend_kwargs_expr...) $kernelcall; $synccall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
         if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
         elseif (package == PKG_METAL)  return :( Metal.@metal launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
-        elseif (package == PKG_KERNELABSTRACTIONS) return :( @ka_auto launch=false $(backend_kwargs_expr...) $kernelcall )
+        elseif (package == PKG_KERNELABSTRACTIONS) return :( ParallelStencil.ParallelKernel.@ka_auto launch=false $(backend_kwargs_expr...) $kernelcall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
