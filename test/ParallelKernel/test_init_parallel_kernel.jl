@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, SCALARTYPES, ARRAYTYPES, FIELDTYPES, select_hardware, current_hardware, handle
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, SCALARTYPES, ARRAYTYPES, FIELDTYPES, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -45,7 +45,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == false
             end;
             @testset "default hardware" begin
-                default_hw = current_hardware(@__MODULE__)
+                default_hw = @current_hardware()
                 if $package == PKG_KERNELABSTRACTIONS
                     @test default_hw == :cpu
                 elseif $package == PKG_CUDA
@@ -65,8 +65,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     syms = @symbols($(@__MODULE__), $(@__MODULE__))
                     @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
                 end;
-                select_hardware(@__MODULE__, :cpu)
-                @test current_hardware(@__MODULE__) == :cpu
+                @select_hardware(:cpu)
+                @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
                     @test @isdefined(Data)
@@ -134,7 +134,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == true
             end;
             @testset "default hardware" begin
-                default_hw = current_hardware(@__MODULE__)
+                default_hw = @current_hardware()
                 if $package == PKG_KERNELABSTRACTIONS
                     @test default_hw == :cpu
                 elseif $package == PKG_CUDA
@@ -154,8 +154,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     syms = @symbols($(@__MODULE__), $(@__MODULE__))
                     @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
                 end;
-                select_hardware(@__MODULE__, :cpu)
-                @test current_hardware(@__MODULE__) == :cpu
+                @select_hardware(:cpu)
+                @test @current_hardware() == :cpu
             else
                 @testset "Data" begin # NOTE: no scalar types
                     @test @isdefined(Data)
