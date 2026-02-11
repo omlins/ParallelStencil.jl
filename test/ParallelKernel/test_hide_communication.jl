@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, select_hardware, current_hardware, handle, @ka, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @select_hardware, @current_hardware, handle, @ka, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER
 import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
@@ -111,8 +111,8 @@ eval(:(
                             push!(valid_symbols, :gpu_oneapi)
                         end
                         for symbol in valid_symbols
-                            select_hardware(@__MODULE__, symbol)
-                            @require current_hardware(@__MODULE__) == symbol
+                            @select_hardware(symbol)
+                            @require @current_hardware() == symbol
                             A  = @zeros(6, 7, 8)
                             @hide_communication (2,2,3) begin
                                 @parallel add_indices!(A);
@@ -120,7 +120,7 @@ eval(:(
                             end
                             @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                         end
-                        select_hardware(@__MODULE__, :cpu)
+                        @select_hardware(:cpu)
                     end
                 end
                 @testset "@hide_communication boundary_width block" begin
@@ -214,7 +214,7 @@ eval(:(
             @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized
             @static if $package == $PKG_KERNELABSTRACTIONS
-                @require current_hardware(@__MODULE__) == :cpu
+                @require @current_hardware() == :cpu
             end
             @testset "arguments @hide_communication" begin
                 @test_throws ArgumentError checkargs_hide_communication(:boundary_width, :block)               # Error: the last argument must be a code block.
