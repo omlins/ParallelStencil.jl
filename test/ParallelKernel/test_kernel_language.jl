@@ -2,7 +2,7 @@ using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
-import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu, select_hardware, current_hardware, handle
+import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -244,7 +244,7 @@ eval(:(
                 end;
                 @testset "Semantic smoke tests" begin
                     @static if $package == $PKG_KERNELABSTRACTIONS
-                        select_hardware(@__MODULE__, :cpu)
+                        @select_hardware(:cpu)
                     end
                     @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
                         N = 8
