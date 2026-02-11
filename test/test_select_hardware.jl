@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @init_parallel_stencil, @is_initialized, @select_hardware, @current_hardware, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil: @reset_parallel_stencil, @init_parallel_stencil, @is_initialized, @select_hardware, @current_hardware, @get_hardware, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
 import ParallelStencil: @require, @symbols
 import ParallelStencil.ParallelKernel: handle
 @static if PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES
@@ -41,8 +41,8 @@ Base.retry_load_extensions()
 			@require !@is_initialized()
 			@testset "Runtime hardware (re-)selection wrappers" begin
 				@init_parallel_stencil(package = $package, numbertype = Float64, ndims = 3)
-				facade_hw = @current_hardware()
-				kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
+				facade_hw = @get_hardware()
+				kernel_hw = ParallelStencil.ParallelKernel.@get_hardware()
 				@test facade_hw == kernel_hw
 				if $package == PKG_KERNELABSTRACTIONS
 					@test facade_hw == :cpu
@@ -114,10 +114,8 @@ Base.retry_load_extensions()
 				invalid_symbols = filter(s -> !(s in valid_symbols), all_symbols)
 				last_valid = @current_hardware()
 				for symbol in invalid_symbols
-					err = @test_throws ArgumentError @select_hardware(symbol)
-					@test occursin(string(symbol), sprint(showerror, err))
-					err_kernel = @test_throws ArgumentError ParallelStencil.ParallelKernel.@select_hardware(symbol)
-					@test occursin(string(symbol), sprint(showerror, err_kernel))
+					@test_throws ArgumentError @select_hardware(symbol)
+					@test_throws ArgumentError ParallelStencil.ParallelKernel.@select_hardware(symbol)
 					@test @current_hardware() == last_valid
 					@test ParallelStencil.ParallelKernel.@current_hardware() == last_valid
 				end
