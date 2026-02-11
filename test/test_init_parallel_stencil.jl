@@ -1,10 +1,10 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE, select_hardware, current_hardware
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE, @select_hardware, @current_hardware
 import ParallelStencil: @require, @symbols
 import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_padding, set_memopt, set_nonconst_metadata
 using ParallelStencil.Exceptions
-import ParallelStencil.ParallelKernel: select_hardware as pk_select_hardware, current_hardware as pk_current_hardware, handle
+import ParallelStencil.ParallelKernel: handle
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -48,8 +48,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == false
             end;
             @testset "default hardware" begin
-                facade_hw = current_hardware(@__MODULE__)
-                kernel_hw = pk_current_hardware(@__MODULE__)
+                facade_hw = @current_hardware()
+                kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
                 @test facade_hw == kernel_hw
                 if $package == PKG_KERNELABSTRACTIONS
                     @test facade_hw == :cpu
@@ -70,8 +70,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     syms = @symbols($(@__MODULE__), $(@__MODULE__))
                     @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
                 end;
-                select_hardware(:cpu)
-                @test current_hardware(@__MODULE__) == :cpu
+                @select_hardware(:cpu)
+                @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
                     @test @isdefined(Data)
@@ -116,8 +116,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == false   #TODO: this needs to be restored to true when Polyester supports padding.
             end;
             @testset "default hardware" begin
-                facade_hw = current_hardware(@__MODULE__)
-                kernel_hw = pk_current_hardware(@__MODULE__)
+                facade_hw = @current_hardware()
+                kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
                 @test facade_hw == kernel_hw
                 if $package == PKG_KERNELABSTRACTIONS
                     @test facade_hw == :cpu
@@ -138,8 +138,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     syms = @symbols($(@__MODULE__), $(@__MODULE__))
                     @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
                 end;
-                select_hardware(:cpu)
-                @test current_hardware(@__MODULE__) == :cpu
+                @select_hardware(:cpu)
+                @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
                     @test @isdefined(Data)
