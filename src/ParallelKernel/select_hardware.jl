@@ -83,7 +83,7 @@ See also: [`select_hardware`](@ref), [`@current_hardware`](@ref)
 @doc SELECT_HARDWARE_MACRO_DOC
 macro select_hardware(hardware)
     caller = __module__
-    package = get_package(caller)
+    package = quote_expr(get_package(caller))
     return esc(:(select_hardware($caller, $hardware; package=$package)))
 end
 
@@ -98,7 +98,7 @@ See also: [`current_hardware`](@ref), [`@select_hardware`](@ref)
 @doc CURRENT_HARDWARE_MACRO_DOC
 macro current_hardware()
     caller = __module__
-    package = get_package(caller)
+    package = quote_expr(get_package(caller))
     return esc(:(current_hardware($caller; package=$package)))
 end
 
