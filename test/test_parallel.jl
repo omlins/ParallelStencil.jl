@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, select_hardware, current_hardware, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, @select_hardware, @current_hardware, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
@@ -129,7 +129,7 @@ eval(:(
                         A[ix] = 2 * A[ix]
                         return
                     end
-                    select_hardware(@__MODULE__, :cpu)
+                    @select_hardware(:cpu)
                     fill!(A, 1)
                     @parallel (1:N) ka_double!(A)
                     baseline = Array(A)
@@ -148,15 +148,15 @@ eval(:(
                             @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
                             continue
                         end
-                        select_hardware(@__MODULE__, symbol)
+                        @select_hardware(symbol)
                         fill!(A, 1)
                         @parallel (1:N) ka_double!(A)
                         @test Array(A) == baseline
                         last_symbol = symbol
                     end
-                    @test current_hardware(@__MODULE__) == last_symbol
-                    select_hardware(@__MODULE__, :cpu)
-                    @test current_hardware(@__MODULE__) == :cpu
+                    @test @current_hardware() == last_symbol
+                    @select_hardware(:cpu)
+                    @test @current_hardware() == :cpu
                 end
             end
             @testset "@parallel ∇" begin
