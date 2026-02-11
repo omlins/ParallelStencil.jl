@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @init_parallel_kernel, @is_initialized, select_hardware, current_hardware, handle, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @init_parallel_kernel, @is_initialized, @select_hardware, @current_hardware, handle, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
 import ParallelStencil.ParallelKernel: @require, @prettystring
 @static if PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES
     import KernelAbstractions: CPU, CUDABackend, ROCBackend, MetalBackend, oneAPIBackend
@@ -40,7 +40,7 @@ Base.retry_load_extensions()
 			@require !@is_initialized()
 			@testset "Runtime hardware (re-)selection" begin
 				@init_parallel_kernel($package, Float64)
-				default_hw = current_hardware(@__MODULE__)
+				default_hw = @current_hardware()
 				if $package == PKG_KERNELABSTRACTIONS
 					@test default_hw == :cpu
 				elseif $package == PKG_CUDA
@@ -80,11 +80,11 @@ Base.retry_load_extensions()
 				end
 
 				for symbol in valid_symbols
-					select_hardware(@__MODULE__, symbol)
-					@test current_hardware(@__MODULE__) == symbol
+					@select_hardware(symbol)
+					@test @current_hardware() == symbol
 				end
-				select_hardware(@__MODULE__, current_hardware(@__MODULE__))
-				@test current_hardware(@__MODULE__) == current_hardware(@__MODULE__)
+				@select_hardware(@current_hardware())
+				@test @current_hardware() == @current_hardware()
 
 				if $package == PKG_KERNELABSTRACTIONS
 					for symbol in valid_symbols
@@ -108,11 +108,11 @@ Base.retry_load_extensions()
 
 				all_symbols = (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi)
 				invalid_symbols = filter(s -> !(s in valid_symbols), all_symbols)
-				last_valid = current_hardware(@__MODULE__)
+				last_valid = @current_hardware()
 				for symbol in invalid_symbols
-					err = @test_throws ArgumentError select_hardware(@__MODULE__, symbol)
+					err = @test_throws ArgumentError @select_hardware(symbol)
 					@test occursin(string(symbol), sprint(showerror, err))
-					@test current_hardware(@__MODULE__) == last_valid
+					@test @current_hardware() == last_valid
 				end
 			end
 			@reset_parallel_kernel()
