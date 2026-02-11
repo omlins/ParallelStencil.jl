@@ -24,6 +24,8 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@synchronize`](@ref)
 
 # Runtime hardware selection
+- [`@select_hardware`](@ref)
+- [`@current_hardware`](@ref)
 - [`select_hardware`](@ref)
 - [`current_hardware`](@ref)
 
@@ -97,7 +99,7 @@ export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteD
 export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
-export select_hardware, current_hardware
+export @select_hardware, @current_hardware, select_hardware, current_hardware
 export PSNumber
 
 end # Module ParallelStencil
