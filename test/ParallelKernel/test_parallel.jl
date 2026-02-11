@@ -4,7 +4,7 @@ using Enzyme
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel.AD
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, INDICES, ARRAYTYPES, FIELDTYPES, SCALARTYPES
-import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, select_hardware, current_hardware, handle
+import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -119,12 +119,12 @@ eval(:(
                                 @test_skip true
                                 continue
                             end
-                            select_hardware(@__MODULE__, symbol)
+                            @select_hardware(symbol)
                             A = @zeros(4)
                             @parallel kernel_switch!(A)
                             @test all(Array(A) .== one(eltype(A)))
                         end
-                        select_hardware(@__MODULE__, :cpu)
+                        @select_hardware(:cpu)
                     end
                 end
                 call = @prettystring(1, @parallel configcall=g(B) f(A))
