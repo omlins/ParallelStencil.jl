@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, select_hardware, current_hardware, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @select_hardware, @current_hardware, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
@@ -35,11 +35,11 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             @testset "Reset if not initialized" begin
                 @require !@is_initialized()
                 @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test current_hardware(@__MODULE__) == :hw_none
+                    @test @current_hardware() == :hw_none
                 end
                 @reset_parallel_stencil()
                 @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test current_hardware(@__MODULE__) == :hw_none
+                    @test @current_hardware() == :hw_none
                 end
                 @test !@is_initialized()
                 @test @get_package() == $PKG_NONE
@@ -65,11 +65,11 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         push!(valid_symbols, :gpu_oneapi)
                     end
                     for symbol in valid_symbols
-                        select_hardware(@__MODULE__, symbol)
-                        @require current_hardware(@__MODULE__) == symbol
+                        @select_hardware(symbol)
+                        @require @current_hardware() == symbol
                     end
                     @reset_parallel_stencil()
-                    @test current_hardware(@__MODULE__) == :hw_none
+                    @test @current_hardware() == :hw_none
                     @test isempty(@symbols($(@__MODULE__), Data)) # KernelAbstractions intentionally lacks convenience modules.
                 else
                     @reset_parallel_stencil()
