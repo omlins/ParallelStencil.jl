@@ -15,12 +15,8 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    @static if Sys.isapple()
-        import Metal
-        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-    else
-        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
-    end
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
 @static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
     import KernelAbstractions
@@ -51,19 +47,19 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 facade_hw = @current_hardware()
                 kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
                 @test facade_hw == kernel_hw
-                if $package == PKG_KERNELABSTRACTIONS
+                if $package == $PKG_KERNELABSTRACTIONS
                     @test facade_hw == :cpu
-                elseif $package == PKG_CUDA
+                elseif $package == $PKG_CUDA
                     @test facade_hw == :gpu_cuda
-                elseif $package == PKG_AMDGPU
+                elseif $package == $PKG_AMDGPU
                     @test facade_hw == :gpu_amd
-                elseif $package == PKG_METAL
+                elseif $package == $PKG_METAL
                     @test facade_hw == :gpu_metal
                 else
                     @test facade_hw == :cpu
                 end
             end;
-            if $package == PKG_KERNELABSTRACTIONS
+            if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
                     @test !@isdefined(Data)
                     @test !@isdefined(TData)
@@ -119,19 +115,19 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 facade_hw = @current_hardware()
                 kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
                 @test facade_hw == kernel_hw
-                if $package == PKG_KERNELABSTRACTIONS
+                if $package == $PKG_KERNELABSTRACTIONS
                     @test facade_hw == :cpu
-                elseif $package == PKG_CUDA
+                elseif $package == $PKG_CUDA
                     @test facade_hw == :gpu_cuda
-                elseif $package == PKG_AMDGPU
+                elseif $package == $PKG_AMDGPU
                     @test facade_hw == :gpu_amd
-                elseif $package == PKG_METAL
+                elseif $package == $PKG_METAL
                     @test facade_hw == :gpu_metal
                 else
                     @test facade_hw == :cpu
                 end
             end;
-            if $package == PKG_KERNELABSTRACTIONS
+            if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
                     @test !@isdefined(Data)
                     @test !@isdefined(TData)
