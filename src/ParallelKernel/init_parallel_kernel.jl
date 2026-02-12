@@ -137,7 +137,7 @@ createmeta_PK(caller::Module) = if !hasmeta_PK(caller) @eval(caller, $(Metadata_
 macro is_initialized() is_initialized(__module__) end
 macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
-macro get_hardware() esc(get_hardware(__module__)) end
+macro get_hardware() quote_expr(get_hardware(__module__)) end
 macro get_inbounds() get_inbounds(__module__) end
 macro get_padding() get_padding(__module__) end
 let
