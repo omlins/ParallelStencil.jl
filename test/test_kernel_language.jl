@@ -18,14 +18,8 @@ end
     end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    @static if Sys.isapple()
-        import Metal
-        if !Metal.functional()
-            TEST_PACKAGES = filter!(x -> x ≠ PKG_METAL, TEST_PACKAGES)
-        end
-    else
-        TEST_PACKAGES = filter!(x -> x ≠ PKG_METAL, TEST_PACKAGES)
-    end
+    import Metal
+    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
 @static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
     import KernelAbstractions
