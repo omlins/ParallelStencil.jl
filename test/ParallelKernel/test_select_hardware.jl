@@ -17,12 +17,8 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x -> x ≠ PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    @static if Sys.isapple()
-        import Metal
-        if !Metal.functional() TEST_PACKAGES = filter!(x -> x ≠ PKG_METAL, TEST_PACKAGES) end
-    else
-        TEST_PACKAGES = filter!(x -> x ≠ PKG_METAL, TEST_PACKAGES)
-    end
+	import Metal
+	if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -41,20 +37,20 @@ Base.retry_load_extensions()
 			@testset "Runtime hardware (re-)selection" begin
 				@init_parallel_kernel($package, Float64)
 				default_hw = @get_hardware()
-				if $package == PKG_KERNELABSTRACTIONS
+				if $package == $PKG_KERNELABSTRACTIONS
 					@test default_hw == :cpu
-				elseif $package == PKG_CUDA
+				elseif $package == $PKG_CUDA
 					@test default_hw == :gpu_cuda
-				elseif $package == PKG_AMDGPU
+				elseif $package == $PKG_AMDGPU
 					@test default_hw == :gpu_amd
-				elseif $package == PKG_METAL
+				elseif $package == $PKG_METAL
 					@test default_hw == :gpu_metal
 				else
 					@test default_hw == :cpu
 				end
 
 				valid_symbols = Symbol[]
-				if $package == PKG_KERNELABSTRACTIONS
+				if $package == $PKG_KERNELABSTRACTIONS
 					push!(valid_symbols, :cpu)
 					if PKG_CUDA in TEST_PACKAGES
 						@require PKG_CUDA in TEST_PACKAGES
@@ -69,11 +65,11 @@ Base.retry_load_extensions()
 						push!(valid_symbols, :gpu_metal)
 					end
 					push!(valid_symbols, :gpu_oneapi)
-				elseif $package == PKG_CUDA
+				elseif $package == $PKG_CUDA
 					valid_symbols = [:gpu_cuda]
-				elseif $package == PKG_AMDGPU
+				elseif $package == $PKG_AMDGPU
 					valid_symbols = [:gpu_amd]
-				elseif $package == PKG_METAL
+				elseif $package == $PKG_METAL
 					valid_symbols = [:gpu_metal]
 				else
 					valid_symbols = [:cpu]
@@ -87,7 +83,7 @@ Base.retry_load_extensions()
 				@select_hardware(last_selected)
 				@test @current_hardware() == last_selected
 
-				if $package == PKG_KERNELABSTRACTIONS
+				if $package == $PKG_KERNELABSTRACTIONS
 					for symbol in valid_symbols
 						@testset "handle($(symbol))" begin
 							if symbol == :cpu
