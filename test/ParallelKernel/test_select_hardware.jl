@@ -35,6 +35,7 @@ Base.retry_load_extensions()
 			@reset_parallel_kernel()
 			@require !@is_initialized()
 			@testset "Runtime hardware (re-)selection" begin
+				package_symbol = $(QuoteNode(package))
 				@init_parallel_kernel($package, Float64)
 				default_hw = @get_hardware()
 				if $package == $PKG_KERNELABSTRACTIONS
@@ -51,20 +52,7 @@ Base.retry_load_extensions()
 
 				valid_symbols = Symbol[]
 				if $package == $PKG_KERNELABSTRACTIONS
-					push!(valid_symbols, :cpu)
-					if PKG_CUDA in TEST_PACKAGES
-						@require PKG_CUDA in TEST_PACKAGES
-						push!(valid_symbols, :gpu_cuda)
-					end
-					if PKG_AMDGPU in TEST_PACKAGES
-						@require PKG_AMDGPU in TEST_PACKAGES
-						push!(valid_symbols, :gpu_amd)
-					end
-					if PKG_METAL in TEST_PACKAGES
-						@require PKG_METAL in TEST_PACKAGES
-						push!(valid_symbols, :gpu_metal)
-					end
-					push!(valid_symbols, :gpu_oneapi)
+					valid_symbols = [:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi]
 				elseif $package == $PKG_CUDA
 					valid_symbols = [:gpu_cuda]
 				elseif $package == $PKG_AMDGPU
@@ -84,23 +72,28 @@ Base.retry_load_extensions()
 				@test @current_hardware() == last_selected
 
 				if $package == $PKG_KERNELABSTRACTIONS
-					for symbol in valid_symbols
+					handle_symbols = [:cpu]
+					if isdefined(KernelAbstractions, :CUDABackend) push!(handle_symbols, :gpu_cuda) end
+					if isdefined(KernelAbstractions, :ROCBackend) push!(handle_symbols, :gpu_amd) end
+					if isdefined(KernelAbstractions, :MetalBackend) push!(handle_symbols, :gpu_metal) end
+					if isdefined(KernelAbstractions, :oneAPIBackend) push!(handle_symbols, :gpu_oneapi) end
+					for symbol in handle_symbols
 						@testset "handle($(symbol))" begin
 							if symbol == :cpu
-								@test handle(symbol) == CPU()
+								@test handle(symbol, package_symbol) == CPU()
 							elseif symbol == :gpu_cuda
-								@test handle(symbol) == CUDABackend()
+								@test handle(symbol, package_symbol) == CUDABackend()
 							elseif symbol == :gpu_amd
-								@test handle(symbol) == ROCBackend()
+								@test handle(symbol, package_symbol) == ROCBackend()
 							elseif symbol == :gpu_metal
-								@test handle(symbol) == MetalBackend()
+								@test handle(symbol, package_symbol) == MetalBackend()
 							elseif symbol == :gpu_oneapi
-								@test handle(symbol) == oneAPIBackend()
+								@test handle(symbol, package_symbol) == oneAPIBackend()
 							end
 						end
 					end
 				else
-					@test_throws ArgumentError handle(:cpu)
+					@test_throws ArgumentError handle(:cpu, package_symbol)
 				end
 
 				all_symbols = (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi)
