@@ -102,8 +102,7 @@ macro current_hardware()
     return esc(:(current_hardware($caller; package=$package)))
 end
 
-function handle(hardware::Symbol)
-    package = get_package(@__MODULE__)
+function handle(hardware::Symbol, package::Symbol)
     if package == PKG_KERNELABSTRACTIONS
         if hardware == :cpu
             return KernelAbstractions.CPU()
@@ -122,4 +121,4 @@ function handle(hardware::Symbol)
     end
 end
 
-hardware_handle(caller::Module) = handle(current_hardware(caller))
+hardware_handle(caller::Module) = handle(current_hardware(caller), get_package(caller))
