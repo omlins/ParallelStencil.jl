@@ -44,19 +44,17 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == false
             end;
             @testset "default hardware" begin
-                facade_hw = @current_hardware()
-                kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
-                @test facade_hw == kernel_hw
+                parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
                 if $package == $PKG_KERNELABSTRACTIONS
-                    @test facade_hw == :cpu
+                    @test parse_hw == :cpu
                 elseif $package == $PKG_CUDA
-                    @test facade_hw == :gpu_cuda
+                    @test parse_hw == :gpu_cuda
                 elseif $package == $PKG_AMDGPU
-                    @test facade_hw == :gpu_amd
+                    @test parse_hw == :gpu_amd
                 elseif $package == $PKG_METAL
-                    @test facade_hw == :gpu_metal
+                    @test parse_hw == :gpu_metal
                 else
-                    @test facade_hw == :cpu
+                    @test parse_hw == :cpu
                 end
             end;
             if $package == $PKG_KERNELABSTRACTIONS
@@ -112,19 +110,17 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_padding() == false   #TODO: this needs to be restored to true when Polyester supports padding.
             end;
             @testset "default hardware" begin
-                facade_hw = @current_hardware()
-                kernel_hw = ParallelStencil.ParallelKernel.@current_hardware()
-                @test facade_hw == kernel_hw
+                parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
                 if $package == $PKG_KERNELABSTRACTIONS
-                    @test facade_hw == :cpu
+                    @test parse_hw == :cpu
                 elseif $package == $PKG_CUDA
-                    @test facade_hw == :gpu_cuda
+                    @test parse_hw == :gpu_cuda
                 elseif $package == $PKG_AMDGPU
-                    @test facade_hw == :gpu_amd
+                    @test parse_hw == :gpu_amd
                 elseif $package == $PKG_METAL
-                    @test facade_hw == :gpu_metal
+                    @test parse_hw == :gpu_metal
                 else
-                    @test facade_hw == :cpu
+                    @test parse_hw == :cpu
                 end
             end;
             if $package == $PKG_KERNELABSTRACTIONS
