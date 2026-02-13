@@ -747,7 +747,7 @@ macro ka(args...)
 end
 
 macro ka_auto(args...)
-    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)), $(args...))))
+    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), ParallelStencil.ParallelKernel.get_package(@__MODULE__)), $(args...))))
 end
 
 function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
@@ -789,7 +789,7 @@ function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
     elseif (package == PKG_METAL)  synchronize_metal(stream)
     elseif (package == PKG_KERNELABSTRACTIONS) 
-        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
+        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), ParallelStencil.ParallelKernel.get_package(@__MODULE__)))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
