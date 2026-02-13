@@ -72,8 +72,13 @@ Base.retry_load_extensions()
 					@test ParallelStencil.ParallelKernel.@current_hardware() == symbol
 					@require @is_initialized()
 					@test @is_initialized()
-					@test !isdefined(Data)
-					@test !isdefined(TData)
+					if $package == $PKG_KERNELABSTRACTIONS
+						@test length(@symbols($(@__MODULE__), Data)) <= 1
+						@test length(@symbols($(@__MODULE__), TData)) <= 1
+					else
+						@test @isdefined(Data)
+						@test @isdefined(TData)
+					end
 				end
 
 				if $package == $PKG_KERNELABSTRACTIONS
