@@ -74,21 +74,33 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test all(T ∈ syms for T in SCALARTYPES)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "Data.Device" begin
-                        syms = @symbols($(@__MODULE__), Data.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in ARRAYTYPES)
+                        if isdefined(Data, :Device)
+                            syms = names(getfield(Data, :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in ARRAYTYPES)
+                        else
+                            @test !isdefined(Data, :Device)
+                        end
                     end;
                     @testset "Data.Fields" begin
-                        mods = (:Fields, :Device)
-                        syms = @symbols($(@__MODULE__), Data.Fields)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in mods)
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(Data, :Fields)
+                            mods = (:Fields, :Device)
+                            syms = names(getfield(Data, :Fields), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in mods)
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !isdefined(Data, :Fields)
+                        end
                     end;
                     @testset "Data.Fields.Device" begin
-                        syms = @symbols($(@__MODULE__), Data.Fields.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device)
+                            syms = names(getfield(getfield(Data, :Fields), :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !(isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device))
+                        end
                     end;
                 end;
                 @testset "TData" begin # NOTE: no scalar types
@@ -99,21 +111,33 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test all(T ∈ syms for T in mods)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "TData.Device" begin
-                        syms = @symbols($(@__MODULE__), TData.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in ARRAYTYPES)
+                        if isdefined(TData, :Device)
+                            syms = names(getfield(TData, :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in ARRAYTYPES)
+                        else
+                            @test !isdefined(TData, :Device)
+                        end
                     end;
                     @testset "TData.Fields" begin
-                        mods = (:Fields, :Device)
-                        syms = @symbols($(@__MODULE__), TData.Fields)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in mods)
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(TData, :Fields)
+                            mods = (:Fields, :Device)
+                            syms = names(getfield(TData, :Fields), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in mods)
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !isdefined(TData, :Fields)
+                        end
                     end;
                     @testset "TData.Fields.Device" begin
-                        syms = @symbols($(@__MODULE__), TData.Fields.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(TData, :Fields) && isdefined(getfield(TData, :Fields), :Device)
+                            syms = names(getfield(getfield(TData, :Fields), :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !(isdefined(TData, :Fields) && isdefined(getfield(TData, :Fields), :Device))
+                        end
                     end;
                 end;
             end
@@ -162,21 +186,33 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test !(Symbol("Number") in syms)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "Data.Device" begin
-                        syms = @symbols($(@__MODULE__), Data.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in ARRAYTYPES)
+                        if isdefined(Data, :Device)
+                            syms = names(getfield(Data, :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in ARRAYTYPES)
+                        else
+                            @test !isdefined(Data, :Device)
+                        end
                     end;
                     @testset "Data.Fields" begin
-                        mods = (:Fields, :Device)
-                        syms = @symbols($(@__MODULE__), Data.Fields)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in mods)
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(Data, :Fields)
+                            mods = (:Fields, :Device)
+                            syms = names(getfield(Data, :Fields), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in mods)
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !isdefined(Data, :Fields)
+                        end
                     end;
                     @testset "Data.Fields.Device" begin
-                        syms = @symbols($(@__MODULE__), Data.Fields.Device)
-                        @test length(syms) > 0
-                        @test all(T ∈ syms for T in FIELDTYPES)
+                        if isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device)
+                            syms = names(getfield(getfield(Data, :Fields), :Device), all=true, imported=true)
+                            @test length(syms) > 0
+                            @test all(T ∈ syms for T in FIELDTYPES)
+                        else
+                            @test !(isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device))
+                        end
                     end;
                 end;
             end
