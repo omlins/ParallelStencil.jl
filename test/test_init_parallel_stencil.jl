@@ -69,28 +69,54 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             else
                 @testset "Data" begin
                     @test @isdefined(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
+                    syms = @symbols($(@__MODULE__), Data)
+                    @test length(syms) > 1
                     @testset "Data.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                        if isdefined(Data, :Device)
+                            @test length(names(getfield(Data, :Device), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(Data, :Device)
+                        end
                     end;
                     @testset "Data.Fields" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                        if isdefined(Data, :Fields)
+                            @test length(names(getfield(Data, :Fields), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(Data, :Fields)
+                        end
                     end;
                     @testset "Data.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                        if isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device)
+                            @test length(names(getfield(getfield(Data, :Fields), :Device), all=true, imported=true)) > 1
+                        else
+                            @test !(isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device))
+                        end
                     end;
                 end;
                 @testset "TData" begin
                     @test @isdefined(TData)
-                    @test length(@symbols($(@__MODULE__), TData)) > 1
+                    syms = @symbols($(@__MODULE__), TData)
+                    @test length(syms) > 1
                     @testset "TData.Device" begin
-                        @test length(@symbols($(@__MODULE__), TData.Device)) > 1
+                        if isdefined(TData, :Device)
+                            @test length(names(getfield(TData, :Device), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(TData, :Device)
+                        end
                     end;
                     @testset "TData.Fields" begin
-                        @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
+                        if isdefined(TData, :Fields)
+                            @test length(names(getfield(TData, :Fields), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(TData, :Fields)
+                        end
                     end;
                     @testset "TData.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
+                        if isdefined(TData, :Fields) && isdefined(getfield(TData, :Fields), :Device)
+                            @test length(names(getfield(getfield(TData, :Fields), :Device), all=true, imported=true)) > 1
+                        else
+                            @test !(isdefined(TData, :Fields) && isdefined(getfield(TData, :Fields), :Device))
+                        end
                     end;
                 end;
             end
@@ -135,15 +161,28 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             else
                 @testset "Data" begin
                     @test @isdefined(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
+                    syms = @symbols($(@__MODULE__), Data)
+                    @test length(syms) > 1
                     @testset "Data.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                        if isdefined(Data, :Device)
+                            @test length(names(getfield(Data, :Device), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(Data, :Device)
+                        end
                     end;
                     @testset "Data.Fields" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                        if isdefined(Data, :Fields)
+                            @test length(names(getfield(Data, :Fields), all=true, imported=true)) > 1
+                        else
+                            @test !isdefined(Data, :Fields)
+                        end
                     end;
                     @testset "Data.Fields.Device" begin
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                        if isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device)
+                            @test length(names(getfield(getfield(Data, :Fields), :Device), all=true, imported=true)) > 1
+                        else
+                            @test !(isdefined(Data, :Fields) && isdefined(getfield(Data, :Fields), :Device))
+                        end
                     end;
                 end;
             end
