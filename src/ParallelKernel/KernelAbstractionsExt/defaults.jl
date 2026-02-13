@@ -6,6 +6,11 @@ const ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED = "the KernelAbstractions extensio
 function get_kernelabstractions_compute_capability end
 
 
+# select_hardware.jl
+
+function handle_kernelabstractions end
+
+
 # allocators.jl
 
 zeros_kernelabstractions(arg...)  = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
