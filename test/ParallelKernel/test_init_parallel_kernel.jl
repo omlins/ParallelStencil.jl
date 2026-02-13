@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_hardware, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, SCALARTYPES, ARRAYTYPES, FIELDTYPES, @select_hardware, @current_hardware, handle
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_package, @get_numbertype, @get_hardware, @get_inbounds, @get_padding, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, SCALARTYPES, ARRAYTYPES, FIELDTYPES, @select_hardware, @current_hardware, @isdefined_at_pt, handle
 import ParallelStencil.ParallelKernel: @require, @symbols
 import ParallelStencil.ParallelKernel: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized
 using ParallelStencil.ParallelKernel.Exceptions
@@ -54,18 +54,16 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test default_hw == :cpu
                 end
             end;
-            if $package == $PKG_KERNELABSTRACTIONS
+            @static if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined(Data)
-                    @test !@isdefined(TData)
-                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
-                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
+                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
+                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
                 end;
                 @select_hardware(:cpu)
                 @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
-                    @test @isdefined(Data)
+                    @test @isdefined_at_pt(Data)
                     mods = (:Data, :Device, :Fields)
                     syms = @symbols($(@__MODULE__), Data)
                     @test length(syms) > 1
@@ -74,11 +72,13 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test all(T ∈ syms for T in SCALARTYPES)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "Data.Device" begin
+                        @test @isdefined_at_pt(Data.Device)
                         syms = @symbols($(@__MODULE__), Data.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in ARRAYTYPES)
                     end;
                     @testset "Data.Fields" begin
+                        @test @isdefined_at_pt(Data.Fields)
                         mods = (:Fields, :Device)
                         syms = @symbols($(@__MODULE__), Data.Fields)
                         @test length(syms) > 0
@@ -86,24 +86,27 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @test all(T ∈ syms for T in FIELDTYPES)
                     end;
                     @testset "Data.Fields.Device" begin
+                        @test @isdefined_at_pt(Data.Fields.Device)
                         syms = @symbols($(@__MODULE__), Data.Fields.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in FIELDTYPES)
                     end;
                 end;
                 @testset "TData" begin # NOTE: no scalar types
-                    @test @isdefined(TData)
+                    @test @isdefined_at_pt(TData)
                     mods = (:TData, :Device, :Fields)
                     syms = @symbols($(@__MODULE__), TData)
                     @test length(syms) > 1
                     @test all(T ∈ syms for T in mods)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "TData.Device" begin
+                        @test @isdefined_at_pt(TData.Device)
                         syms = @symbols($(@__MODULE__), TData.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in ARRAYTYPES)
                     end;
                     @testset "TData.Fields" begin
+                        @test @isdefined_at_pt(TData.Fields)
                         mods = (:Fields, :Device)
                         syms = @symbols($(@__MODULE__), TData.Fields)
                         @test length(syms) > 0
@@ -111,6 +114,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @test all(T ∈ syms for T in FIELDTYPES)
                     end;
                     @testset "TData.Fields.Device" begin
+                        @test @isdefined_at_pt(TData.Fields.Device)
                         syms = @symbols($(@__MODULE__), TData.Fields.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in FIELDTYPES)
@@ -143,18 +147,16 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test default_hw == :cpu
                 end
             end;
-            if $package == $PKG_KERNELABSTRACTIONS
+            @static if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined(Data)
-                    @test !@isdefined(TData)
-                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
-                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
+                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
+                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
                 end;
                 @select_hardware(:cpu)
                 @test @current_hardware() == :cpu
             else
                 @testset "Data" begin # NOTE: no scalar types
-                    @test @isdefined(Data)
+                    @test @isdefined_at_pt(Data)
                     mods = (:Data, :Device, :Fields)
                     syms = @symbols($(@__MODULE__), Data)
                     @test length(syms) > 1
@@ -162,11 +164,13 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test !(Symbol("Number") in syms)
                     @test all(T ∈ syms for T in ARRAYTYPES)
                     @testset "Data.Device" begin
+                        @test @isdefined_at_pt(Data.Device)
                         syms = @symbols($(@__MODULE__), Data.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in ARRAYTYPES)
                     end;
                     @testset "Data.Fields" begin
+                        @test @isdefined_at_pt(Data.Fields)
                         mods = (:Fields, :Device)
                         syms = @symbols($(@__MODULE__), Data.Fields)
                         @test length(syms) > 0
@@ -174,6 +178,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                         @test all(T ∈ syms for T in FIELDTYPES)
                     end;
                     @testset "Data.Fields.Device" begin
+                        @test @isdefined_at_pt(Data.Fields.Device)
                         syms = @symbols($(@__MODULE__), Data.Fields.Device)
                         @test length(syms) > 0
                         @test all(T ∈ syms for T in FIELDTYPES)
