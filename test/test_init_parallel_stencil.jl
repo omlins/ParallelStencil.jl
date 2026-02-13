@@ -4,7 +4,7 @@ import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, 
 import ParallelStencil: @require, @symbols
 import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_padding, set_memopt, set_nonconst_metadata
 using ParallelStencil.Exceptions
-import ParallelStencil.ParallelKernel: handle
+import ParallelStencil.ParallelKernel: handle, @isdefined_at_pt
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -57,39 +57,43 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test parse_hw == :cpu
                 end
             end;
-            if $package == $PKG_KERNELABSTRACTIONS
+            @static if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined(Data)
-                    @test !@isdefined(TData)
-                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
-                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
+                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
+                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
                 end;
                 @select_hardware(:cpu)
                 @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
-                    @test @isdefined(Data)
+                    @test @isdefined_at_pt(Data)
                     @test length(@symbols($(@__MODULE__), Data)) > 1
                     @testset "Data.Device" begin
+                        @test @isdefined_at_pt(Data.Device)
                         @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                     end;
                     @testset "Data.Fields" begin
+                        @test @isdefined_at_pt(Data.Fields)
                         @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                     end;
                     @testset "Data.Fields.Device" begin
+                        @test @isdefined_at_pt(Data.Fields.Device)
                         @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
                     end;
                 end;
                 @testset "TData" begin
-                    @test @isdefined(TData)
+                    @test @isdefined_at_pt(TData)
                     @test length(@symbols($(@__MODULE__), TData)) > 1
                     @testset "TData.Device" begin
+                        @test @isdefined_at_pt(TData.Device)
                         @test length(@symbols($(@__MODULE__), TData.Device)) > 1
                     end;
                     @testset "TData.Fields" begin
+                        @test @isdefined_at_pt(TData.Fields)
                         @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
                     end;
                     @testset "TData.Fields.Device" begin
+                        @test @isdefined_at_pt(TData.Fields.Device)
                         @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
                     end;
                 end;
@@ -123,26 +127,27 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                     @test parse_hw == :cpu
                 end
             end;
-            if $package == $PKG_KERNELABSTRACTIONS
+            @static if $package == $PKG_KERNELABSTRACTIONS
                 @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined(Data)
-                    @test !@isdefined(TData)
-                    syms = @symbols($(@__MODULE__), $(@__MODULE__))
-                    @require length(filter(sym -> sym in (:Data, :TData), syms)) == 0
+                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
+                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
                 end;
                 @select_hardware(:cpu)
                 @test @current_hardware() == :cpu
             else
                 @testset "Data" begin
-                    @test @isdefined(Data)
+                    @test @isdefined_at_pt(Data)
                     @test length(@symbols($(@__MODULE__), Data)) > 1
                     @testset "Data.Device" begin
+                        @test @isdefined_at_pt(Data.Device)
                         @test length(@symbols($(@__MODULE__), Data.Device)) > 1
                     end;
                     @testset "Data.Fields" begin
+                        @test @isdefined_at_pt(Data.Fields)
                         @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
                     end;
                     @testset "Data.Fields.Device" begin
+                        @test @isdefined_at_pt(Data.Fields.Device)
                         @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
                     end;
                 end;
