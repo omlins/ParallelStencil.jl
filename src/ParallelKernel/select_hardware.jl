@@ -104,18 +104,7 @@ end
 
 function handle(hardware::Symbol, package::Symbol)
     if package == PKG_KERNELABSTRACTIONS
-        if hardware == :cpu
-            return KernelAbstractions.CPU()
-        elseif hardware == :gpu_cuda
-            return KernelAbstractions.CUDABackend()
-        elseif hardware == :gpu_amd
-            return KernelAbstractions.ROCBackend()
-        elseif hardware == :gpu_metal
-            return KernelAbstractions.MetalBackend()
-        elseif hardware == :gpu_oneapi
-            return KernelAbstractions.oneAPIBackend()
-        end
-        @ArgumentError("unsupported KernelAbstractions hardware symbol (obtained: $hardware).")
+        return handle_kernelabstractions(hardware)
     else
         @ArgumentError("hardware handle translation is only supported for multi-architecture backends (obtained: $package).")
     end
