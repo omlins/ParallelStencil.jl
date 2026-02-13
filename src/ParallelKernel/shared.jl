@@ -530,6 +530,8 @@ gorgeousstring(expr::Expr) = string(simplify_varnames!(remove_linenumbernodes!(e
 longnameof(f)              = "$(parentmodule(f)).$(nameof(f))"
 symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Expr,Module}; imported=false, all=true) = @eval(eval_mod, names($mod, all=$all, imported=$imported))
 macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; all=all, imported=imported) end
+isdefined_at_pt(caller::Module, expr) = !isnothing(eval_try(caller, expr))
+macro isdefined_at_pt(expr)           Expr(:quote, isdefined_at_pt(__module__, expr)) end
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro isgpu(package)                   isgpu(package) end
 macro iscpu(package)                   iscpu(package) end
