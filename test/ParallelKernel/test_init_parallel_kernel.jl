@@ -42,7 +42,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @testset "default hardware" begin
                 default_hw = @get_hardware()
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test default_hw == :cpu
                 elseif $package == $PKG_CUDA
                     @test default_hw == :gpu_cuda
@@ -135,7 +135,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @testset "default hardware" begin
                 default_hw = @get_hardware()
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test default_hw == :cpu
                 elseif $package == $PKG_CUDA
                     @test default_hw == :gpu_cuda
