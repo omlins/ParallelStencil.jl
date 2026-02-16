@@ -38,7 +38,7 @@ Base.retry_load_extensions()
 				package_symbol = $(QuoteNode(package))
 				@init_parallel_kernel($package, Float64)
 				default_hw = @get_hardware()
-				if $package == $PKG_KERNELABSTRACTIONS
+				@static if $package == $PKG_KERNELABSTRACTIONS
 					@test default_hw == :cpu
 				elseif $package == $PKG_CUDA
 					@test default_hw == :gpu_cuda
@@ -51,7 +51,7 @@ Base.retry_load_extensions()
 				end
 
 				valid_symbols = Symbol[]
-				if $package == $PKG_KERNELABSTRACTIONS
+				@static if $package == $PKG_KERNELABSTRACTIONS
 					valid_symbols = [:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi]
 				elseif $package == $PKG_CUDA
 					valid_symbols = [:gpu_cuda]
@@ -71,7 +71,7 @@ Base.retry_load_extensions()
 				@select_hardware(last_selected)
 				@test @current_hardware() == last_selected
 
-				if $package == $PKG_KERNELABSTRACTIONS
+				@static if $package == $PKG_KERNELABSTRACTIONS
 					handle_symbols = [:cpu]
 					if isdefined(KernelAbstractions, :CUDABackend) push!(handle_symbols, :gpu_cuda) end
 					if isdefined(KernelAbstractions, :ROCBackend) push!(handle_symbols, :gpu_amd) end
