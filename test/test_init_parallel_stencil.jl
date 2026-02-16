@@ -45,7 +45,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @testset "default hardware" begin
                 parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test parse_hw == :cpu
                 elseif $package == $PKG_CUDA
                     @test parse_hw == :gpu_cuda
@@ -115,7 +115,7 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
             end;
             @testset "default hardware" begin
                 parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test parse_hw == :cpu
                 elseif $package == $PKG_CUDA
                     @test parse_hw == :gpu_cuda
