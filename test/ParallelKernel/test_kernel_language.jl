@@ -81,18 +81,30 @@ eval(:(
                     # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"  #TODO: not yet supported for Metal
                 elseif $package == $PKG_KERNELABSTRACTIONS
                     call = @prettystring(1, @gridDim())
+                    @test occursin("ParallelStencil.ParallelKernel.@gridDim_kernelabstractions", call)
+
+                    call = @prettystring(2, @gridDim())
                     @test occursin("KernelAbstractions.@ndrange", call)
                     @test occursin("KernelAbstractions.@groupsize", call)
 
                     call = @prettystring(1, @blockIdx())
+                    @test occursin("ParallelStencil.ParallelKernel.@blockIdx_kernelabstractions", call)
+
+                    call = @prettystring(2, @blockIdx())
                     @test occursin("KernelAbstractions.@index", call)
                     @test occursin("Group", call)
                     @test occursin("NTuple", call)
 
                     call = @prettystring(1, @blockDim())
+                    @test occursin("ParallelStencil.ParallelKernel.@blockDim_kernelabstractions", call)
+
+                    call = @prettystring(2, @blockDim())
                     @test occursin("KernelAbstractions.@groupsize", call)
 
                     call = @prettystring(1, @threadIdx())
+                    @test occursin("ParallelStencil.ParallelKernel.@threadIdx_kernelabstractions", call)
+
+                    call = @prettystring(2, @threadIdx())
                     @test occursin("KernelAbstractions.@index", call)
                     @test occursin("Local", call)
                     @test occursin("NTuple", call)
@@ -101,6 +113,9 @@ eval(:(
                     @test occursin("KernelAbstractions.@synchronize", call)
 
                     call = @prettystring(1, @sharedMem($FloatDefault, (2,3)))
+                    @test occursin("ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions", call)
+
+                    call = @prettystring(2, @sharedMem($FloatDefault, (2,3)))
                     @test occursin("KernelAbstractions.@localmem", call)
                     @test occursin("$(nameof($FloatDefault))", call)
                 elseif @iscpu($package)
