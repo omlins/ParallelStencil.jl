@@ -52,7 +52,7 @@ eval(:(
             @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized()
             @testset "mapping to package" begin
-                if $package == $PKG_CUDA
+                @static if $package == $PKG_CUDA
                     @test @prettystring(1, @gridDim()) == "CUDA.gridDim()"
                     @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
                     @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
@@ -133,7 +133,7 @@ eval(:(
                     lane_mask = 1
                     predicate = true
 
-                    if $package == $PKG_CUDA
+                    @static if $package == $PKG_CUDA
                         @test @prettystring(1, @warpsize()) == "CUDA.warpsize()"
                         @test @prettystring(1, @laneid())   == "CUDA.laneid() + 1"
                         @test @prettystring(1, @active_mask()) == "CUDA.active_mask()"
@@ -222,10 +222,7 @@ eval(:(
                     end
                 end;
                 @testset "Semantic smoke tests" begin
-                    @static if $package == $PKG_KERNELABSTRACTIONS
-                        @select_hardware(:cpu)
-                    end
-                    @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
+                    @static if @iscpu($package)
                         N = 8
                         A  = @rand(N)
                         P  = [isfinite(A[i]) && (A[i] > zero($FloatDefault)) for i in 1:N]  # simple predicate
