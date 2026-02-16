@@ -1,18 +1,31 @@
 ## RUNTIME ALLOCATOR FUNCTIONS
 
+import Random
+
 ParallelStencil.ParallelKernel.zeros_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Number}             = (check_datatype_kernelabstractions(T); KernelAbstractions.zeros(backend, T, args...))
 ParallelStencil.ParallelKernel.ones_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Number}              = (check_datatype_kernelabstractions(T); KernelAbstractions.ones(backend, T, args...))
-ParallelStencil.ParallelKernel.rand_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = (check_datatype_kernelabstractions(T, Bool, Enum); KernelAbstractions.rand(backend, T, args...))
-ParallelStencil.ParallelKernel.falses_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}              = KernelAbstractions.fill(backend, false, args...)
-ParallelStencil.ParallelKernel.trues_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}               = KernelAbstractions.fill(backend, true, args...)
-ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = KernelAbstractions.fill(backend, convert(T, args[1]), args[2:end]...)
+ParallelStencil.ParallelKernel.rand_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = begin
+    check_datatype_kernelabstractions(T, Bool, Enum)
+    A = KernelAbstractions.allocate(backend, T, args...)
+    Random.rand!(A)
+    A
+end
+ParallelStencil.ParallelKernel.falses_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}              = ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, T, blocklength, false, args...)
+ParallelStencil.ParallelKernel.trues_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Bool}               = ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, T, blocklength, true, args...)
+ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{Number,Enum}}  = begin
+    check_datatype_kernelabstractions(T, Bool, Enum)
+    A = KernelAbstractions.allocate(backend, T, args[2:end]...)
+    Base.fill!(A, convert(T, args[1]))
+    A
+end
 
 ParallelStencil.ParallelKernel.zeros_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}} = (check_datatype_kernelabstractions(T); ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, T, blocklength, 0, args...))
 ParallelStencil.ParallelKernel.ones_kernelabstractions(backend, ::Type{T}, blocklength, args...) where {T<:Union{SArray,FieldArray}}  = (check_datatype_kernelabstractions(T); ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, T, blocklength, 1, args...))
 ParallelStencil.ParallelKernel.rand_kernelabstractions(backend, ::Type{T}, ::Val{B}, dims) where {T<:Union{SArray,FieldArray}, B} = begin
     check_datatype_kernelabstractions(T, Bool, Enum)
     blocklen = (B == 0) ? prod(dims) : B
-    storage = KernelAbstractions.rand(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(dims) / blocklen))
+    storage = KernelAbstractions.allocate(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(dims) / blocklen))
+    Random.rand!(storage)
     CellArray{T,length(dims),B, typeof(storage)}(storage, dims)
 end
 ParallelStencil.ParallelKernel.rand_kernelabstractions(backend, ::Type{T}, blocklength, dims...) where {T<:Union{SArray,FieldArray}} = ParallelStencil.ParallelKernel.rand_kernelabstractions(backend, T, blocklength, dims)
@@ -26,9 +39,9 @@ function ParallelStencil.ParallelKernel.fill_kernelabstractions(backend, ::Type{
     elseif (length(x) == length(T)) cell = convert(T, x)
     else                            @ArgumentError("fill: argument 'x' contains the wrong number of elements ($(length(x))). It must be a scalar or contain the number of elements defined by 'celldims'.")
     end
-    blocklen = (B == 0) ? prod(size(T)) : B
-    storage = KernelAbstractions.zeros(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(args) / blocklen))
-    return CellArrays.fill!(CellArray{T,length(args),B, typeof(storage)}(storage, args...), cell)
+    blocklen = (B == 0) ? prod(args) : B
+    storage = KernelAbstractions.allocate(backend, eltype(T), blocklen, prod(size(T)), ceil(Int, prod(args) / blocklen))
+    return CellArrays.fill!(CellArray{T,length(args),B, typeof(storage)}(storage, args), cell)
 end
 
 ParallelStencil.ParallelKernel.fill!_kernelabstractions(backend, A, x) = KernelAbstractions.fill!(backend, A, construct_cell(A, x))
