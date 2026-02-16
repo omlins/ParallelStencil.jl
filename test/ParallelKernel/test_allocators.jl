@@ -169,7 +169,6 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float32))    == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
                     @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(fill(convert(DATA_INDEX, 9), 2,3)))
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -271,7 +270,6 @@ eval(:(
                     @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
                     Metal.allowscalar(false)
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -337,10 +335,12 @@ eval(:(
                         @test contains_current_hardware_call(call)
                         @test occursin("KernelAbstractions", call)
                     end
-                    invalid_symbols = kernelabstractions_invalid_symbols(valid_symbols)
+                    supported_symbols = (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi)
+                    all_symbols = (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi, :hw_none, :gpu_invalid)
+                    invalid_symbols = filter(s -> !(s in supported_symbols), all_symbols)
                     for invalid in invalid_symbols
                         @test_throws ArgumentError @select_hardware(invalid)
-                        @test_throws ArgumentError handle(invalid)
+                        @test_throws ArgumentError handle(invalid, PKG_KERNELABSTRACTIONS)
                     end
                     @select_hardware(:cpu)
                 else
@@ -395,7 +395,6 @@ eval(:(
                     @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                     Metal.allowscalar(false)
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -418,8 +417,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CuCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,1}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,1}(undef,2,3))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                             CUDA.allowscalar(false)
                         elseif symbol == :gpu_amd
@@ -504,7 +503,6 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float32))  == typeof(Metal.MtlArray(fill(convert(Float32, 9), 2,3)))
                     @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(Metal.MtlArray(zeros(DATA_INDEX,2,3)))
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -567,7 +565,6 @@ eval(:(
                     @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                     Metal.allowscalar(false)
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -583,8 +580,8 @@ eval(:(
                             CUDA.allowscalar(true)
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(CuCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CuCellArray{T_Float64,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CuCellArray{T_Float64,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(CuCellArray{T_Float64,1}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(CuCellArray{T_Float64,1}(undef,2,3))
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(CuCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             CUDA.allowscalar(false)
@@ -658,7 +655,6 @@ eval(:(
                     @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
                     Metal.allowscalar(false)
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @current_hardware() == :cpu
                     valid_symbols = kernelabstractions_valid_symbols()
                     for symbol in valid_symbols
                         @select_hardware(symbol)
@@ -680,8 +676,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(CuCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(CuCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(CuCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(CuCellArray{SymmetricTensor2D,1}(undef,2,3))
+                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(CuCellArray{SymmetricTensor2D,1}(undef,2,3))
                             CUDA.allowscalar(false)
                         elseif symbol == :gpu_amd
                             @require PKG_AMDGPU in TEST_PACKAGES
