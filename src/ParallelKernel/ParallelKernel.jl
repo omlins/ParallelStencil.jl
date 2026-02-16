@@ -76,6 +76,7 @@ include(joinpath("AMDGPUExt", "defaults.jl"))
 include(joinpath("CUDAExt", "defaults.jl"))
 include(joinpath("KernelAbstractionsExt", "defaults.jl"))
 include(joinpath("MetalExt", "defaults.jl"))
+include(joinpath("OneAPIExt", "defaults.jl"))
 
 ## Include of constant parameters, types and syntax sugar shared in ParallelKernel module only
 include("shared.jl")
