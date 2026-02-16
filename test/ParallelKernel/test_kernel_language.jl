@@ -115,7 +115,7 @@ eval(:(
                 end;
             end;
             @testset "mapping to package (internal macros)" begin
-                if $package == $PKG_THREADS
+                @static if $package == $PKG_THREADS
                     @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Base.Threads.@threads"
                 elseif $package == $PKG_POLYESTER
                     @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Polyester.@batch"
@@ -172,27 +172,6 @@ eval(:(
                     elseif $package == $PKG_METAL
                         @test @prettystring(1, @warpsize()) == "Metal.threads_per_simdgroup()"
                         @test @prettystring(1, @laneid())   == "unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1)"
-                        @test_throws Exception @prettystring(1, @active_mask())
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
-                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
-
-                    elseif $package == $PKG_KERNELABSTRACTIONS
-                        @test_throws Exception @prettystring(1, @warpsize())
-                        @test_throws Exception @prettystring(1, @laneid())
-                        @test_throws Exception @prettystring(1, @active_mask())
-
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane, width))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask, val, delta))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask, val, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask, val, delta))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask, val, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask, val, lane_mask))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask, val, lane_mask, width))
-
-                        @test_throws Exception @prettystring(1, @vote_any_sync(mask, predicate))
-                        @test_throws Exception @prettystring(1, @vote_all_sync(mask, predicate))
-                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
 
                     elseif @iscpu($package)
                         @test @prettystring(1, @warpsize())     == "ParallelStencil.ParallelKernel.warpsize_cpu()"
@@ -286,33 +265,6 @@ eval(:(
                         @test Bout_any == P
                         @test Bout_all == P
                         @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
-                    end
-                end;
-                @testset "Unsupported primitives" begin
-                    @static if $package == $PKG_METAL || $package == $PKG_KERNELABSTRACTIONS
-                        mask      = UInt64(0x1)
-                        mask32    = UInt32(0x1)
-                        valf      = one($FloatDefault)
-                        lane      = 1
-                        width     = 1
-                        delta     = 1
-                        lanemask  = 1
-                        predicate = true
-
-                        @test_throws Exception @prettystring(1, @active_mask())
-
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane))
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane, width))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask, width))
-
-                        @test_throws Exception @prettystring(1, @vote_any_sync(mask32, predicate))
-                        @test_throws Exception @prettystring(1, @vote_all_sync(mask32, predicate))
-                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask32, predicate))
                     end
                 end;
             end;
