@@ -213,7 +213,7 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(fill(convert(Float64, 9), 2,3))
                     @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(fill(convert(DATA_INDEX, 9), 2,3))
                 end
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test Array(@falses(2,3)) == Array(falses(2,3))
                     @test Array(@trues(2,3))  == Array(trues(2,3))
                 else
@@ -524,7 +524,7 @@ eval(:(
                     @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(fill(convert(Float64, 9), 2,3))
                     @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(zeros(DATA_INDEX,2,3))
                 end
-                if $package == $PKG_KERNELABSTRACTIONS
+                @static if $package == $PKG_KERNELABSTRACTIONS
                     @test Array(@falses(2,3)) == Array(falses(2,3))
                     @test Array(@trues(2,3))  == Array(trues(2,3))
                 else
