@@ -747,7 +747,9 @@ macro ka(args...)
 end
 
 macro ka_auto(args...)
-    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), ParallelStencil.ParallelKernel.get_package(@__MODULE__)), $(args...))))
+    package = ParallelKernel.get_package(__module__)
+    package_expr = quote_expr(package)
+    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), $package_expr), $(args...))))
 end
 
 function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
@@ -770,8 +772,11 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
         elseif (package == PKG_METAL)  return :( Metal.@metal groups=$nblocks threads=$nthreads queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_KERNELABSTRACTIONS)
             ndrange_expr = :($nblocks .* $nthreads)
-            queue_expr = (stream == :(nothing)) ? nothing : :(queue = $stream)
-            return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(queue_expr === nothing ? () : (queue_expr,)) $(backend_kwargs_expr...) $kernelcall; $synccall )
+            if stream == :(nothing) || stream === nothing
+                return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(backend_kwargs_expr...) $kernelcall; $synccall )
+            else
+                return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
+            end
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
@@ -789,7 +794,8 @@ function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
     elseif (package == PKG_METAL)  synchronize_metal(stream)
     elseif (package == PKG_KERNELABSTRACTIONS) 
-        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), ParallelStencil.ParallelKernel.get_package(@__MODULE__)))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
+        package_expr = quote_expr(package)
+        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), $package_expr))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
