@@ -81,6 +81,7 @@ eval(:(
                     @test occursin("Metal.@metal groups = nblocks threads = nthreads queue = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
                 elseif $package == $PKG_KERNELABSTRACTIONS
                     call = @prettystring(1, @parallel f(A))
+                    call = @prettystring(2, @parallel f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                     @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions)", call)
                     @test occursin("KernelAbstractions", call)
