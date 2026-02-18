@@ -203,9 +203,12 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
-    body = add_return(body)
+    body = add_return(body, package)
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
+    if package == PKG_KERNELABSTRACTIONS
+        kernel = :(KernelAbstractions.@kernel $kernel)
+    end
     return kernel
 end
 
@@ -533,7 +536,7 @@ function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol
     int_type = kernel_int_type(package)
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
     if isgpu(package) || isxpu(package)
-        body = add_threadids(indices, ranges, body)        
+        body = add_threadids(indices, ranges, body, package)
         body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
     elseif iscpu(package)
@@ -548,7 +551,7 @@ end
 
 ## FUNCTIONS TO ADD THREAD-IDS / LOOPS IN KERNELS
 
-function add_threadids(indices::Array, ranges::Array, block::Expr)
+function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symbol)
     if !(length(ranges)==3) @ModuleInternalError("ranges must be an Array or Tuple of size 3.") end # E.g. (5:28,5:28,1:1) in 2D. Note that for simplicity for the users and developers, 1D and 2D problems are always expressed like 3D problems...
     check_thread_bounds = true
     if haskey(ENV, "PS_THREAD_BOUND_CHECK") check_thread_bounds = (parse(Int64, ENV["PS_THREAD_BOUND_CHECK"]) > 0); end # PS_THREAD_BOUND_CHECK=0 enables to deactivate the check whether each thread is in bounds of the ranges array in order to reach maximal performance. If deactivated and any thread is out-of-bound it will cause normally a segmentation fault. To ensure that all threads are in bounds, the thread block must be of the same size as the ranges passed to the @parallel or @parallel_indices function.
@@ -556,56 +559,93 @@ function add_threadids(indices::Array, ranges::Array, block::Expr)
     rangelength_x, rangelength_y, rangelength_z = RANGELENGTHS_VARNAMES
     tx, ty, tz = THREADIDS_VARNAMES
     ndims = length(indices)
+    use_ka_guard = (package == PKG_KERNELABSTRACTIONS)
     if ndims == 1
         ix, = indices
         range_x, = ranges
-        if check_thread_bounds
+        if check_thread_bounds && !use_ka_guard
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
             end
         end
-        quote
-            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-            $thread_bounds_check
-            $ix = $range_x[$tx]                                                    # index, dimension x
-            $block
+        if check_thread_bounds && use_ka_guard
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                if ($tx <= $rangelength_x)
+                    $ix = $range_x[$tx]                                                    # index, dimension x
+                    $block
+                end
+            end
+        else
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                $thread_bounds_check
+                $ix = $range_x[$tx]                                                    # index, dimension x
+                $block
+            end
         end
     elseif ndims == 2
         ix, iy = indices
         range_x, range_y = ranges
-        if check_thread_bounds
+        if check_thread_bounds && !use_ka_guard
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
             end
         end
-        quote
-            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-            $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-            $thread_bounds_check
-            $ix = $range_x[$tx]                                                    # index, dimension x
-            $iy = $range_y[$ty]                                                    # index, dimension y
-            $block
+        if check_thread_bounds && use_ka_guard
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+                if ($tx <= $rangelength_x && $ty <= $rangelength_y)
+                    $ix = $range_x[$tx]                                                    # index, dimension x
+                    $iy = $range_y[$ty]                                                    # index, dimension y
+                    $block
+                end
+            end
+        else
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+                $thread_bounds_check
+                $ix = $range_x[$tx]                                                    # index, dimension x
+                $iy = $range_y[$ty]                                                    # index, dimension y
+                $block
+            end
         end
     elseif ndims == 3
         ix, iy, iz = indices
         range_x, range_y, range_z = ranges
-        if check_thread_bounds
+        if check_thread_bounds && !use_ka_guard
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
                 if ($tz > $rangelength_z) return; end
             end
         end
-        quote
-            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-            $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-            $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
-            $thread_bounds_check
-            $ix = $range_x[$tx]                                                    # index, dimension x
-            $iy = $range_y[$ty]                                                    # index, dimension y
-            $iz = $range_z[$tz]                                                    # index, dimension z
-            $block
+        if check_thread_bounds && use_ka_guard
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+                $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
+                if ($tx <= $rangelength_x && $ty <= $rangelength_y && $tz <= $rangelength_z)
+                    $ix = $range_x[$tx]                                                    # index, dimension x
+                    $iy = $range_y[$ty]                                                    # index, dimension y
+                    $iz = $range_z[$tz]                                                    # index, dimension z
+                    $block
+                end
+            end
+        else
+            quote
+                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+                $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
+                $thread_bounds_check
+                $ix = $range_x[$tx]                                                    # index, dimension x
+                $iy = $range_y[$ty]                                                    # index, dimension y
+                $iz = $range_z[$tz]                                                    # index, dimension z
+                $block
+            end
         end
     end
 end
