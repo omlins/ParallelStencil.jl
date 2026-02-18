@@ -223,10 +223,17 @@ function disguise_returns(body::Expr)
     end
 end
 
-function add_return(body::Expr)
-    quote
-        $body
-        return nothing
+function add_return(body::Expr, package::Symbol)
+    if package == PKG_KERNELABSTRACTIONS
+        quote
+            $body
+            nothing
+        end
+    else
+        quote
+            $body
+            return nothing
+        end
     end
 end
 
