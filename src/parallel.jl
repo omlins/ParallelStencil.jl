@@ -265,7 +265,7 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     body = get_body(kernel)
     body = remove_return(body)
     body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
-    body = add_return(body)
+    body = add_return(body, package)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
     return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) ndims=$ndims inbounds=$inbounds padding=$padding memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
@@ -307,7 +307,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end
-    body = add_return(body)
+    body = add_return(body, package)
     set_body!(kernel, body)
     if memopt
         expanded_kernel = macroexpand(caller, kernel)
@@ -316,6 +316,9 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
             $metadata_function
         end
     else
+        if package == PKG_KERNELABSTRACTIONS
+            kernel = :(KernelAbstractions.@kernel $kernel)
+        end
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
