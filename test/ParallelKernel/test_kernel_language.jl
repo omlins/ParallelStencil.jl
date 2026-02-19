@@ -84,30 +84,26 @@ eval(:(
                     @test occursin("ParallelStencil.ParallelKernel.@gridDim_kernelabstractions", call)
 
                     call = @prettystring(2, @gridDim())
-                    @test occursin("KernelAbstractions.@ndrange", call)
-                    @test occursin("KernelAbstractions.@groupsize", call)
+                    @test occursin("@ndrange", call)
+                    @test occursin("@groupsize", call)
 
                     call = @prettystring(1, @blockIdx())
                     @test occursin("ParallelStencil.ParallelKernel.@blockIdx_kernelabstractions", call)
 
                     call = @prettystring(2, @blockIdx())
-                    @test occursin("KernelAbstractions.@index", call)
-                    @test occursin("Group", call)
-                    @test occursin("NTuple", call)
+                    @test occursin("index_group_ntuple", call)
 
                     call = @prettystring(1, @blockDim())
                     @test occursin("ParallelStencil.ParallelKernel.@blockDim_kernelabstractions", call)
 
                     call = @prettystring(2, @blockDim())
-                    @test occursin("KernelAbstractions.@groupsize", call)
+                    @test occursin("@groupsize", call)
 
                     call = @prettystring(1, @threadIdx())
                     @test occursin("ParallelStencil.ParallelKernel.@threadIdx_kernelabstractions", call)
 
                     call = @prettystring(2, @threadIdx())
-                    @test occursin("KernelAbstractions.@index", call)
-                    @test occursin("Local", call)
-                    @test occursin("NTuple", call)
+                    @test occursin("index_local_ntuple", call)
 
                     call = @prettystring(1, @sync_threads())
                     @test occursin("KernelAbstractions.@synchronize", call)
