@@ -635,48 +635,21 @@ macro sync_threads_cpu() esc(:(begin end)) end
 ## KERNELABSTRACTIONS TARGET IMPLEMENTATIONS
 
 macro gridDim_kernelabstractions()
-    esc(:(begin
-        ndrange = KernelAbstractions.@ndrange()
-        groupsize = KernelAbstractions.@groupsize()
-        ParallelStencil.ParallelKernel.Dim3(
-            cld(ndrange[1], groupsize[1]),
-            length(ndrange) >= 2 ? cld(ndrange[2], groupsize[2]) : 1,
-            length(ndrange) >= 3 ? cld(ndrange[3], groupsize[3]) : 1
-        )
-    end))
+    esc(:(ParallelStencil.ParallelKernel.Dim3(cld.(@ndrange(), @groupsize()))))
 end
 
 macro blockIdx_kernelabstractions()
-    esc(:(begin
-        group_idx = KernelAbstractions.@index(Group, NTuple)
-        ParallelStencil.ParallelKernel.Dim3(
-            group_idx[1],
-            length(group_idx) >= 2 ? group_idx[2] : 1,
-            length(group_idx) >= 3 ? group_idx[3] : 1
-        )
-    end))
+    index_group_ntuple = INDEX_GROUP_NTUPLE_VARNAME
+    esc(:(ParallelStencil.ParallelKernel.Dim3($index_group_ntuple)))
 end
 
 macro blockDim_kernelabstractions()
-    esc(:(begin
-        groupsize = KernelAbstractions.@groupsize()
-        ParallelStencil.ParallelKernel.Dim3(
-            groupsize[1],
-            length(groupsize) >= 2 ? groupsize[2] : 1,
-            length(groupsize) >= 3 ? groupsize[3] : 1
-        )
-    end))
+    esc(:(ParallelStencil.ParallelKernel.Dim3(@groupsize())))
 end
 
 macro threadIdx_kernelabstractions()
-    esc(:(begin
-        local_idx = KernelAbstractions.@index(Local, NTuple)
-        ParallelStencil.ParallelKernel.Dim3(
-            local_idx[1],
-            length(local_idx) >= 2 ? local_idx[2] : 1,
-            length(local_idx) >= 3 ? local_idx[3] : 1
-        )
-    end))
+    index_local_ntuple = INDEX_LOCAL_NTUPLE_VARNAME
+    esc(:(ParallelStencil.ParallelKernel.Dim3($index_local_ntuple)))
 end
 
 
