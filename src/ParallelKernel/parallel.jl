@@ -187,7 +187,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     indices = extract_tuple(indices)
     ndims = length(indices)
     body = get_body(kernel)
-    body = remove_return(body)
+    body = remove_return(body; disguise_nested=(package!=PKG_KERNELABSTRACTIONS))
     body = macroexpand(caller, body)
     use_aliases = !all(indices .== INDICES[1:ndims])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
@@ -207,9 +207,52 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
     if package == PKG_KERNELABSTRACTIONS
-        kernel = :(KernelAbstractions.@kernel $kernel)
+        kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
     end
     return kernel
+end
+
+function contains_index_macro(ex)
+    if !(ex isa Expr)
+        return false
+    end
+    if ex.head == :macrocall
+        macro_name = ex.args[1]
+        if macro_name == Symbol("@index")
+            return true
+        end
+        if macro_name isa Expr && macro_name.head == :. && !isempty(macro_name.args)
+            lastarg = macro_name.args[end]
+            if lastarg isa QuoteNode && lastarg.value == Symbol("@index")
+                return true
+            end
+        end
+        if macro_name isa GlobalRef && macro_name.name == Symbol("@index")
+            return true
+        end
+    end
+    for arg in ex.args
+        if contains_index_macro(arg)
+            return true
+        end
+    end
+    return false
+end
+
+macro ka_kernel(kernel)
+    caller = __module__
+    if !isdefined(caller, Symbol("@index")) || !isdefined(caller, Symbol("@groupsize")) || !isdefined(caller, Symbol("@ndrange"))
+        Core.eval(caller, :(import KernelAbstractions: @index, @groupsize, @ndrange))
+    end
+    expanded_kernel = kernel
+    while !contains_index_macro(expanded_kernel)
+        next_kernel = macroexpand(caller, expanded_kernel; recursive=false)
+        if next_kernel === expanded_kernel
+            break
+        end
+        expanded_kernel = next_kernel
+    end
+    return esc(:(KernelAbstractions.@kernel $expanded_kernel))
 end
 
 
@@ -558,18 +601,21 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
     thread_bounds_check = :(begin end)
     rangelength_x, rangelength_y, rangelength_z = RANGELENGTHS_VARNAMES
     tx, ty, tz = THREADIDS_VARNAMES
+    index_group_ntuple = INDEX_GROUP_NTUPLE_VARNAME
+    index_local_ntuple = INDEX_LOCAL_NTUPLE_VARNAME
     ndims = length(indices)
-    use_ka_guard = (package == PKG_KERNELABSTRACTIONS)
+    is_ka = (package == PKG_KERNELABSTRACTIONS)
+    thread_execution = :(begin end)
     if ndims == 1
         ix, = indices
         range_x, = ranges
-        if check_thread_bounds && !use_ka_guard
+        if check_thread_bounds && !is_ka
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
             end
         end
-        if check_thread_bounds && use_ka_guard
-            quote
+        if check_thread_bounds && is_ka
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 if ($tx <= $rangelength_x)
                     $ix = $range_x[$tx]                                                    # index, dimension x
@@ -577,7 +623,7 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
                 end
             end
         else
-            quote
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 $thread_bounds_check
                 $ix = $range_x[$tx]                                                    # index, dimension x
@@ -587,14 +633,14 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
     elseif ndims == 2
         ix, iy = indices
         range_x, range_y = ranges
-        if check_thread_bounds && !use_ka_guard
+        if check_thread_bounds && !is_ka
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
             end
         end
-        if check_thread_bounds && use_ka_guard
-            quote
+        if check_thread_bounds && is_ka
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
                 if ($tx <= $rangelength_x && $ty <= $rangelength_y)
@@ -604,7 +650,7 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
                 end
             end
         else
-            quote
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
                 $thread_bounds_check
@@ -616,15 +662,15 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
     elseif ndims == 3
         ix, iy, iz = indices
         range_x, range_y, range_z = ranges
-        if check_thread_bounds && !use_ka_guard
+        if check_thread_bounds && !is_ka
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
                 if ($tz > $rangelength_z) return; end
             end
         end
-        if check_thread_bounds && use_ka_guard
-            quote
+        if check_thread_bounds && is_ka
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
                 $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
@@ -636,7 +682,7 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
                 end
             end
         else
-            quote
+            thread_execution = quote
                 $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
                 $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
                 $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
@@ -647,7 +693,17 @@ function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symb
                 $block
             end
         end
+    else
+        @ModuleInternalError("unsupported number of dimensions in add_threadids (obtained: $ndims).")
     end
+    if is_ka
+        thread_execution = quote
+            $index_group_ntuple = @index(Group, NTuple)
+            $index_local_ntuple = @index(Local, NTuple)
+            $thread_execution
+        end
+    end
+    return thread_execution
 end
 
 function add_loop(indices::Array, ranges::Array, block::Expr)
