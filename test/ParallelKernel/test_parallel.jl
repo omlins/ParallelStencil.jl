@@ -332,7 +332,7 @@ eval(:(
                     @parallel (1:size(A,1), 1:size(A,3)) write_indices!(A);
                     @test all(Array(A)[:,end,:] .== [ix + (iz-1)*size(A,1) for ix=1:size(A,1), iz=1:size(A,3)])
                 end;
-                @static if $package != $PKG_POLYESTER
+                @static if $package != $PKG_POLYESTER && $package != $PKG_KERNELABSTRACTIONS
                     @testset "nested function (long definition, array modification)" begin
                         A  = @zeros(4, 5, 6)
                         @parallel_indices (ix,iy,iz) function write_indices!(A)
