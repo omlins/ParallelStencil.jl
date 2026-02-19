@@ -39,6 +39,8 @@ const INDICES_DIR_FUNCTIONS_SYMS   = (:(ParallelStencil.ParallelKernel.ixd), :(P
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
 const RANGELENGTHS_VARNAMES        = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
 const THREADIDS_VARNAMES           = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
+const INDEX_GROUP_NTUPLE_VARNAME   = gensym_world("index_group_ntuple", @__MODULE__)
+const INDEX_LOCAL_NTUPLE_VARNAME   = gensym_world("index_local_ntuple", @__MODULE__)
 const RANGES_TYPE_1D               = UnitRange{}
 const RANGES_TYPE_1D_TUPLE         = Tuple{UnitRange{}}
 const RANGES_TYPE_2D               = Tuple{UnitRange{},UnitRange{}}
@@ -108,6 +110,14 @@ struct Dim3
     y::INT_THREADS
     z::INT_THREADS
 end
+
+@inline Dim3(x::Integer, y::Integer, z::Integer) = Dim3(INT_THREADS(x), INT_THREADS(y), INT_THREADS(z))
+@inline Dim3(v::NTuple{1,<:Integer}) = Dim3(v[1], 1, 1)
+@inline Dim3(v::NTuple{2,<:Integer}) = Dim3(v[1], v[2], 1)
+@inline Dim3(v::NTuple{3,<:Integer}) = Dim3(v[1], v[2], v[3])
+@inline Dim3(v::CartesianIndex{1}) = Dim3(Tuple(v))
+@inline Dim3(v::CartesianIndex{2}) = Dim3(Tuple(v))
+@inline Dim3(v::CartesianIndex{3}) = Dim3(Tuple(v))
 
 macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
@@ -187,23 +197,27 @@ function in_signature(kernel::Expr, x)
     return inexpr_walk(signature, x)
 end
 
-function remove_return(body::Expr)
+function remove_return(body::Expr; disguise_nested=true)
     if !(body.args[end] in [:(return), :(return nothing), :(nothing)])
         @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any GPU kernels.")
     end
-    body = disguise_nested_returns(body)
     remainder = copy(body)
     remainder.args = body.args[1:end-2]
+    remainder = handle_nested_returns(remainder; disguise=disguise_nested)
     if inexpr_walk(remainder, :return) @ArgumentError("invalid kernel in @parallel kernel definition: only one return statement is allowed in the kernel (exception: nested function definitions) and it must return nothing and be the last statement (required to ensure equal behaviour with different packages for parallellization).") end
     return remainder
 end
 
-function disguise_nested_returns(body::Expr)
+function handle_nested_returns(body::Expr; disguise=true)
     return postwalk(body) do ex
         if isdef(ex)
             f_elems = splitdef(ex)
             body = f_elems[:body]
-            f_elems[:body] = disguise_returns(body)
+            if disguise
+                f_elems[:body] = disguise_returns(body)
+            else
+                if has_return(body) @ArgumentError("nested function with return in @parallel kernel definition: no return statements are supported with the KernelAbstractions backend (remove the return statement or selected another backend).") end
+            end
             return combinedef(f_elems)
         else
             return ex
@@ -221,6 +235,10 @@ function disguise_returns(body::Expr)
             return ex
         end
     end
+end
+
+function has_return(body::Expr)
+    return inexpr_walk(body, :return)
 end
 
 function add_return(body::Expr, package::Symbol)
