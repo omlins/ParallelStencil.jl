@@ -1,5 +1,5 @@
 import ParallelStencil
-import ParallelStencil.ParallelKernel: INT_KERNELABSTRACTIONS, rand_cpu, fill_cpu, construct_cell, check_datatype, check_datatype_kernelabstractions, rand_kernelabstractions, fill_kernelabstractions
+import ParallelStencil.ParallelKernel: INT_KERNELABSTRACTIONS, rand_cpu, fill_cpu, construct_cell, check_datatype, rand_kernelabstractions, fill_kernelabstractions
 using ParallelStencil.ParallelKernel.Exceptions
 using KernelAbstractions, CellArrays, StaticArrays
 
