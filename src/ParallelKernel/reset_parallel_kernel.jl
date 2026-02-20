@@ -20,7 +20,6 @@ function reset_parallel_kernel(caller::Module)
         set_initialized(caller, false)
         set_package(caller, PKG_NONE)
         set_numbertype(caller, NUMBERTYPE_NONE)
-        reset_hardware!(caller)
     end
     return nothing
 end
