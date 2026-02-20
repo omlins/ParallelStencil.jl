@@ -104,6 +104,67 @@ eval(:(
                     @test @prettystring(1, @parallel stream=mystream f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                 end;
                 @static if $package == $PKG_KERNELABSTRACTIONS
+                    @testset "KernelAbstractions custom launch macro" begin
+                        @testset "@ka compile and launch steps" begin
+                            call = @prettystring(1, ParallelStencil.ParallelKernel.@ka(myhandle, f(A), launch=false))
+                            @test occursin("f(myhandle)", call)
+                            @test !occursin("f(myhandle)(A", call)
+
+                            call = @prettystring(1, ParallelStencil.ParallelKernel.@ka(myhandle, f(A)))
+                            @test occursin("(f(myhandle))(A)", call)
+
+                            call = @prettystring(1, ParallelStencil.ParallelKernel.@ka(myhandle, f(A), workgroupsize=nthreads, ndrange=nblocks .* nthreads, queue=mystream, priority=:high))
+                            @test occursin("f(myhandle, nthreads)", call)
+                            @test occursin("\$(Expr(:(=), :ndrange", call)
+                            @test occursin("\$(Expr(:(=), :queue", call)
+                            @test occursin("\$(Expr(:(=), :priority", call)
+                        end
+
+                        @testset "@ka_auto mapping and two-step expansion" begin
+                            call = @prettystring(1, ParallelStencil.ParallelKernel.@ka_auto f(A))
+                            @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                            @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions)", call)
+
+                            call = @prettystring(2, ParallelStencil.ParallelKernel.@ka_auto launch=false f(A))
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))", call)
+                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))(A", call)
+
+                            call = @prettystring(2, ParallelStencil.ParallelKernel.@ka_auto workgroupsize=nthreads ndrange=nblocks .* nthreads queue=mystream f(A))
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions), nthreads)", call)
+                            @test occursin("\$(Expr(:(=), :ndrange", call)
+                            @test occursin("\$(Expr(:(=), :queue", call)
+                        end
+
+                        @testset "@parallel integration with @ka_auto" begin
+                            call = @prettystring(1, @parallel launch=false f(A))
+                            @test occursin("ParallelStencil.ParallelKernel.@ka_auto launch = false", call)
+
+                            call = @prettystring(2, @parallel launch=false f(A))
+                            @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                            @test occursin("launch = false", call)
+
+                            call = @prettystring(3, @parallel launch=false f(A))
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))", call)
+                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))(A", call)
+
+                            call = @prettystring(2, @parallel nblocks nthreads stream=mystream f(A))
+                            @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                            @test occursin("workgroupsize = nthreads", call)
+                            @test occursin("ndrange = nblocks .* nthreads", call)
+                            @test occursin("queue = mystream", call)
+
+                            call = @prettystring(3, @parallel nblocks nthreads stream=mystream f(A))
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions), nthreads)", call)
+                            @test occursin("Expr(:(=), :ndrange", call)
+                            @test occursin("Expr(:(=), :queue", call)
+                        end
+
+                        @testset "@ka argument edge cases" begin
+                            @test_throws LoadError @eval ParallelStencil.ParallelKernel.@ka(myhandle)
+                            @test_throws LoadError @eval ParallelStencil.ParallelKernel.@ka(myhandle, f)
+                            @test_throws LoadError @eval ParallelStencil.ParallelKernel.@ka(myhandle, f(; x=1))
+                        end
+                    end;
                     @testset "KernelAbstractions runtime switches" begin
                         @parallel_indices (ix) function kernel_switch!(A)
                             A[ix] = A[ix] + one(eltype(A))
