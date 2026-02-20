@@ -49,6 +49,9 @@ eval(:(
             @require !@is_initialized()
             @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
             @require @is_initialized()
+            @static if $package == $PKG_KERNELABSTRACTIONS
+                @select_hardware(:cpu)
+            end
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
                     call = @prettystring(1, @parallel f(A))
@@ -101,7 +104,7 @@ eval(:(
                     @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions)", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("stream = mystream", call)
+                    @test occursin("queue = mystream", call)
                     call = @prettystring(2, @parallel memopt=true f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                     call = @prettystring(2, @parallel ranges memopt=true f(A))
@@ -120,16 +123,12 @@ eval(:(
                 @static if $package == $PKG_KERNELABSTRACTIONS
                     @require KernelAbstractions.functional(KernelAbstractions.CPU())
                     N = 8
-                    A = @zeros(N)
                     @parallel_indices (ix) function ka_double!(A)
-                        A[ix] = 2 * A[ix]
+                        A[ix] = A[ix] + one(eltype(A))
                         return
                     end
-                    @select_hardware(:cpu)
-                    fill!(A, 1)
-                    @parallel (1:N) ka_double!(A)
-                    baseline = Array(A)
-                    last_symbol = :cpu
+                    valid_symbols = (:cpu, KA_GPU_SYMBOLS...)
+                    last_symbol = :hw_none
                     for symbol in (:cpu, KA_GPU_SYMBOLS...)
                         if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
                             @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
@@ -145,11 +144,12 @@ eval(:(
                             continue
                         end
                         @select_hardware(symbol)
-                        fill!(A, 1)
+                        A = @zeros(N)
                         @parallel (1:N) ka_double!(A)
-                        @test Array(A) == baseline
+                        @test all(Array(A) .== one(eltype(A)))
                         last_symbol = symbol
                     end
+                    @test @current_hardware() in valid_symbols
                     @test @current_hardware() == last_symbol
                     @select_hardware(:cpu)
                     @test @current_hardware() == :cpu
