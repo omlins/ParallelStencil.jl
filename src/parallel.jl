@@ -317,7 +317,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         end
     else
         if package == PKG_KERNELABSTRACTIONS
-            kernel = :(KernelAbstractions.@kernel $kernel)
+            kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
         end
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
