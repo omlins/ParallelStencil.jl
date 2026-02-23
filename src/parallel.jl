@@ -134,6 +134,12 @@ function checkargs_parallel_indices(args...)
     ParallelKernel.checkargs_parallel_indices(posargs...)
 end
 
+function check_memopt_supported(memopt::Bool, package::Symbol, context::String)
+    if memopt && package == PKG_KERNELABSTRACTIONS
+        @KeywordArgumentError("$context: keyword argument `memopt=true` is currently not supported for the KernelAbstractions backend. Set `memopt=false`.")
+    end
+end
+
 
 ## GATEWAY FUNCTIONS
 
@@ -143,6 +149,8 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
         kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
+        check_memopt_supported(memopt, package, "@parallel <kernel>")
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
         is_parallel_kernel = true
         if typeof(ndims) <: Tuple
@@ -165,6 +173,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
         memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
+        check_memopt_supported(memopt, package, "@parallel <kernelcall>")
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
@@ -186,6 +195,8 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
+    check_memopt_supported(memopt, package, "@parallel_indices")
     indices_expr = posargs[1]
     ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if typeof(ndims) <: Tuple
