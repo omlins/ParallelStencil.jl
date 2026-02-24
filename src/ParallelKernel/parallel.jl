@@ -892,9 +892,7 @@ function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     if     (package == PKG_CUDA)   synchronize_cuda(stream)
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
     elseif (package == PKG_METAL)  synchronize_metal(stream)
-    elseif (package == PKG_KERNELABSTRACTIONS) 
-        package_expr = quote_expr(package)
-        return :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), $package_expr))) # NOTE: KernelAbstractions does not provide a stream synchronization function, so we synchronize this way for now (a KA "stream" could be implemented like it was first done for AMDGPU)
+    elseif (package == PKG_KERNELABSTRACTIONS) synchronize_kernelabstractions(stream)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
