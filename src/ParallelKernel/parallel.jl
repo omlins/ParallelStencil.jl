@@ -173,6 +173,7 @@ function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbo
     if     (package == PKG_CUDA)      synchronize_cuda(args...)
     elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
     elseif (package == PKG_METAL)     synchronize_metal(args...)
+    elseif (package == PKG_KERNELABSTRACTIONS) synchronize_kernelabstractions(args...)
     elseif (package == PKG_THREADS)   synchronize_threads(args...)
     elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -371,6 +372,8 @@ end
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...); blocking=true))
 synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...); blocking=true))
 synchronize_metal(args::Union{Symbol,Expr}...) = :(Metal.synchronize($(args...)))
+synchronize_kernelabstractions(args::Union{Symbol,Expr}...) =
+    :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $(quote_expr(PKG_KERNELABSTRACTIONS)))))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
