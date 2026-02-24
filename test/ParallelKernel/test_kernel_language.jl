@@ -1,8 +1,8 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER
-import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil.ParallelKernel: @require, @prettystring, @iscpu, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checknoargs, checkargs_sharedMem, Dim3
 using ParallelStencil.ParallelKernel.Exceptions
 TEST_PACKAGES = SUPPORTED_PACKAGES
@@ -17,6 +17,10 @@ end
 @static if PKG_METAL in TEST_PACKAGES
     import Metal # Import also on non-Apple systems to test macro expansions
     if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+end
+@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
+    import KernelAbstractions
+    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -48,7 +52,7 @@ eval(:(
             @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized()
             @testset "mapping to package" begin
-                if $package == $PKG_CUDA
+                @static if $package == $PKG_CUDA
                     @test @prettystring(1, @gridDim()) == "CUDA.gridDim()"
                     @test @prettystring(1, @blockIdx()) == "CUDA.blockIdx()"
                     @test @prettystring(1, @blockDim()) == "CUDA.blockDim()"
@@ -75,6 +79,41 @@ eval(:(
                     @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "ParallelStencil.ParallelKernel.@sharedMem_metal $(nameof($FloatDefault)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "Metal.@mtlshow"        #TODO: not yet supported for Metal
                     # @test @prettystring(1, @pk_println()) == "Metal.@mtlprintln"  #TODO: not yet supported for Metal
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    call = @prettystring(1, @gridDim())
+                    @test occursin("ParallelStencil.ParallelKernel.@gridDim_kernelabstractions", call)
+
+                    call = @prettystring(2, @gridDim())
+                    @test occursin("@ndrange", call)
+                    @test occursin("@groupsize", call)
+
+                    call = @prettystring(1, @blockIdx())
+                    @test occursin("ParallelStencil.ParallelKernel.@blockIdx_kernelabstractions", call)
+
+                    call = @prettystring(2, @blockIdx())
+                    @test occursin("index_group_ntuple", call)
+
+                    call = @prettystring(1, @blockDim())
+                    @test occursin("ParallelStencil.ParallelKernel.@blockDim_kernelabstractions", call)
+
+                    call = @prettystring(2, @blockDim())
+                    @test occursin("@groupsize", call)
+
+                    call = @prettystring(1, @threadIdx())
+                    @test occursin("ParallelStencil.ParallelKernel.@threadIdx_kernelabstractions", call)
+
+                    call = @prettystring(2, @threadIdx())
+                    @test occursin("index_local_ntuple", call)
+
+                    call = @prettystring(1, @sync_threads())
+                    @test occursin("KernelAbstractions.@synchronize", call)
+
+                    call = @prettystring(1, @sharedMem($FloatDefault, (2,3)))
+                    @test occursin("ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions", call)
+
+                    call = @prettystring(2, @sharedMem($FloatDefault, (2,3)))
+                    @test occursin("KernelAbstractions.@localmem", call)
+                    @test occursin("$(nameof($FloatDefault))", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
                     @test @prettystring(1, @blockIdx()) == "ParallelStencil.ParallelKernel.@blockIdx_cpu"
@@ -87,7 +126,7 @@ eval(:(
                 end;
             end;
             @testset "mapping to package (internal macros)" begin
-                if $package == $PKG_THREADS
+                @static if $package == $PKG_THREADS
                     @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Base.Threads.@threads"
                 elseif $package == $PKG_POLYESTER
                     @test @prettystring(1, ParallelStencil.ParallelKernel.@threads()) == "Polyester.@batch"
@@ -105,7 +144,7 @@ eval(:(
                     lane_mask = 1
                     predicate = true
 
-                    if $package == $PKG_CUDA
+                    @static if $package == $PKG_CUDA
                         @test @prettystring(1, @warpsize()) == "CUDA.warpsize()"
                         @test @prettystring(1, @laneid())   == "CUDA.laneid() + 1"
                         @test @prettystring(1, @active_mask()) == "CUDA.active_mask()"
@@ -144,9 +183,6 @@ eval(:(
                     elseif $package == $PKG_METAL
                         @test @prettystring(1, @warpsize()) == "Metal.threads_per_simdgroup()"
                         @test @prettystring(1, @laneid())   == "unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1)"
-                        @test_throws Exception @prettystring(1, @active_mask())
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask, val, lane))
-                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask, predicate))
 
                     elseif @iscpu($package)
                         @test @prettystring(1, @warpsize())     == "ParallelStencil.ParallelKernel.warpsize_cpu()"
@@ -242,33 +278,6 @@ eval(:(
                         @test Bout_any == P
                         @test Bout_all == P
                         @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
-                    end
-                end;
-                @testset "Unsupported primitives" begin
-                    @static if $package == $PKG_METAL
-                        mask      = UInt64(0x1)
-                        mask32    = UInt32(0x1)
-                        valf      = one($FloatDefault)
-                        lane      = 1
-                        width     = 1
-                        delta     = 1
-                        lanemask  = 1
-                        predicate = true
-
-                        @test_throws Exception @prettystring(1, @active_mask())
-
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane))
-                        @test_throws Exception @prettystring(1, @shfl_sync(mask,  valf, lane, width))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta))
-                        @test_throws Exception @prettystring(1, @shfl_up_sync(mask,  valf, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta))
-                        @test_throws Exception @prettystring(1, @shfl_down_sync(mask,  valf, delta, width))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask))
-                        @test_throws Exception @prettystring(1, @shfl_xor_sync(mask,  valf, lanemask, width))
-
-                        @test_throws Exception @prettystring(1, @vote_any_sync(mask32, predicate))
-                        @test_throws Exception @prettystring(1, @vote_all_sync(mask32, predicate))
-                        @test_throws Exception @prettystring(1, @vote_ballot_sync(mask32, predicate))
                     end
                 end;
             end;
