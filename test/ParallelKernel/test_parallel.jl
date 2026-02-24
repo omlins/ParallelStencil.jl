@@ -454,6 +454,9 @@ eval(:(
                 elseif $package == $PKG_AMDGPU
                     @test @prettystring(1, @synchronize()) == "AMDGPU.synchronize(; blocking = true)"
                     @test @prettystring(1, @synchronize(mystream)) == "AMDGPU.synchronize(mystream; blocking = true)"
+                elseif $package == $PKG_KERNELABSTRACTIONS
+                    @test @prettystring(1, @synchronize()) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))"
+                    @test @prettystring(1, @synchronize(mystream)) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :KernelAbstractions))"
                 end;
             end;
             @reset_parallel_kernel()
