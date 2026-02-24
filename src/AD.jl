@@ -7,8 +7,9 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
     import ParallelStencil.AD
 
 # Functions
-- `autodiff_deferred!`: wraps function `autodiff_deferred`, promoting all arguments that are not Enzyme.Annotations to Enzyme.Const.
-- `autodiff_deferred_thunk!`: wraps function `autodiff_deferred_thunk`, promoting all arguments that are not Enzyme.Annotations to Enzyme.Const.
+- `autodiff_deferred!`: wraps function `Enzyme.autodiff_deferred`, and supports the same arguments, with the exception of the return type activity (3rd argument) which must be omitted and will be automatically inserted (inserting it explicitly will raise a GPU compiler error when targeting a GPU). Additionally, it promotes all arguments that are not `Enzyme.Annotation` to `Enzyme.Const`. As a result, the function can be conveniently called as, e.g., `autodiff_deferred!(Enzyme.Reverse, f!,...)`, instead of the fully explicit form, e.g., `autodiff_deferred!(Enzyme.Reverse, Enzyme.Const(f!), Enzyme.Const,...)` (which is not supported).
+- `autodiff_deferred_thunk!`: wraps function `Enzyme.autodiff_deferred_thunk`, in the same way as `autodiff_deferred!` wraps `Enzyme.autodiff_deferred` (see above).
+
 
 # Examples
     const USE_GPU = true
@@ -36,7 +37,7 @@ Provides GPU-compatible wrappers for automatic differentiation functions of the 
 
         @info "running on CPU/GPU"
         @parallel f!(A, B, a) # normal call of f!
-        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), DuplicatedNoNeed(B, B̄), Const(a)) # automatic differentiation of f!
+        @parallel configcall=f!(A, B, a) AD.autodiff_deferred!(Enzyme.Reverse, f!, Duplicated(A, Ā), DuplicatedNoNeed(B, B̄), a) # automatic differentiation of f!
         
         return
     end

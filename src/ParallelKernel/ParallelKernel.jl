@@ -11,6 +11,7 @@ Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fi
 - [`@init_parallel_kernel`](@ref)
 - [`@parallel`](@ref)
 - [`@hide_communication`](@ref)
+- [`@overlap`](@ref)
 - [`@zeros`](@ref)
 - [`@ones`](@ref)
 - [`@rand`](@ref)
@@ -22,6 +23,8 @@ Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fi
     - [`@parallel_indices`](@ref)
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
+    - [`@get_stream`](@ref)
+    - [`@get_priority_stream`](@ref)
 
 # Runtime hardware selection
 - [`@select_hardware`](@ref)
@@ -87,6 +90,7 @@ include("Data.jl")
 include("hide_communication.jl")
 include("init_parallel_kernel.jl")
 include("kernel_language.jl")
+include("overlap.jl")
 include("parallel.jl")
 include("reset_parallel_kernel.jl")
 include("select_hardware.jl")
@@ -95,7 +99,7 @@ include("select_hardware.jl")
 include("FieldAllocators.jl")
 
 ## Exports
-export @init_parallel_kernel, @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
+export @init_parallel_kernel, @parallel, @hide_communication, @overlap, @get_priority_stream, @get_stream, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @select_hardware, @current_hardware, select_hardware, current_hardware
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync

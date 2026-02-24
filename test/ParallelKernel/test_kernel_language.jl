@@ -61,7 +61,7 @@ eval(:(
                     @test @prettystring(1, @sharedMem($FloatDefault, (2,3))) == "CUDA.@cuDynamicSharedMem $(nameof($FloatDefault)) (2, 3)"
                     # @test @prettystring(1, @pk_show()) == "CUDA.@cushow"
                     # @test @prettystring(1, @pk_println()) == "CUDA.@cuprintln"
-                elseif $package == $AMDGPU
+                elseif $package == $PKG_AMDGPU
                     @test @prettystring(1, @gridDim()) == "AMDGPU.gridGroupDim()"
                     @test @prettystring(1, @blockIdx()) == "AMDGPU.workgroupIdx()"
                     @test @prettystring(1, @blockDim()) == "AMDGPU.workgroupDim()"
@@ -244,14 +244,16 @@ eval(:(
                         Bshfl_up    = similar(A)
                         Bshfl_down  = similar(A)
                         Bshfl_xor   = similar(A)
+                        Bwarpsize   = Vector{Int}(undef, N)
+                        Blaneid     = Vector{Int}(undef, N)
 
-                        @parallel_indices (ix) function kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, A, P)
+                        @parallel_indices (ix) function kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, Bwarpsize, Blaneid, A, P)
                             m = @active_mask()
                             w = @warpsize()
                             l = @laneid()
-                            # basic invariants under CPU model
-                            @test w == 1
-                            @test l == 1
+                            # store values for verification outside kernel
+                            Bwarpsize[ix] = w
+                            Blaneid[ix] = l
                             # shuffle identities
                             Bshfl[ix]      = @shfl_sync(m, A[ix], l)
                             Bshfl_up[ix]   = @shfl_up_sync(m, A[ix], 1)
@@ -264,8 +266,11 @@ eval(:(
                             Bout_ballot[ix] = @vote_ballot_sync(m, pa)
                             return
                         end
-                        @parallel (1:N) kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, A, P)
+                        @parallel (1:N) kernel_semantics!(Bout_any, Bout_all, Bout_ballot, Bshfl, Bshfl_up, Bshfl_down, Bshfl_xor, Bwarpsize, Blaneid, A, P)
 
+                        # basic invariants under CPU model
+                        @test all(Bwarpsize .== 1)
+                        @test all(Blaneid .== 1)
                         @test all(Bshfl .== A)
                         @test all(Bshfl_up .== A)
                         @test all(Bshfl_down .== A)

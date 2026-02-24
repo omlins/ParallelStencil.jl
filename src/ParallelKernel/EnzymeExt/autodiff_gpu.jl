@@ -1,5 +1,6 @@
 import ParallelStencil
 import ParallelStencil: PKG_THREADS, PKG_POLYESTER
+using ParallelStencil.ParallelKernel.Exceptions
 import Enzyme
 
 # NOTE: package specific initialization of Enzyme could be done as follows (not needed in the currently supported versions of Enzyme)
@@ -25,15 +26,29 @@ function promote_to_const(args::Vararg{Any,N}) where N
     end
 end
 
-function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
-    args = promote_to_const(args...)
-    Enzyme.autodiff_deferred(arg, args...)
+
+function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(mode, f, ::Type{T}, args::Vararg{Any,N}) where {T<:Enzyme.Annotation, N} # NOTE: minimal specialization is required to avoid overwriting the default method
+    @ArgumentError("AD.autodiff_deferred!: explicit insertion of the return type activity (third argument) is not supported as not GPU compiler compatible; call without it instead.") 
     return
 end
 
-function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(arg, args...) # NOTE: minimal specialization is used to avoid overwriting the default method
+function ParallelStencil.ParallelKernel.AD.autodiff_deferred!(mode, f, args::Vararg{Any,N}) where N # NOTE: minimal specialization is required to avoid overwriting the default method
+    f    = promote_to_const(f)[1]
     args = promote_to_const(args...)
-    Enzyme.autodiff_deferred_thunk(arg, args...)
+    Enzyme.autodiff_deferred(mode, f, Enzyme.Const, args...)
+    return
+end
+
+
+function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(mode, f, ::Type{T}, args::Vararg{Any,N}) where {T<:Enzyme.Annotation, N} # NOTE: minimal specialization is required to avoid overwriting the default method
+    @ArgumentError("AD.autodiff_deferred_thunk!: explicit insertion of the return type activity (third argument) is not supported as not GPU compiler compatible; call without it instead.")
+    return
+end
+
+function ParallelStencil.ParallelKernel.AD.autodiff_deferred_thunk!(mode, f, args::Vararg{Any,N}) where N # NOTE: minimal specialization is required to avoid overwriting the default method
+    f    = promote_to_const(f)[1]
+    args = promote_to_const(args...)
+    Enzyme.autodiff_deferred_thunk(mode, f, Enzyme.Const, args...)
     return
 end
 

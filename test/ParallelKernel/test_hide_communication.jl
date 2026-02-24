@@ -202,6 +202,12 @@ eval(:(
                     end
                     @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
+                @testset "@get_stream and @get_priority_stream" begin
+                    @static if ParallelStencil.ParallelKernel.iscpu($package)
+                        @test ParallelStencil.ParallelKernel.@get_stream(1) === nothing
+                        @test ParallelStencil.ParallelKernel.@get_priority_stream(1) === nothing
+                    end
+                end;
             end;
             @reset_parallel_kernel()
         end;

@@ -11,6 +11,7 @@ https://github.com/omlins/ParallelStencil.jl
 - [`@init_parallel_stencil`](@ref)
 - [`@parallel`](@ref)
 - [`@hide_communication`](@ref)
+- [`@overlap`](@ref)
 - [`@zeros`](@ref)
 - [`@ones`](@ref)
 - [`@rand`](@ref)
@@ -22,6 +23,8 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@parallel_indices`](@ref)
     - [`@parallel_async`](@ref)
     - [`@synchronize`](@ref)
+    - [`@get_stream`](@ref)
+    - [`@get_priority_stream`](@ref)
 
 # Runtime hardware selection
 - [`@select_hardware`](@ref)
@@ -85,6 +88,7 @@ include("hide_communication.jl")
 include("init_parallel_stencil.jl")
 include("kernel_language.jl")
 include("memopt.jl")
+include("overlap.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
 include("select_hardware.jl")
@@ -96,7 +100,7 @@ include("FiniteDifferences.jl")
 
 ## Exports (need to be after include of submodules as re-exports from them)
 export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteDifferences3D, AD
-export @parallel, @hide_communication, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
+export @parallel, @hide_communication, @overlap, @get_priority_stream, @get_stream, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export @select_hardware, @current_hardware, select_hardware, current_hardware
