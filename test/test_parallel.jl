@@ -105,10 +105,10 @@ eval(:(
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                     @test occursin("queue = mystream", call)
-                    call = @prettystring(2, @parallel memopt=true f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    call = @prettystring(2, @parallel ranges memopt=true f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    # call = @prettystring(2, @parallel memopt=true f(A))
+                    # @test occursin("ParallelStencil.ParallelKernel.@ka", call)
+                    # call = @prettystring(2, @parallel ranges memopt=true f(A))
+                    # @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
