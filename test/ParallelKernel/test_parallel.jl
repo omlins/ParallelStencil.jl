@@ -83,19 +83,19 @@ eval(:(
                     call = @prettystring(1, @parallel f(A))
                     call = @prettystring(2, @parallel f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     @test occursin("KernelAbstractions", call)
                     @test !occursin("CUDA.@cuda", call)
                     @test !occursin("AMDGPU.@roc", call)
                     @test !occursin("Metal.@metal", call)
                     call = @prettystring(1, @parallel ranges f(A))
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     call = @prettystring(1, @parallel nblocks nthreads f(A))
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
@@ -123,14 +123,14 @@ eval(:(
                         @testset "@ka_auto mapping and two-step expansion" begin
                             call = @prettystring(1, ParallelStencil.ParallelKernel.@ka_auto f(A))
                             @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                            @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS)", call)
+                            @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
 
                             call = @prettystring(2, ParallelStencil.ParallelKernel.@ka_auto launch=false f(A))
-                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))", call)
-                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))(A", call)
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))", call)
+                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))(A", call)
 
                             call = @prettystring(2, ParallelStencil.ParallelKernel.@ka_auto workgroupsize=nthreads ndrange=nblocks .* nthreads queue=mystream f(A))
-                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS), nthreads)", call)
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS), nthreads)", call)
                             @test occursin("\$(Expr(:(=), :ndrange", call)
                             @test occursin("\$(Expr(:(=), :queue", call)
                         end
@@ -144,8 +144,8 @@ eval(:(
                             @test occursin("launch = false", call)
 
                             call = @prettystring(3, @parallel launch=false f(A))
-                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))", call)
-                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))(A", call)
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))", call)
+                            @test !occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))(A", call)
 
                             call = @prettystring(2, @parallel nblocks nthreads stream=mystream f(A))
                             @test occursin("ParallelStencil.ParallelKernel.@ka", call)
@@ -154,7 +154,7 @@ eval(:(
                             @test occursin("queue = mystream", call)
 
                             call = @prettystring(3, @parallel nblocks nthreads stream=mystream f(A))
-                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS), nthreads)", call)
+                            @test occursin("f(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS), nthreads)", call)
                             @test occursin("Expr(:(=), :ndrange", call)
                             @test occursin("Expr(:(=), :queue", call)
                         end
@@ -455,8 +455,8 @@ eval(:(
                     @test @prettystring(1, @synchronize()) == "AMDGPU.synchronize(; blocking = true)"
                     @test @prettystring(1, @synchronize(mystream)) == "AMDGPU.synchronize(mystream; blocking = true)"
                 elseif $package == $PKG_KERNELABSTRACTIONS
-                    @test @prettystring(1, @synchronize()) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))"
-                    @test @prettystring(1, @synchronize(mystream)) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $PKG_KERNELABSTRACTIONS))"
+                    @test @prettystring(1, @synchronize()) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))"
+                    @test @prettystring(1, @synchronize(mystream)) == "KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS))"
                 end;
             end;
             @reset_parallel_kernel()
