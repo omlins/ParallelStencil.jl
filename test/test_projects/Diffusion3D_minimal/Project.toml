@@ -12,9 +12,7 @@ ParallelStencil = ">= 0.4.0"
 [weakdeps]
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
-KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 
 [extensions]
 #D3D_AMDGPUExt = "AMDGPU"
-D3D_KernelAbstractionsExt = "KernelAbstractions"
 D3D_CUDAExt = "CUDA"

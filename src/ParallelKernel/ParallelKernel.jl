@@ -2,7 +2,6 @@
 Module ParallelKernel
 
 Enables writing parallel high-performance kernels and whole applications that can be deployed on both GPUs and CPUs.
-Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fixed to their hardware, while abstraction-layer backends such as KernelAbstractions let you switch the runtime target through [`select_hardware`](@ref) and inspect it with [`current_hardware`](@ref) without reparsing code. Detailed workflow guidance is available in the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
 # Usage
     using ParallelStencil.ParallelKernel
@@ -26,12 +25,6 @@ Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fi
     - [`@get_stream`](@ref)
     - [`@get_priority_stream`](@ref)
 
-# Runtime hardware selection
-- [`@select_hardware`](@ref)
-- [`@current_hardware`](@ref)
-- [`select_hardware`](@ref)
-- [`current_hardware`](@ref)
-
 # Macros available for [`@parallel_indices`](@ref) kernels
 - [`@pk_show`](@ref)
 - [`@pk_println`](@ref)
@@ -53,8 +46,6 @@ Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fi
     - [`@vote_any_sync`](@ref)
     - [`@vote_all_sync`](@ref)
     - [`@vote_ballot_sync`](@ref)
-    !!! note "Warp-level primitives support"
-        Warp-level primitives are not supported with the KernelAbstractions backend and only partially supported with the Metal backend.
 
 # Submodules
 - [`ParallelKernel.AD`](@ref)
@@ -77,9 +68,7 @@ include(joinpath("EnzymeExt", "AD.jl"))
 ## Alphabetical include of defaults for extensions
 include(joinpath("AMDGPUExt", "defaults.jl"))
 include(joinpath("CUDAExt", "defaults.jl"))
-include(joinpath("KernelAbstractionsExt", "defaults.jl"))
 include(joinpath("MetalExt", "defaults.jl"))
-include(joinpath("OneAPIExt", "defaults.jl"))
 
 ## Include of constant parameters, types and syntax sugar shared in ParallelKernel module only
 include("shared.jl")
@@ -93,14 +82,12 @@ include("kernel_language.jl")
 include("overlap.jl")
 include("parallel.jl")
 include("reset_parallel_kernel.jl")
-include("select_hardware.jl")
 
 ## Alphabetical include of submodules (not extensions)
 include("FieldAllocators.jl")
 
 ## Exports
 export @init_parallel_kernel, @parallel, @hide_communication, @overlap, @get_priority_stream, @get_stream, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
-export @select_hardware, @current_hardware, select_hardware, current_hardware
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @pk_show, @pk_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
 export PKNumber

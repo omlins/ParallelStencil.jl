@@ -34,15 +34,12 @@ See also: [`@init_parallel_stencil`](@ref)
 
 Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below); Enzyme needs to be imported before ParallelStencil in order to have it load the corresponding extension.
 
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
-
 # Arguments
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_kernel`](@ref).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU or Metal was selected with [`@init_parallel_kernel`](@ref).
 
 # Keyword arguments
 - `memopt::Bool=false`: whether the kernel to be launched was generated with `memopt=true` (meaning the keyword was set in the kernel declaration).
@@ -51,7 +48,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA.jl, AMDGPU.jl, Metal.jl or KernelAbstractions.jl (ignored for Threads and Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads and Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -68,9 +65,6 @@ const PARALLEL_INDICES_DOC = """
     @parallel_indices indices inbounds=... memopt=... ndims=... kernel
 
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_stencil`](@ref).
-
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 # Optional keyword arguments
     - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
@@ -134,12 +128,6 @@ function checkargs_parallel_indices(args...)
     ParallelKernel.checkargs_parallel_indices(posargs...)
 end
 
-function check_memopt_supported(memopt::Bool, package::Symbol, context::String)
-    if memopt && package == PKG_KERNELABSTRACTIONS
-        @KeywordArgumentError("$context: keyword argument `memopt=true` is currently not supported for the KernelAbstractions backend. Set `memopt=false`.")
-    end
-end
-
 
 ## GATEWAY FUNCTIONS
 
@@ -149,8 +137,6 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
         kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
-        memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-        check_memopt_supported(memopt, package, "@parallel <kernel>")
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
         is_parallel_kernel = true
         if typeof(ndims) <: Tuple
@@ -173,7 +159,6 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
         memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-        check_memopt_supported(memopt, package, "@parallel <kernelcall>")
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
@@ -195,8 +180,6 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
     kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
-    memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-    check_memopt_supported(memopt, package, "@parallel_indices")
     indices_expr = posargs[1]
     ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
     if typeof(ndims) <: Tuple
@@ -276,7 +259,7 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     body = get_body(kernel)
     body = remove_return(body)
     body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
-    body = add_return(body, package)
+    body = add_return(body)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
     return :(@parallel_indices $(Expr(:tuple, indices[1:end-1]...)) ndims=$ndims inbounds=$inbounds padding=$padding memopt=false metadata_module=$metadata_module metadata_function=$metadata_function $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
@@ -318,7 +301,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         body   = handle_indices_and_literals(body, indices, package, numbertype)
         if (inbounds) body = add_inbounds(body) end
     end
-    body = add_return(body, package)
+    body = add_return(body)
     set_body!(kernel, body)
     if memopt
         expanded_kernel = macroexpand(caller, kernel)
@@ -327,9 +310,6 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
             $metadata_function
         end
     else
-        if package == PKG_KERNELABSTRACTIONS
-            kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
-        end
         return kernel # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
@@ -386,7 +366,7 @@ end
 
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
-determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : ((package == PKG_KERNELABSTRACTIONS) ? NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS : NTHREADS_MAX_MEMOPT_METAL))
+determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : NTHREADS_MAX_MEMOPT_METAL)
 determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
 
 function compute_loopsize(package::Symbol)

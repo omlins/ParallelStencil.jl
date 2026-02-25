@@ -2,19 +2,15 @@
     @init_parallel_kernel(package, numbertype)
     @init_parallel_kernel(package, numbertype, inbounds=..., padding=...)
 
-Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from; the module `Data` contains the types `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module). 
-When the abstraction-layer backend KernelAbstractions is selected, the concrete runtime hardware is chosen later via [`select_hardware`](@ref) and inspected with [`current_hardware`](@ref); consult the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection) for an end-to-end workflow.
-
-!!! note "Convenience modules"
-    `Data` and `TData` modules with hardware-specific array aliases are generated only for single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester). The KernelAbstractions backend users trade off the additional convenience modules (and warp level macros) for runtime hardware selection instead.
+Initialize the package ParallelKernel, giving access to its main functionality. Creates a module `Data` in the module where `@init_parallel_kernel` is called from. The module `Data` contains the types as `Data.Number`, `Data.Array` and `Data.CellArray` (type `?Data` *after* calling `@init_parallel_kernel` to see the full description of the module).
 
 # Arguments
-- `package::Module`: the package used for parallelization (CUDA, AMDGPU, Metal, Threads, Polyester, or KernelAbstractions when deferring the hardware decision to runtime).
+- `package::Module`: the package used for parallelization (CUDA or AMDGPU or Metal for GPU, or Threads or Polyester for CPU).
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_kernel.
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 - `padding::Bool=false`: whether to apply padding to the fields allocated with macros from [`ParallelKernel.FieldAllocators`](@ref).
 
-See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
+See also: [`Data`](@ref)
 """
 macro init_parallel_kernel(args...)
     check_already_initialized(__module__)
@@ -47,9 +43,6 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
         indextype          = INT_METAL
         data_module        = Data_metal(numbertype, indextype)
         tdata_module       = TData_metal()
-    elseif package == PKG_KERNELABSTRACTIONS
-        if (isinteractive() && !is_installed("KernelAbstractions")) @NotInstalledError("KernelAbstractions was selected as package for parallelization, but KernelAbstractions.jl is not installed. KernelAbstractions functionality is provided as an extension of $parent_module and KernelAbstractions.jl needs therefore to be installed independently (type `add KernelAbstractions` in the julia package manager).") end
-        indextype          = INT_KERNELABSTRACTIONS
     elseif package == PKG_POLYESTER
         if (isinteractive() && !is_installed("Polyester")) @NotInstalledError("Polyester was selected as package for parallelization, but Polyester.jl is not installed. Multi-threading using Polyester is provided as an extension of $parent_module and Polyester.jl needs therefore to be installed independently (type `add Polyester` in the julia package manager).") end
         indextype          = INT_POLYESTER
@@ -62,41 +55,30 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     end
     pkg_import_cmd = define_import(caller, package, parent_module)
     # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be
-    ad_init_cmd = parent_module == "ParallelKernel" ?
-        :(ParallelKernel.AD.init_AD($package)) :
-        :(ParallelStencil.ParallelKernel.AD.init_AD($package))
+    ad_init_cmd = :(ParallelStencil.ParallelKernel.AD.init_AD($package))
     @eval(caller, $pkg_import_cmd)
-    if !supports_multi_architecture(package)
-        if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
-            if (datadoc_call==:())
-                if parent_module == "ParallelKernel"
-                    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data)
-                    else                               datadoc_call = :(@doc ParallelKernel.DATA_DOC Data)
-                    end
-                else
-                    if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data)
-                    else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
-                    end
-                end
+    if !isdefined(caller, :Data) || (@eval(caller, isa(Data, Module)) &&  length(symbols(caller, :Data)) == 1)  # Only if the module Data does not exist in the caller or is empty, create it.
+        if (datadoc_call==:())
+            if (numbertype == NUMBERTYPE_NONE) datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC_NUMBERTYPE_NONE Data) 
+            else                               datadoc_call = :(@doc ParallelStencil.ParallelKernel.DATA_DOC Data)
             end
-            @eval(caller, $data_module)
-            @eval(caller, $datadoc_call)
-        elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
-            if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
-        else
-            @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
         end
-        if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
-            @eval(caller, $tdata_module)
-        elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
-            if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
-        else
-            @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
-        end
+        @eval(caller, $data_module)
+        @eval(caller, $datadoc_call)
+    elseif isdefined(caller, :Data) && isdefined(caller.Data, :Device)
+        if !isinteractive() @warn "Module Data from previous module initialization found in caller module ($caller); module Data not created. Note: this warning is only shown in non-interactive mode." end
+    else
+        @warn "Module Data cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the Data module."
     end
+    if !isdefined(caller, :TData) || (@eval(caller, isa(TData, Module)) &&  length(symbols(caller, :TData)) == 1)  # Only if the module TData does not exist in the caller or is empty, create it.
+        @eval(caller, $tdata_module)
+    elseif isdefined(caller, :TData) && isdefined(caller.TData, :Device)
+        if !isinteractive() @warn "Module TData from previous module initialization found in caller module ($caller); module TData not created. Note: this warning is only shown in non-interactive mode." end
+    else
+        @warn "Module TData cannot be created in caller module ($caller) as there is already a user defined symbol (module/variable...) with this name. ParallelStencil is still usable but without the features of the TData module."
+    end              
     @eval(caller, $ad_init_cmd)
     set_package(caller, package)
-    set_hardware(caller, hardware_default(package))
     set_numbertype(caller, numbertype)
     set_inbounds(caller, inbounds)
     set_padding(caller, padding)
@@ -108,13 +90,12 @@ end
 function Metadata_PK()
     :(module $MOD_METADATA_PK # NOTE: there cannot be any newline before 'module $MOD_METADATA_PK' or it will create a begin end block and the module creation will fail.
         let
-            global set_initialized, is_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, set_hardware, get_hardware
+            global set_initialized, is_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding
             _is_initialized::Bool       = false
             package::Symbol             = $(quote_expr(PKG_NONE))
             numbertype::DataType        = $NUMBERTYPE_NONE
             inbounds::Bool              = $INBOUNDS_DEFAULT
             padding::Bool               = $PADDING_DEFAULT
-            hardware::Symbol            = $(quote_expr(hardware_default(PKG_NONE)))
             set_initialized(flag::Bool) = (_is_initialized = flag)
             is_initialized()            = _is_initialized
             set_package(pkg::Symbol)    = (package = pkg)
@@ -125,8 +106,6 @@ function Metadata_PK()
             get_inbounds()              = inbounds
             set_padding(flag::Bool)     = (padding = flag)
             get_padding()               = padding
-            set_hardware(hw::Symbol)     = (hardware = hw)
-            get_hardware()               = hardware
         end
     end)
 end
@@ -137,11 +116,10 @@ createmeta_PK(caller::Module) = if !hasmeta_PK(caller) @eval(caller, $(Metadata_
 macro is_initialized() is_initialized(__module__) end
 macro get_package() esc(get_package(__module__)) end # NOTE: escaping is required here, to avoid that the symbol is evaluated in this module, instead of just being returned as a symbol.
 macro get_numbertype() get_numbertype(__module__) end
-macro get_hardware() quote_expr(get_hardware(__module__)) end
 macro get_inbounds() get_inbounds(__module__) end
 macro get_padding() get_padding(__module__) end
 let
-    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, set_hardware, get_hardware, reset_hardware!, check_initialized, check_already_initialized    
+    global is_initialized, set_initialized, set_package, get_package, set_numbertype, get_numbertype, set_inbounds, get_inbounds, set_padding, get_padding, check_initialized, check_already_initialized    
     set_initialized(caller::Module, flag::Bool) = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_initialized($flag)))
     is_initialized(caller::Module)              = hasmeta_PK(caller) && @eval(caller, $MOD_METADATA_PK.is_initialized())
     set_package(caller::Module, pkg::Symbol)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_package($(quote_expr(pkg)))))
@@ -152,9 +130,6 @@ let
     get_inbounds(caller::Module)                = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_inbounds()) : INBOUNDS_DEFAULT
     set_padding(caller::Module, flag::Bool)     = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_padding($flag)))
     get_padding(caller::Module)                 = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_padding()) : PADDING_DEFAULT
-    set_hardware(caller::Module, hw::Symbol)    = (createmeta_PK(caller); @eval(caller, $MOD_METADATA_PK.set_hardware($(quote_expr(hw)))))
-    get_hardware(caller::Module)                = hasmeta_PK(caller) ? @eval(caller, $MOD_METADATA_PK.get_hardware()) : hardware_default(get_package(caller))
-    reset_hardware!(caller::Module)             = set_hardware(caller, hardware_default(PKG_NONE))
     check_initialized(caller::Module)           = if !is_initialized(caller) @NotInitializedError("no ParallelKernel macro or function can be called before @init_parallel_kernel in each module (missing call in $caller).") end
     check_already_initialized(caller::Module)   = if is_initialized(caller) @IncoherentCallError("ParallelKernel has already been initialized for the module $caller.") end
 end

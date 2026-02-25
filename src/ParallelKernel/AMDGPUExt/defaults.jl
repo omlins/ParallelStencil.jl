@@ -8,11 +8,6 @@ function get_rocstream end
 function get_amdgpu_compute_capability end
 
 
-# select_hardware.jl
-
-handle_kernelabstractions_amd(arg...)  = @NotLoadedError(ERRMSG_AMDGPUEXT_NOT_LOADED)
-
-
 # allocators.jl
 
 zeros_amdgpu(arg...)  = @NotLoadedError(ERRMSG_AMDGPUEXT_NOT_LOADED)
