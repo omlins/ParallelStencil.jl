@@ -13,25 +13,20 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 Metal = "dde4c033-4e86-420c-a63e-0dd931031962"
-oneAPI = "8f75cd03-7ff8-4ecb-9b8f-daf728133b1b"
 Polyester = "f517fe37-dbe3-4b94-8317-1923a5111588"
 
 [extensions]
 ParallelStencil_AMDGPUExt = "AMDGPU"
 ParallelStencil_CUDAExt = "CUDA"
 ParallelStencil_EnzymeExt = "Enzyme"
-ParallelStencil_KernelAbstractionsExt = "KernelAbstractions"
 ParallelStencil_MetalExt = "Metal"
-ParallelStencil_OneAPIExt = "oneAPI"
 
 [compat]
-AMDGPU = "1, 2"
+AMDGPU = "0.6, 0.7, 0.8, 0.9, 1"
 CUDA = "3.12, 4, 5"
 CellArrays = "0.3.2"
 Enzyme = "0.12, 0.13"
-KernelAbstractions = "0.9"
 MacroTools = "0.5"
 Metal = "1.2"
 Polyester = "0.7"
@@ -43,4 +38,4 @@ TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "TOML", "AMDGPU", "CUDA", "Metal", "Enzyme", "Polyester", "KernelAbstractions"]
+test = ["Test", "TOML", "AMDGPU", "CUDA", "Metal", "Enzyme", "Polyester"]

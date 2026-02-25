@@ -149,7 +149,6 @@ function hide_communication(caller::Module, args::Union{Integer,Symbol,Expr}...;
     kwargs, ~ = extract_kwargs(caller, kwargs_expr, (:computation_calls,), "@hide_communication", false; eval_args=(:computation_calls,))
     if     isgpu(package) hide_communication_gpu(posargs...; kwargs...)
     elseif iscpu(package) hide_communication_cpu(posargs...; kwargs...)
-    elseif isxpu(package) hide_communication_xpu(posargs...; kwargs...)
     else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
 end
@@ -223,10 +222,6 @@ function hide_communication_cpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
     return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
 end
 
-function hide_communication_xpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr; computation_calls::Integer=1)
-    return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
-end
-
 
 function hide_communication_gpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr; computation_calls::Integer=1)
     if (computation_calls < 1) @KeywordArgumentError("Invalid keyword argument in @hide_communication: computation_calls must be >= 1.") end
@@ -258,10 +253,6 @@ function hide_communication_gpu(boundary_width::Union{Integer,Symbol,Expr}, bloc
 end
 
 function hide_communication_cpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr; computation_calls::Integer=1)
-    return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
-end
-
-function hide_communication_xpu(boundary_width::Union{Integer,Symbol,Expr}, block::Expr; computation_calls::Integer=1)
     return block #NOTE: This is currently not implemented, but enables correct execution nevertheless.
 end
 

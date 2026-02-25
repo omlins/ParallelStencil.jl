@@ -2,15 +2,14 @@
 push!(LOAD_PATH, "../src")
 
 import ParallelStencil # Precompile it.
-import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS
+import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL
 @static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
 @static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
-@static if (PKG_METAL in SUPPORTED_PACKAGES) import Metal end
-@static if (PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES) import KernelAbstractions end # KernelAbstractions does not require extra harness env vars beyond the existing CUDA/AMDGPU settings.
+@static if (PKG_METAL in SUPPORTED_PACKAGES && Sys.isapple()) import Metal end
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_revise.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
-function runtests(testfiles=String[]; stop_on_fail=false)
+function runtests(testfiles=String[])
     exename   = joinpath(Sys.BINDIR, Base.julia_exename())
     testdir   = pwd()
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
@@ -20,7 +19,6 @@ function runtests(testfiles=String[]; stop_on_fail=false)
     nfail  = 0
     abortfiles = String[]
     failfiles  = String[]
-    first_fail_file = ""
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
@@ -33,10 +31,6 @@ function runtests(testfiles=String[]; stop_on_fail=false)
 
     if (PKG_METAL in SUPPORTED_PACKAGES && (!Sys.isapple() || !Metal.functional()))
         @warn "Test Skip: All Metal tests will be skipped because Metal is not functional (if this is unexpected type `import Metal; Metal.functional()` to debug your Metal installation)."
-    end
-
-    if (PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES && !KernelAbstractions.functional(KernelAbstractions.CPU()))
-        @warn "Test Skip: All KernelAbstractions tests will be skipped because KernelAbstractions is not functional (if this is unexpected type `import KernelAbstractions; KernelAbstractions.functional(KernelAbstractions.CPU())` to debug your KernelAbstractions installation)."
     end
 
     for f in testfiles
@@ -82,10 +76,6 @@ function runtests(testfiles=String[]; stop_on_fail=false)
         elseif proc !== nothing && !success(proc)
             nfail += 1
             push!(failfiles, f)
-            if stop_on_fail
-                first_fail_file = f
-                break
-            end
         end
     end
     println("")
@@ -103,17 +93,10 @@ function runtests(testfiles=String[]; stop_on_fail=false)
             for f in abortfiles
                 println(" - $f")
             end
-        elseif !stop_on_fail
-            printstyled("Test suite: all selected test files executed, but some test file(s) have tests that failed or errored (see message above).\n"; bold=true, color=:red)
         end
-    end
-    if stop_on_fail && !isempty(first_fail_file)
-        printstyled("Test suite: stopped at first test file with tests that failed or errored: $first_fail_file\n"; bold=true, color=:red)
     end
     println("")
     return nabort+nfail
 end
 
-stop_on_fail = any(==("--stop-on-fail"), ARGS)
-testfiles = filter(!=("--stop-on-fail"), ARGS)
-exit(runtests(testfiles; stop_on_fail=stop_on_fail))
+exit(runtests(ARGS))

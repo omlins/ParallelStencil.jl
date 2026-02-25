@@ -1,10 +1,9 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE, @select_hardware, @current_hardware
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, @get_package, @get_numbertype, @get_ndims, @get_inbounds, @get_padding, @get_memopt, @get_nonconst_metadata, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, NDIMS_NONE
 import ParallelStencil: @require, @symbols
 import ParallelStencil: extract_posargs_init, extract_kwargs_init, check_already_initialized, set_initialized, is_initialized, check_initialized, set_package, set_numbertype, set_ndims, set_inbounds, set_padding, set_memopt, set_nonconst_metadata
 using ParallelStencil.Exceptions
-import ParallelStencil.ParallelKernel: handle, @isdefined_at_pt
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -15,12 +14,12 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -43,61 +42,32 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_inbounds() == false
                 @test @get_padding() == false
             end;
-            @testset "default hardware" begin
-                parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
-                @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test parse_hw == :cpu
-                elseif $package == $PKG_CUDA
-                    @test parse_hw == :gpu_cuda
-                elseif $package == $PKG_AMDGPU
-                    @test parse_hw == :gpu_amd
-                elseif $package == $PKG_METAL
-                    @test parse_hw == :gpu_metal
-                else
-                    @test parse_hw == :cpu
-                end
+            @testset "Data" begin
+                @test @isdefined(Data)
+                @test length(@symbols($(@__MODULE__), Data)) > 1
+                @testset "Data.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                end;
+                @testset "Data.Fields" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                end;
+                @testset "Data.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                end;
             end;
-            @static if $package == $PKG_KERNELABSTRACTIONS
-                @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
-                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
+            @testset "TData" begin
+                @test @isdefined(TData)
+                @test length(@symbols($(@__MODULE__), TData)) > 1
+                @testset "TData.Device" begin
+                    @test length(@symbols($(@__MODULE__), TData.Device)) > 1
                 end;
-                @select_hardware(:cpu)
-                @test @current_hardware() == :cpu
-            else
-                @testset "Data" begin
-                    @test @isdefined_at_pt(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
-                    @testset "Data.Device" begin
-                        @test @isdefined_at_pt(Data.Device)
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
-                    end;
-                    @testset "Data.Fields" begin
-                        @test @isdefined_at_pt(Data.Fields)
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
-                    end;
-                    @testset "Data.Fields.Device" begin
-                        @test @isdefined_at_pt(Data.Fields.Device)
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
-                    end;
+                @testset "TData.Fields" begin
+                    @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
                 end;
-                @testset "TData" begin
-                    @test @isdefined_at_pt(TData)
-                    @test length(@symbols($(@__MODULE__), TData)) > 1
-                    @testset "TData.Device" begin
-                        @test @isdefined_at_pt(TData.Device)
-                        @test length(@symbols($(@__MODULE__), TData.Device)) > 1
-                    end;
-                    @testset "TData.Fields" begin
-                        @test @isdefined_at_pt(TData.Fields)
-                        @test length(@symbols($(@__MODULE__), TData.Fields)) > 1
-                    end;
-                    @testset "TData.Fields.Device" begin
-                        @test @isdefined_at_pt(TData.Fields.Device)
-                        @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
-                    end;
+                @testset "TData.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), TData.Fields.Device)) > 1
                 end;
-            end
+            end;
             @reset_parallel_stencil()
         end;
         @testset "2. initialization of ParallelStencil without numbertype and ndims, with memopt, inbounds and padding (and nonconst_metadata)" begin
@@ -113,45 +83,19 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
                 @test @get_inbounds() == true
                 @test @get_padding() == false   #TODO: this needs to be restored to true when Polyester supports padding.
             end;
-            @testset "default hardware" begin
-                parse_hw = ParallelStencil.ParallelKernel.@get_hardware()
-                @static if $package == $PKG_KERNELABSTRACTIONS
-                    @test parse_hw == :cpu
-                elseif $package == $PKG_CUDA
-                    @test parse_hw == :gpu_cuda
-                elseif $package == $PKG_AMDGPU
-                    @test parse_hw == :gpu_amd
-                elseif $package == $PKG_METAL
-                    @test parse_hw == :gpu_metal
-                else
-                    @test parse_hw == :cpu
-                end
+            @testset "Data" begin
+                @test @isdefined(Data)
+                @test length(@symbols($(@__MODULE__), Data)) > 1
+                @testset "Data.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Device)) > 1
+                end;
+                @testset "Data.Fields" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
+                end;
+                @testset "Data.Fields.Device" begin
+                    @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
+                end;
             end;
-            @static if $package == $PKG_KERNELABSTRACTIONS
-                @testset "KernelAbstractions exposes no Data modules" begin
-                    @test !@isdefined_at_pt(Data) || (@isdefined_at_pt(Data) && !@isdefined_at_pt(Data.Device))
-                    @test !@isdefined_at_pt(TData) || (@isdefined_at_pt(TData) && !@isdefined_at_pt(TData.Device))
-                end;
-                @select_hardware(:cpu)
-                @test @current_hardware() == :cpu
-            else
-                @testset "Data" begin
-                    @test @isdefined_at_pt(Data)
-                    @test length(@symbols($(@__MODULE__), Data)) > 1
-                    @testset "Data.Device" begin
-                        @test @isdefined_at_pt(Data.Device)
-                        @test length(@symbols($(@__MODULE__), Data.Device)) > 1
-                    end;
-                    @testset "Data.Fields" begin
-                        @test @isdefined_at_pt(Data.Fields)
-                        @test length(@symbols($(@__MODULE__), Data.Fields)) > 1
-                    end;
-                    @testset "Data.Fields.Device" begin
-                        @test @isdefined_at_pt(Data.Fields.Device)
-                        @test length(@symbols($(@__MODULE__), Data.Fields.Device)) > 1
-                    end;
-                end;
-            end
             @reset_parallel_stencil()
         end;
         @testset "3. Exceptions" begin

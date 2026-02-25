@@ -1,7 +1,7 @@
 using Test
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @select_hardware, @current_hardware, handle, @ka, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
 import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
@@ -14,13 +14,13 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -91,34 +91,6 @@ eval(:(
                 end
                 add_indices2! = add_indices!
                 add_indices3! = add_indices!
-                @static if $package == $PKG_KERNELABSTRACTIONS
-                    @testset "KernelAbstractions runtime reselection" begin
-                        valid_symbols = Symbol[:cpu]
-                        @static if PKG_CUDA in TEST_PACKAGES
-                            push!(valid_symbols, :gpu_cuda)
-                        end
-                        @static if PKG_AMDGPU in TEST_PACKAGES
-                            push!(valid_symbols, :gpu_amd)
-                        end
-                        @static if PKG_METAL in TEST_PACKAGES
-                            push!(valid_symbols, :gpu_metal)
-                        end
-                        @static if isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES
-                            push!(valid_symbols, :gpu_oneapi)
-                        end
-                        for symbol in valid_symbols
-                            @select_hardware(symbol)
-                            @require @current_hardware() == symbol
-                            A  = @zeros(6, 7, 8)
-                            @hide_communication (2,2,3) begin
-                                @parallel add_indices!(A);
-                                communication!(A);
-                            end
-                            @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
-                        end
-                        @select_hardware(:cpu)
-                    end
-                end
                 @testset "@hide_communication boundary_width block" begin
                     A  = @zeros(6, 7, 8)
                     @hide_communication (2,2,3) begin
@@ -215,9 +187,6 @@ eval(:(
             @require !@is_initialized()
             @init_parallel_kernel($package, $FloatDefault)
             @require @is_initialized
-            @static if $package == $PKG_KERNELABSTRACTIONS
-                @require @current_hardware() == :cpu
-            end
             @testset "arguments @hide_communication" begin
                 @test_throws ArgumentError checkargs_hide_communication(:boundary_width, :block)               # Error: the last argument must be a code block.
                 @test_throws ArgumentError checkargs_hide_communication(:ranges_outer, :ranges_inner, :block)  # Error: the last argument must be a code block.

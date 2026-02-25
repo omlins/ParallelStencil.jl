@@ -7,11 +7,6 @@ function get_metalstream end
 function get_metal_compute_capability end
 
 
-# select_hardware.jl
-
-handle_kernelabstractions_metal(arg...)  = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)
-
-
 # allocators
 
 zeros_metal(arg...)  = @NotLoadedError(ERRMSG_METALEXT_NOT_LOADED)

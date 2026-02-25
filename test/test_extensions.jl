@@ -1,6 +1,5 @@
 using Test
-import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_POLYESTER, @select_hardware, @current_hardware
-import ParallelStencil.ParallelKernel: handle
+import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER
 TEST_PACKAGES = SUPPORTED_PACKAGES
 TEST_PACKAGES = filter!(x->x≠PKG_POLYESTER, TEST_PACKAGES) # NOTE: Polyester is not tested here, because the CPU case is sufficiently covered by the test of the Threads package.
 @static if PKG_CUDA in TEST_PACKAGES
@@ -11,13 +10,13 @@ end
     import AMDGPU
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester

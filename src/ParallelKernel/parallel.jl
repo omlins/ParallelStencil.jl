@@ -11,9 +11,6 @@ const PARALLEL_DOC = """
 
 Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below); Enzyme needs to be imported before ParallelKernel in order to have it load the corresponding extension.
 
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
-
 # Arguments
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
@@ -27,7 +24,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
-    - `backendkwargs...`: keyword arguments to be passed further to CUDA.jl, AMDGPU.jl or Metal.jl (ignored for Threads or Polyester).
+    - `backendkwargs...`: keyword arguments to be passed further to CUDA, AMDGPU or Metal (ignored for Threads or Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
@@ -44,9 +41,6 @@ const PARALLEL_INDICES_DOC = """
     @parallel_indices indices inbounds=... kernel
 
 Declare the `kernel` parallel and generate the given parallel `indices` inside the `kernel` using the package for parallelization selected with [`@init_parallel_kernel`](@ref).
-
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 # Keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_kernel`](@ref).
@@ -70,9 +64,6 @@ const PARALLEL_ASYNC_DOC = """
         @parallel_async ∇=... ad_mode=... ad_annotations=... (...) backendkwargs... kernelcall
 
 Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`](@ref) for more information); deactivates however automatic synchronization at the end of the call. Use [`@synchronize`](@ref) for synchronizing.
-
-!!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 !!! note "Performance note"
     @parallel_async falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
@@ -153,7 +144,7 @@ function parallel(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=g
     if is_ad_highlevel
         parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
     else
-        if     isgpu(package) || isxpu(package) parallel_call_gpu_or_xpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
+        if     isgpu(package) parallel_call_gpu(posargs..., kernelarg, backend_kwargs_expr, async, package; kwargs...)
         elseif iscpu(package) parallel_call_cpu(posargs..., kernelarg, async, package; launch=launch, configcall=configcall) # Ignore keyword args as they are not for the threads case (noted in doc).
         else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
         end
@@ -173,7 +164,6 @@ function synchronize(caller::Module, args::Union{Symbol,Expr}...; package::Symbo
     if     (package == PKG_CUDA)      synchronize_cuda(args...)
     elseif (package == PKG_AMDGPU)    synchronize_amdgpu(args...)
     elseif (package == PKG_METAL)     synchronize_metal(args...)
-    elseif (package == PKG_KERNELABSTRACTIONS) synchronize_kernelabstractions(args...)
     elseif (package == PKG_THREADS)   synchronize_threads(args...)
     elseif (package == PKG_POLYESTER) synchronize_polyester(args...)
     else                              @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -188,7 +178,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
     indices = extract_tuple(indices)
     ndims = length(indices)
     body = get_body(kernel)
-    body = remove_return(body; disguise_nested=(package!=PKG_KERNELABSTRACTIONS))
+    body = remove_return(body)
     body = macroexpand(caller, body)
     use_aliases = !all(indices .== INDICES[1:ndims])
     if use_aliases # NOTE: we treat explicit parallel indices as aliases to the statically retrievable indices INDICES.
@@ -198,62 +188,16 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package) || isxpu(package) kernel = insert_device_types(caller, kernel) end
+    if isgpu(package) kernel = insert_device_types(caller, kernel) end
     kernel = adjust_signatures(kernel, package)
     body   = handle_padding(caller, body, padding, indices)
     body   = handle_inverses(body)
     body   = handle_indices_and_literals(body, indices, package, numbertype)
     if (inbounds) body = add_inbounds(body) end
-    body = add_return(body, package)
+    body = add_return(body)
     set_body!(kernel, body)
     # @show QuoteNode(simplify_varnames!(remove_linenumbernodes!(deepcopy(kernel))))
-    if package == PKG_KERNELABSTRACTIONS
-        kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
-    end
     return kernel
-end
-
-function contains_index_macro(ex)
-    if !(ex isa Expr)
-        return false
-    end
-    if ex.head == :macrocall
-        macro_name = ex.args[1]
-        if macro_name == Symbol("@index")
-            return true
-        end
-        if macro_name isa Expr && macro_name.head == :. && !isempty(macro_name.args)
-            lastarg = macro_name.args[end]
-            if lastarg isa QuoteNode && lastarg.value == Symbol("@index")
-                return true
-            end
-        end
-        if macro_name isa GlobalRef && macro_name.name == Symbol("@index")
-            return true
-        end
-    end
-    for arg in ex.args
-        if contains_index_macro(arg)
-            return true
-        end
-    end
-    return false
-end
-
-macro ka_kernel(kernel)
-    caller = __module__
-    if !isdefined(caller, Symbol("@index")) || !isdefined(caller, Symbol("@groupsize")) || !isdefined(caller, Symbol("@ndrange"))
-        Core.eval(caller, :(import KernelAbstractions: @index, @groupsize, @ndrange))
-    end
-    expanded_kernel = kernel
-    while !contains_index_macro(expanded_kernel)
-        next_kernel = macroexpand(caller, expanded_kernel; recursive=false)
-        if next_kernel === expanded_kernel
-            break
-        end
-        expanded_kernel = next_kernel
-    end
-    return esc(:(KernelAbstractions.@kernel $expanded_kernel))
 end
 
 
@@ -297,37 +241,36 @@ function parallel_call_ad(caller::Module, kernelcall::Expr, backend_kwargs_expr:
     end
 end
 
-function parallel_call_gpu_or_xpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :(ParallelStencil.ParallelKernel.promote_ranges($ranges))
     if     (package == PKG_CUDA)   int_type = INT_CUDA
     elseif (package == PKG_AMDGPU) int_type = INT_AMDGPU
     elseif (package == PKG_METAL)  int_type = INT_METAL
-    elseif (package == PKG_KERNELABSTRACTIONS) int_type = INT_KERNELABSTRACTIONS
     end
     push!(kernelcall.args, ranges) #TODO: to enable indexing with other then Int64 something like the following but probably better in a function will also be necessary: push!(kernelcall.args, :(convert(Tuple{UnitRange{$int_type},UnitRange{$int_type},UnitRange{$int_type}}, $ranges)))
     push!(kernelcall.args, :($int_type(length($ranges[1]))))
     push!(kernelcall.args, :($int_type(length($ranges[2]))))
     push!(kernelcall.args, :($int_type(length($ranges[3]))))
-    return create_gpu_or_xpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
+    return create_gpu_call(package, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, stream, shmem, launch)
 end
 
-function parallel_call_gpu_or_xpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu(nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     maxsize = :( $nblocks .* $nthreads )
     ranges  = :(ParallelStencil.ParallelKernel.compute_ranges($maxsize))
-    parallel_call_gpu_or_xpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu_or_xpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     nthreads_x_max = determine_nthreads_x_max(package)
     maxsize  = :(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)))
     nthreads = :( ParallelStencil.ParallelKernel.compute_nthreads($maxsize; nthreads_x_max=$nthreads_x_max) )
     nblocks  = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
-    parallel_call_gpu_or_xpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu(ranges, nblocks, nthreads, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
-function parallel_call_gpu_or_xpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
+function parallel_call_gpu(kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, package::Symbol; stream::Union{Symbol,Expr}=default_stream(package), shmem::Union{Symbol,Expr,Nothing}=nothing, launch::Bool=true, configcall::Expr=kernelcall)
     ranges = :( ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...)) )
-    parallel_call_gpu_or_xpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
+    parallel_call_gpu(ranges, kernelcall, backend_kwargs_expr, async, package; stream=stream, shmem=shmem, launch=launch)
 end
 
 
@@ -372,8 +315,6 @@ end
 synchronize_cuda(args::Union{Symbol,Expr}...) = :(CUDA.synchronize($(args...); blocking=true))
 synchronize_amdgpu(args::Union{Symbol,Expr}...) = :(AMDGPU.synchronize($(args...); blocking=true))
 synchronize_metal(args::Union{Symbol,Expr}...) = :(Metal.synchronize($(args...)))
-synchronize_kernelabstractions(args::Union{Symbol,Expr}...) =
-    :(KernelAbstractions.synchronize(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), $(quote_expr(PKG_KERNELABSTRACTIONS)))))
 synchronize_threads(args::Union{Symbol,Expr}...) = :(begin end)
 synchronize_polyester(args::Union{Symbol,Expr}...) = :(begin end)
 
@@ -581,8 +522,8 @@ end
 function handle_indices_and_literals(body::Expr, indices::Array, package::Symbol, numbertype::DataType)
     int_type = kernel_int_type(package)
     ranges = [:($RANGES_VARNAME[1]), :($RANGES_VARNAME[2]), :($RANGES_VARNAME[3])]
-    if isgpu(package) || isxpu(package)
-        body = add_threadids(indices, ranges, body, package)
+    if isgpu(package)
+        body = add_threadids(indices, ranges, body)        
         body = (numbertype != NUMBERTYPE_NONE) ? literaltypes(numbertype, body) : body
         body = literaltypes(int_type, body) # TODO: the size function always returns a 64 bit integer; the following is not performance efficient: body = cast(body, :size, int_type)
     elseif iscpu(package)
@@ -597,116 +538,66 @@ end
 
 ## FUNCTIONS TO ADD THREAD-IDS / LOOPS IN KERNELS
 
-function add_threadids(indices::Array, ranges::Array, block::Expr, package::Symbol)
+function add_threadids(indices::Array, ranges::Array, block::Expr)
     if !(length(ranges)==3) @ModuleInternalError("ranges must be an Array or Tuple of size 3.") end # E.g. (5:28,5:28,1:1) in 2D. Note that for simplicity for the users and developers, 1D and 2D problems are always expressed like 3D problems...
     check_thread_bounds = true
     if haskey(ENV, "PS_THREAD_BOUND_CHECK") check_thread_bounds = (parse(Int64, ENV["PS_THREAD_BOUND_CHECK"]) > 0); end # PS_THREAD_BOUND_CHECK=0 enables to deactivate the check whether each thread is in bounds of the ranges array in order to reach maximal performance. If deactivated and any thread is out-of-bound it will cause normally a segmentation fault. To ensure that all threads are in bounds, the thread block must be of the same size as the ranges passed to the @parallel or @parallel_indices function.
     thread_bounds_check = :(begin end)
     rangelength_x, rangelength_y, rangelength_z = RANGELENGTHS_VARNAMES
     tx, ty, tz = THREADIDS_VARNAMES
-    index_group_ntuple = INDEX_GROUP_NTUPLE_VARNAME
-    index_local_ntuple = INDEX_LOCAL_NTUPLE_VARNAME
     ndims = length(indices)
-    is_ka = (package == PKG_KERNELABSTRACTIONS)
-    thread_execution = :(begin end)
     if ndims == 1
         ix, = indices
         range_x, = ranges
-        if check_thread_bounds && !is_ka
+        if check_thread_bounds
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
             end
         end
-        if check_thread_bounds && is_ka
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                if ($tx <= $rangelength_x)
-                    $ix = $range_x[$tx]                                                    # index, dimension x
-                    $block
-                end
-            end
-        else
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                $thread_bounds_check
-                $ix = $range_x[$tx]                                                    # index, dimension x
-                $block
-            end
+        quote
+            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $thread_bounds_check
+            $ix = $range_x[$tx]                                                    # index, dimension x
+            $block
         end
     elseif ndims == 2
         ix, iy = indices
         range_x, range_y = ranges
-        if check_thread_bounds && !is_ka
+        if check_thread_bounds
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
             end
         end
-        if check_thread_bounds && is_ka
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-                if ($tx <= $rangelength_x && $ty <= $rangelength_y)
-                    $ix = $range_x[$tx]                                                    # index, dimension x
-                    $iy = $range_y[$ty]                                                    # index, dimension y
-                    $block
-                end
-            end
-        else
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-                $thread_bounds_check
-                $ix = $range_x[$tx]                                                    # index, dimension x
-                $iy = $range_y[$ty]                                                    # index, dimension y
-                $block
-            end
+        quote
+            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+            $thread_bounds_check
+            $ix = $range_x[$tx]                                                    # index, dimension x
+            $iy = $range_y[$ty]                                                    # index, dimension y
+            $block
         end
     elseif ndims == 3
         ix, iy, iz = indices
         range_x, range_y, range_z = ranges
-        if check_thread_bounds && !is_ka
+        if check_thread_bounds
             thread_bounds_check = quote
                 if ($tx > $rangelength_x) return; end
                 if ($ty > $rangelength_y) return; end
                 if ($tz > $rangelength_z) return; end
             end
         end
-        if check_thread_bounds && is_ka
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-                $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
-                if ($tx <= $rangelength_x && $ty <= $rangelength_y && $tz <= $rangelength_z)
-                    $ix = $range_x[$tx]                                                    # index, dimension x
-                    $iy = $range_y[$ty]                                                    # index, dimension y
-                    $iz = $range_z[$tz]                                                    # index, dimension z
-                    $block
-                end
-            end
-        else
-            thread_execution = quote
-                $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
-                $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
-                $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
-                $thread_bounds_check
-                $ix = $range_x[$tx]                                                    # index, dimension x
-                $iy = $range_y[$ty]                                                    # index, dimension y
-                $iz = $range_z[$tz]                                                    # index, dimension z
-                $block
-            end
-        end
-    else
-        @ModuleInternalError("unsupported number of dimensions in add_threadids (obtained: $ndims).")
-    end
-    if is_ka
-        thread_execution = quote
-            $index_group_ntuple = @index(Group, NTuple)
-            $index_local_ntuple = @index(Local, NTuple)
-            $thread_execution
+        quote
+            $tx = ((ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + 1) + ParallelStencil.ParallelKernel.@threadIdx().x - 1;  # thread ID, dimension x  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tx = (ParallelStencil.ParallelKernel.@blockIdx().x-1) * ParallelStencil.ParallelKernel.@blockDim().x + ParallelStencil.ParallelKernel.@threadIdx().x;  # thread ID, dimension x
+            $ty = ((ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + 1) + ParallelStencil.ParallelKernel.@threadIdx().y - 1;  # thread ID, dimension y  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $ty = (ParallelStencil.ParallelKernel.@blockIdx().y-1) * ParallelStencil.ParallelKernel.@blockDim().y + ParallelStencil.ParallelKernel.@threadIdx().y;  # thread ID, dimension y
+            $tz = ((ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + 1) + ParallelStencil.ParallelKernel.@threadIdx().z - 1;  # thread ID, dimension z  #NOTE: the addition and subtraction is a trick to reduce register pressure due to Int64 indexing; normally it would simply be: $tz = (ParallelStencil.ParallelKernel.@blockIdx().z-1) * ParallelStencil.ParallelKernel.@blockDim().z + ParallelStencil.ParallelKernel.@threadIdx().z;  # thread ID, dimension z
+            $thread_bounds_check
+            $ix = $range_x[$tx]                                                    # index, dimension x
+            $iy = $range_y[$ty]                                                    # index, dimension y
+            $iz = $range_z[$tz]                                                    # index, dimension z
+            $block
         end
     end
-    return thread_execution
 end
 
 function add_loop(indices::Array, ranges::Array, block::Expr)
@@ -818,40 +709,7 @@ determine_nthreads_x_max(package::Symbol) = (package == PKG_AMDGPU) ? NTHREADS_X
 
 ## FUNCTIONS TO CREATE KERNEL LAUNCH AND SYNCHRONIZATION CALLS
 
-macro ka(args...)
-    posargs, kwargs_expr = split_args(args)
-    if length(posargs) != 2 @ArgumentError("wrong number of positional arguments.") end
-    handle_expr = posargs[1]
-    kernelcall = posargs[2]
-    if !is_call(kernelcall) @ArgumentError("the last argument must be a kernel call (obtained: $kernelcall).") end
-    kwargs, backend_kwargs_expr = extract_kwargs(__module__, kwargs_expr, (:ndrange, :workgroupsize, :queue, :launch), "@ka <handle> <kernelcall>", true; eval_args=(:launch,))
-    launch        = haskey(kwargs, :launch) ? kwargs.launch : true
-    ndrange       = haskey(kwargs, :ndrange) ? kwargs.ndrange : nothing
-    workgroupsize = haskey(kwargs, :workgroupsize) ? kwargs.workgroupsize : nothing
-    queue         = haskey(kwargs, :queue) ? kwargs.queue : nothing
-    kernel_name = extract_kernelcall_name(kernelcall)
-    kernel_args, kernel_kwargs = extract_kernelcall_args(kernelcall)
-    if length(kernel_kwargs) > 0 @ArgumentError("keyword arguments are not allowed in @ka kernel calls.") end
-    kernel_handle_call = isnothing(workgroupsize) ? :($kernel_name($handle_expr)) : :($kernel_name($handle_expr, $workgroupsize))
-    if launch
-        kwexprs = Expr[]
-        if !isnothing(ndrange) push!(kwexprs, :(ndrange = $ndrange)) end
-        if !isnothing(queue) push!(kwexprs, :(queue = $queue)) end
-        append!(kwexprs, backend_kwargs_expr)
-        call_expr = isempty(kwexprs) ? :($kernel_handle_call($(kernel_args...))) : :($kernel_handle_call($(kernel_args...); $(kwexprs...)))
-        return esc(call_expr)
-    else
-        return esc(kernel_handle_call)
-    end
-end
-
-macro ka_auto(args...)
-    package = ParallelKernel.get_package(__module__)
-    package_expr = quote_expr(package)
-    return esc(:(ParallelStencil.ParallelKernel.@ka(ParallelStencil.ParallelKernel.handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__), $package_expr), $(args...))))
-end
-
-function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
+function create_gpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nthreads::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool, stream::Union{Symbol,Expr}, shmem::Union{Symbol,Expr,Nothing}, launch::Bool)
     synccall = async ? :(begin end) : create_synccall(package, stream)
     backend_kwargs_expr = (backend_kwargs_expr...,)
     if launch
@@ -859,7 +717,6 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
             if     (package == PKG_CUDA)   shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_AMDGPU) shmem_expr = :(shmem = $shmem)
             elseif (package == PKG_METAL)  shmem_expr = nothing # No need to pass shared memory to Metal kernels.
-            elseif (package == PKG_KERNELABSTRACTIONS) shmem_expr = nothing # KernelAbstractions does not accept dynamic shared-memory sizes here.
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
             if package != PKG_METAL
@@ -869,20 +726,12 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc gridsize=$nblocks groupsize=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
         elseif (package == PKG_METAL)  return :( Metal.@metal groups=$nblocks threads=$nthreads queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
-        elseif (package == PKG_KERNELABSTRACTIONS)
-            ndrange_expr = :($nblocks .* $nthreads)
-            if stream == :(nothing) || stream === nothing
-                return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr $(backend_kwargs_expr...) $kernelcall; $synccall )
-            else
-                return :( ParallelStencil.ParallelKernel.@ka_auto workgroupsize=$nthreads ndrange=$ndrange_expr queue=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )
-            end
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     else
         if     (package == PKG_CUDA)   return :( CUDA.@cuda  launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: runtime arguments must be omitted when the kernel is not launched (backend_kwargs_expr must not contain any around time argument)
         elseif (package == PKG_AMDGPU) return :( AMDGPU.@roc launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
         elseif (package == PKG_METAL)  return :( Metal.@metal launch=false $(backend_kwargs_expr...) $kernelcall)  # NOTE: ...
-        elseif (package == PKG_KERNELABSTRACTIONS) return :( ParallelStencil.ParallelKernel.@ka_auto launch=false $(backend_kwargs_expr...) $kernelcall )
         else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
         end
     end
@@ -892,7 +741,6 @@ function create_synccall(package::Symbol, stream::Union{Symbol,Expr})
     if     (package == PKG_CUDA)   synchronize_cuda(stream)
     elseif (package == PKG_AMDGPU) synchronize_amdgpu(stream)
     elseif (package == PKG_METAL)  synchronize_metal(stream)
-    elseif (package == PKG_KERNELABSTRACTIONS) synchronize_kernelabstractions(stream)
     else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end
@@ -901,7 +749,6 @@ function default_stream(package)
     if     (package == PKG_CUDA)    return :(CUDA.stream()) # Use the default stream of the task.
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.stream()) # Use the default stream of the task.
     elseif (package == PKG_METAL)   return :(Metal.global_queue(Metal.device())) # Use the default queue of the task.
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(nothing)
     else                            @ModuleInternalError("unsupported GPU package (obtained: $package).")
     end
 end

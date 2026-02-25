@@ -1,13 +1,12 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, @select_hardware, @current_hardware, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
 import ParallelStencil: checkargs_parallel, validate_body, parallel
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
 using ParallelStencil.FieldAllocators
 import ParallelStencil.FieldAllocators: @XXYYZField, @XYYZZField
-import ParallelStencil.ParallelKernel: handle, @ka
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
@@ -22,18 +21,12 @@ end
     if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
 end
 @static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-    const KA_GPU_SYMBOLS = filter(!isnothing, (
-        PKG_CUDA in TEST_PACKAGES ? :gpu_cuda : nothing,
-        PKG_AMDGPU in TEST_PACKAGES ? :gpu_amd : nothing,
-        PKG_METAL in TEST_PACKAGES ? :gpu_metal : nothing,
-        (isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES) ? :gpu_oneapi : nothing
-    ))
+    @static if Sys.isapple()
+        import Metal
+        if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
+    else
+        TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES)
+    end
 end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
@@ -49,9 +42,6 @@ eval(:(
             @require !@is_initialized()
             @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
             @require @is_initialized()
-            @static if $package == $PKG_KERNELABSTRACTIONS
-                @select_hardware(:cpu)
-            end
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
                     call = @prettystring(1, @parallel f(A))
@@ -85,30 +75,6 @@ eval(:(
                     # @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) groupsize = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = AMDGPU.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
                     call = @prettystring(2, @parallel ranges memopt=true f(A))
                     @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) groupsize = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = AMDGPU.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
-                elseif $package == $PKG_KERNELABSTRACTIONS
-                    call = @prettystring(1, @parallel f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
-                    @test occursin("compute_nblocks", call)
-                    @test occursin("compute_nthreads", call)
-                    @test !occursin("CUDA.@cuda", call)
-                    @test !occursin("AMDGPU.@roc", call)
-                    call = @prettystring(1, @parallel ranges f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
-                    call = @prettystring(1, @parallel nblocks nthreads f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
-                    call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
-                    call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
-                    @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    @test occursin("queue = mystream", call)
-                    # call = @prettystring(2, @parallel memopt=true f(A))
-                    # @test occursin("ParallelStencil.ParallelKernel.@ka", call)
-                    # call = @prettystring(2, @parallel ranges memopt=true f(A))
-                    # @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
@@ -119,50 +85,14 @@ eval(:(
                     @test @prettystring(2, @parallel ranges memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                 end;
             end;
-            @testset "KernelAbstractions runtime reselection" begin
-                @static if $package == $PKG_KERNELABSTRACTIONS
-                    @require KernelAbstractions.functional(KernelAbstractions.CPU())
-                    N = 8
-                    @parallel_indices (ix) function ka_double!(A)
-                        A[ix] = A[ix] + one(eltype(A))
-                        return
-                    end
-                    valid_symbols = (:cpu, KA_GPU_SYMBOLS...)
-                    last_symbol = :hw_none
-                    for symbol in (:cpu, KA_GPU_SYMBOLS...)
-                        if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
-                            continue
-                        elseif symbol == :gpu_amd && !(PKG_AMDGPU in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_amd unavailable"
-                            continue
-                        elseif symbol == :gpu_metal && !(PKG_METAL in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_metal unavailable"
-                            continue
-                        elseif symbol == :gpu_oneapi && !(isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
-                            continue
-                        end
-                        @select_hardware(symbol)
-                        A = @zeros(N)
-                        @parallel (1:N) ka_double!(A)
-                        @test all(Array(A) .== one(eltype(A)))
-                        last_symbol = symbol
-                    end
-                    @test @current_hardware() in valid_symbols
-                    @test @current_hardware() == last_symbol
-                    @select_hardware(:cpu)
-                    @test @current_hardware() == :cpu
-                end
-            end
             @static if $package != $PKG_POLYESTER # Enzyme does not support Polyester.
-              @testset "@parallel ∇" begin
-                  @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.Const(A), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.Duplicated(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a), Enzyme.Active(b))"
-                  @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))"
+                @testset "@parallel ∇" begin
+                    @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.Const(A), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
+                    @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
+                    @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
+                    @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a))"
+                    @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.Duplicated(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a), Enzyme.Active(b))"
+                    @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))"
                 end;
             end;
             @testset "@parallel <kernel>" begin
@@ -212,7 +142,6 @@ eval(:(
                     expansion = @gorgeousstring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A, B, c::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
                 end
-                # NOTE: KernelAbstractions intentionally leaves convenience modules like Data.Device undefined; these checks only validate macro expansion shapes.
                 $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "Data.__T__ to Data.Device.__T__" begin
                         @static if @isgpu($package)

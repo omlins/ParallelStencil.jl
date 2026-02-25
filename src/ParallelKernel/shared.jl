@@ -17,17 +17,15 @@ const MOD_METADATA_PK              = gensym_world("__metadata_PK__", @__MODULE__
 const PKG_CUDA                     = :CUDA
 const PKG_AMDGPU                   = :AMDGPU
 const PKG_METAL                    = :Metal
-const PKG_KERNELABSTRACTIONS       = :KernelAbstractions
 const PKG_THREADS                  = :Threads
 const PKG_POLYESTER                = :Polyester
 const PKG_NONE                     = :PKG_NONE
-const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS]
+const SUPPORTED_PACKAGES           = [PKG_THREADS, PKG_POLYESTER, PKG_CUDA, PKG_AMDGPU, PKG_METAL]
 const INT_CUDA                     = Int64 # NOTE: unsigned integers are not yet supported (proper negative offset and range is dealing missing)
 const INT_AMDGPU                   = Int64 # NOTE: ...
 const INT_METAL                    = Int64 # NOTE: ...
 const INT_POLYESTER                = Int64 # NOTE: ...
 const INT_THREADS                  = Int64 # NOTE: ...
-const INT_KERNELABSTRACTIONS       = Int64 # NOTE: ...
 const COMPUTE_CAPABILITY_DEFAULT   = v"∞" # having it infinity if it is not set allows to directly use statements like `if compute_capability < v"8"`, assuming a recent architecture if it is not set.
 const NTHREADS_X_MAX               = 32
 const NTHREADS_X_MAX_AMDGPU        = 64
@@ -39,8 +37,6 @@ const INDICES_DIR_FUNCTIONS_SYMS   = (:(ParallelStencil.ParallelKernel.ixd), :(P
 const RANGES_VARNAME               = gensym_world("ranges", @__MODULE__)
 const RANGELENGTHS_VARNAMES        = (gensym_world("rangelength_x", @__MODULE__), gensym_world("rangelength_y", @__MODULE__), gensym_world("rangelength_z", @__MODULE__))
 const THREADIDS_VARNAMES           = (gensym_world("tx", @__MODULE__), gensym_world("ty", @__MODULE__), gensym_world("tz", @__MODULE__))
-const INDEX_GROUP_NTUPLE_VARNAME   = gensym_world("index_group_ntuple", @__MODULE__)
-const INDEX_LOCAL_NTUPLE_VARNAME   = gensym_world("index_local_ntuple", @__MODULE__)
 const RANGES_TYPE_1D               = UnitRange{}
 const RANGES_TYPE_1D_TUPLE         = Tuple{UnitRange{}}
 const RANGES_TYPE_2D               = Tuple{UnitRange{},UnitRange{}}
@@ -81,43 +77,18 @@ const ERRMSG_CHECK_INBOUNDS        = "inbounds must be a evaluatable at parse ti
 const ERRMSG_CHECK_PADDING         = "padding must be a evaluatable at parse time (e.g. literal or constant) and has to be of type Bool."
 const ERRMSG_CHECK_LITERALTYPES    = "the type given to 'literaltype' must be one of the following: $(join(SUPPORTED_LITERALTYPES,", "))"
 
-const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE                 => 0,
-                                   PKG_CUDA                 => 0,
-                                   PKG_AMDGPU               => 0,
-                                   PKG_METAL                => 0,
-                                   PKG_THREADS              => 1,
-                                   PKG_POLYESTER            => 1,
-                                   PKG_KERNELABSTRACTIONS   => 1)
-
-const HARDWARE_DEFAULTS = Dict(PKG_NONE                 => :hw_none,
-                               PKG_THREADS              => :cpu,
-                               PKG_POLYESTER            => :cpu,
-                               PKG_CUDA                 => :gpu_cuda,
-                               PKG_AMDGPU               => :gpu_amd,
-                               PKG_METAL                => :gpu_metal,
-                               PKG_KERNELABSTRACTIONS   => :cpu)
-
-function hardware_default(package::Symbol)
-    value = get(HARDWARE_DEFAULTS, package, nothing)
-    if isnothing(value) @ModuleInternalError("unknown package: $package") end
-    return value
-end
-
-supports_multi_architecture(package::Symbol) = package == PKG_KERNELABSTRACTIONS
+const CELLARRAY_BLOCKLENGTH = Dict(PKG_NONE      => 0,
+                                   PKG_CUDA      => 0,
+                                   PKG_AMDGPU    => 0,
+                                   PKG_METAL     => 0,
+                                   PKG_THREADS   => 1,
+                                   PKG_POLYESTER => 1)
 
 struct Dim3
     x::INT_THREADS
     y::INT_THREADS
     z::INT_THREADS
 end
-
-@inline Dim3(x::Integer, y::Integer, z::Integer) = Dim3(INT_THREADS(x), INT_THREADS(y), INT_THREADS(z))
-@inline Dim3(v::NTuple{1,<:Integer}) = Dim3(v[1], 1, 1)
-@inline Dim3(v::NTuple{2,<:Integer}) = Dim3(v[1], v[2], 1)
-@inline Dim3(v::NTuple{3,<:Integer}) = Dim3(v[1], v[2], v[3])
-@inline Dim3(v::CartesianIndex{1}) = Dim3(Tuple(v))
-@inline Dim3(v::CartesianIndex{2}) = Dim3(Tuple(v))
-@inline Dim3(v::CartesianIndex{3}) = Dim3(Tuple(v))
 
 macro ranges()       esc(RANGES_VARNAME) end
 macro rangelengths() esc(:(($(RANGELENGTHS_VARNAMES...),))) end
@@ -128,8 +99,6 @@ function kernel_int_type(package::Symbol)
     elseif (package == PKG_METAL)     int_type = INT_METAL
     elseif (package == PKG_THREADS)   int_type = INT_THREADS
     elseif (package == PKG_POLYESTER) int_type = INT_POLYESTER
-    elseif (package == PKG_KERNELABSTRACTIONS) int_type = INT_KERNELABSTRACTIONS
-    else @ModuleInternalError("unknown package: $package")
     end
     return int_type
 end
@@ -197,27 +166,23 @@ function in_signature(kernel::Expr, x)
     return inexpr_walk(signature, x)
 end
 
-function remove_return(body::Expr; disguise_nested=true)
+function remove_return(body::Expr)
     if !(body.args[end] in [:(return), :(return nothing), :(nothing)])
         @ArgumentError("invalid kernel in @parallel kernel definition: the last statement must be a `return nothing` statement ('return' or 'return nothing' or 'nothing') as required for any GPU kernels.")
     end
+    body = disguise_nested_returns(body)
     remainder = copy(body)
     remainder.args = body.args[1:end-2]
-    remainder = handle_nested_returns(remainder; disguise=disguise_nested)
     if inexpr_walk(remainder, :return) @ArgumentError("invalid kernel in @parallel kernel definition: only one return statement is allowed in the kernel (exception: nested function definitions) and it must return nothing and be the last statement (required to ensure equal behaviour with different packages for parallellization).") end
     return remainder
 end
 
-function handle_nested_returns(body::Expr; disguise=true)
+function disguise_nested_returns(body::Expr)
     return postwalk(body) do ex
         if isdef(ex)
             f_elems = splitdef(ex)
             body = f_elems[:body]
-            if disguise
-                f_elems[:body] = disguise_returns(body)
-            else
-                if has_return(body) @ArgumentError("nested function with return in @parallel kernel definition: no return statements are supported with the KernelAbstractions backend (remove the return statement or selected another backend).") end
-            end
+            f_elems[:body] = disguise_returns(body)
             return combinedef(f_elems)
         else
             return ex
@@ -237,21 +202,10 @@ function disguise_returns(body::Expr)
     end
 end
 
-function has_return(body::Expr)
-    return inexpr_walk(body, :return)
-end
-
-function add_return(body::Expr, package::Symbol)
-    if package == PKG_KERNELABSTRACTIONS
-        quote
-            $body
-            nothing
-        end
-    else
-        quote
-            $body
-            return nothing
-        end
+function add_return(body::Expr)
+    quote
+        $body
+        return nothing
     end
 end
 
@@ -555,12 +509,9 @@ gorgeousstring(expr::Expr) = string(simplify_varnames!(remove_linenumbernodes!(e
 longnameof(f)              = "$(parentmodule(f)).$(nameof(f))"
 symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Expr,Module}; imported=false, all=true) = @eval(eval_mod, names($mod, all=$all, imported=$imported))
 macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; all=all, imported=imported) end
-isdefined_at_pt(caller::Module, expr) = !isnothing(eval_try(caller, expr))
-macro isdefined_at_pt(expr)           Expr(:quote, isdefined_at_pt(__module__, expr)) end
 macro require(condition)               condition_str = string(condition); esc(:( if !($condition) error("pre-test requirement not met: $($condition_str).") end )) end  # Verify a condition required for a unit test (in the unit test results, this should not be treated as a unit test).
 macro isgpu(package)                   isgpu(package) end
 macro iscpu(package)                   iscpu(package) end
-macro isxpu(package)                   isxpu(package) end
 macro macroexpandn(n::Integer, expr)   return QuoteNode(macroexpandn(__module__, expr, n)) end
 macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(macroexpandn(__module__, expr, n))) end
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
@@ -643,7 +594,6 @@ get_cpu_compute_capability(default::VersionNumber) = return default
 
 iscpu(package) = return (package in (PKG_THREADS, PKG_POLYESTER))
 isgpu(package) = return (package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL))
-isxpu(package) = return (package == PKG_KERNELABSTRACTIONS)
 
 hasmeta_PK(caller::Module) = isdefined(caller, MOD_METADATA_PK)
 

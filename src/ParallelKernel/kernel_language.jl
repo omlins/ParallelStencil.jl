@@ -301,7 +301,6 @@ function gridDim(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.gridDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.gridGroupDim($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroups_per_grid_3d($(args...)))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.@gridDim_kernelabstractions($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@gridDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -311,7 +310,6 @@ function blockIdx(caller::Module, args...; package::Symbol=get_package(caller)) 
     if     (package == PKG_CUDA)    return :(CUDA.blockIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupIdx($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroup_position_in_grid_3d($(args...)))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.@blockIdx_kernelabstractions($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -321,7 +319,6 @@ function blockDim(caller::Module, args...; package::Symbol=get_package(caller)) 
     if     (package == PKG_CUDA)    return :(CUDA.blockDim($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workgroupDim($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threads_per_threadgroup_3d($(args...)))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.@blockDim_kernelabstractions($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@blockDim_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -331,7 +328,6 @@ function threadIdx(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.threadIdx($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.workitemIdx($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.thread_position_in_threadgroup_3d($(args...)))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.@threadIdx_kernelabstractions($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@threadIdx_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -344,7 +340,6 @@ function sync_threads(caller::Module, args...; package::Symbol=get_package(calle
     if     (package == PKG_CUDA)    return :(CUDA.sync_threads($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.sync_workgroup($(args...)))
     elseif (package == PKG_METAL)   return :(Metal.threadgroup_barrier($(args...); flag=Metal.MemoryFlagThreadGroup))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(KernelAbstractions.@synchronize($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sync_threads_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -357,7 +352,6 @@ function sharedMem(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.@cuDynamicSharedMem($(args...)))
     elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.@sharedMem_amdgpu($(args...)))
     elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.@sharedMem_metal($(args...)))
-    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions($(args...)))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.@sharedMem_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
@@ -370,14 +364,6 @@ macro sharedMem_amdgpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sh
 macro sharedMem_metal(T, dims) :(Metal.MtlThreadGroupArray($T, $dims)); end
 
 macro sharedMem_metal(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sharedMem_metal($T, $dims))) end
-
-macro sharedMem_kernelabstractions(args...)
-    if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
-    if length(args) == 2
-        return esc(:(KernelAbstractions.@localmem($(args[1]), $(args[2]))))
-    end
-    return esc(:(ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions($(args[1]), $(args[2]))))
-end
 
 ## FUNCTIONS FOR PRINTING
 
@@ -405,7 +391,6 @@ end
 function warpsize(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.warpsize())
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.wavefrontsize())
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   return :(Metal.threads_per_simdgroup())
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.warpsize_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -415,7 +400,6 @@ end
 function laneid(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.laneid() + 1)
     elseif (package == PKG_AMDGPU)  return :(unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   return :(unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.laneid_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -425,7 +409,6 @@ end
 function active_mask(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.active_mask())
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.activemask())
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.active_mask_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -445,8 +428,6 @@ function shfl_sync(caller::Module, args...; package::Symbol=get_package(caller))
         end
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
@@ -469,8 +450,6 @@ function shfl_up_sync(caller::Module, args...; package::Symbol=get_package(calle
         end
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
@@ -493,8 +472,6 @@ function shfl_down_sync(caller::Module, args...; package::Symbol=get_package(cal
         end
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
@@ -517,8 +494,6 @@ function shfl_xor_sync(caller::Module, args...; package::Symbol=get_package(call
         end
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
-    elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
@@ -533,7 +508,6 @@ end
 function vote_any_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_any_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.any_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_any_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -543,7 +517,6 @@ end
 function vote_all_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_all_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.all_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_all_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -553,7 +526,6 @@ end
 function vote_ballot_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_ballot_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.ballot_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_ballot_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -631,27 +603,6 @@ macro blockDim_cpu()  esc(:(ParallelStencil.ParallelKernel.Dim3(1, 1, 1))) end
 macro threadIdx_cpu() esc(:(ParallelStencil.ParallelKernel.Dim3(1, 1, 1))) end
 
 macro sync_threads_cpu() esc(:(begin end)) end
-
-## KERNELABSTRACTIONS TARGET IMPLEMENTATIONS
-
-macro gridDim_kernelabstractions()
-    esc(:(ParallelStencil.ParallelKernel.Dim3(cld.(@ndrange(), @groupsize()))))
-end
-
-macro blockIdx_kernelabstractions()
-    index_group_ntuple = INDEX_GROUP_NTUPLE_VARNAME
-    esc(:(ParallelStencil.ParallelKernel.Dim3($index_group_ntuple)))
-end
-
-macro blockDim_kernelabstractions()
-    esc(:(ParallelStencil.ParallelKernel.Dim3(@groupsize())))
-end
-
-macro threadIdx_kernelabstractions()
-    index_local_ntuple = INDEX_LOCAL_NTUPLE_VARNAME
-    esc(:(ParallelStencil.ParallelKernel.Dim3($index_local_ntuple)))
-end
-
 
 macro sharedMem_cpu(T, dims) :(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))}(undef)); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code.
 
