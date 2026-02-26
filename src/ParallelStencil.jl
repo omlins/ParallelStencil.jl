@@ -2,6 +2,7 @@
 Module ParallelStencil
 
 Enables domain scientists to write high-level code for parallel high-performance stencil computations that can be deployed on both GPUs and CPUs.
+Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fixed to their hardware, while abstraction-layer backends such as KernelAbstractions let you switch the runtime target through [`select_hardware`](@ref) and inspect it with [`current_hardware`](@ref) without reparsing code. Detailed workflow guidance is available in the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
 # General overview and examples
 https://github.com/omlins/ParallelStencil.jl
@@ -25,6 +26,12 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@get_stream`](@ref)
     - [`@get_priority_stream`](@ref)
 
+# Runtime hardware selection
+- [`@select_hardware`](@ref)
+- [`@current_hardware`](@ref)
+- [`select_hardware`](@ref)
+- [`current_hardware`](@ref)
+
 # Macros available for [`@parallel_indices`](@ref) kernels
 - [`@ps_show`](@ref)
 - [`@ps_println`](@ref)
@@ -46,6 +53,8 @@ https://github.com/omlins/ParallelStencil.jl
     - [`@vote_any_sync`](@ref)
     - [`@vote_all_sync`](@ref)
     - [`@vote_ballot_sync`](@ref)
+    !!! note "Warp-level primitives support"
+        Warp-level primitives are only partially supported with the KernelAbstractions and Metal backends.
 
 # Submodules
 - [`ParallelStencil.AD`](@ref)
@@ -82,6 +91,7 @@ include("memopt.jl")
 include("overlap.jl")
 include("parallel.jl")
 include("reset_parallel_stencil.jl")
+include("select_hardware.jl")
 
 ## Alphabetical include of allocation/computation-submodules (must be at end as needs to import from ParallelStencil, .e.g. INDICES).
 include("AD.jl")
@@ -93,6 +103,7 @@ export @init_parallel_stencil, FiniteDifferences1D, FiniteDifferences2D, FiniteD
 export @parallel, @hide_communication, @overlap, @get_priority_stream, @get_stream, @parallel_indices, @parallel_async, @synchronize, @zeros, @ones, @rand, @falses, @trues, @fill, @fill!, @CellType
 export @gridDim, @blockIdx, @blockDim, @threadIdx, @sync_threads, @sharedMem, @ps_show, @ps_println, @∀
 export @warpsize, @laneid, @active_mask, @shfl_sync, @shfl_up_sync, @shfl_down_sync, @shfl_xor_sync, @vote_any_sync, @vote_all_sync, @vote_ballot_sync
+export @select_hardware, @current_hardware, select_hardware, current_hardware
 export PSNumber
 
 end # Module ParallelStencil

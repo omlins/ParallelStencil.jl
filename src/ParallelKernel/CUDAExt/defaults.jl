@@ -8,6 +8,11 @@ function get_custream end
 function get_cuda_compute_capability end
 
 
+# select_hardware.jl
+
+handle_kernelabstractions_cuda(arg...)  = @NotLoadedError(ERRMSG_CUDAEXT_NOT_LOADED)
+
+
 # allocators.jl
 
 zeros_cuda(arg...)  = @NotLoadedError(ERRMSG_CUDAEXT_NOT_LOADED)
