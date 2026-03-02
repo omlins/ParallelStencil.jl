@@ -35,6 +35,7 @@ end
 function overlap(caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller))
     block = args[1] # safe through checkargs_overlap
     if     isgpu(package) overlap_gpu(block)
+    elseif isxpu(package) overlap_xpu(block)
     elseif iscpu(package) overlap_cpu(block)
     else                  @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).") # ERRMSG_UNSUPPORTED_PACKAGE defined in shared.jl
     end
@@ -70,7 +71,10 @@ function collect_parallel_calls(block::Expr)
     return calls
 end
 
-function overlap_cpu(block::Expr)
+overlap_cpu(block::Expr) = overlap_fake(block)
+overlap_xpu(block::Expr) = overlap_fake(block)  
+
+function overlap_fake(block::Expr)
     calls = collect_parallel_calls(block)
     seq_calls = [:(@parallel $(call.posargs...) $(call.kwargs...) $(call.kernelcall)) for call in calls]
     quote
