@@ -262,29 +262,30 @@ The KernelAbstractions backend keeps the familiar parse-time `@init_parallel_ste
 
 ```julia
 # --- Session setup -----------------------------------------------------
+import CUDA                                                             # 1 Import backends to be used by the KernelAbstractions backend
 using ParallelStencil
-@init_parallel_stencil(package=KernelAbstractions, numbertype=Float32)  # 1 Initialize KernelAbstractions backend at parse time
+@init_parallel_stencil(package=KernelAbstractions, numbertype=Float32)  # 2 Initialize KernelAbstractions backend at parse time
 const N = 1024
 const α = 2.5
 
 # --- Kernel definition -------------------------------------------------
-@parallel_indices (i) function saxpy!(Y, α, X)                          # 2 Define a single time a hardware-agnostic SAXPY kernel
+@parallel_indices (i) function saxpy!(Y, α, X)                          # 3 Define a single time a hardware-agnostic SAXPY kernel
   Y[i] = α * X[i] + Y[i]
   return
 end
 
 # --- First run on default runtime hardware (CPU) -----------------------
-println("Current runtime hardware target: ", @current_hardware())       # 3 Query current (default) runtime hardware target
-X = @rand(N)                                                            # 4 Allocate data on the current target
-Y = @rand(N)                                                            # 4 Allocate data on the current target
-@parallel saxpy!(Y, α, X)                                               # 5 Launch kernel on the current target
+println("Current runtime hardware target: ", @current_hardware())       # 4 Query current (default) runtime hardware target
+X = @rand(N)                                                            # 5 Allocate data on the current target
+Y = @rand(N)                                                            # 5 Allocate data on the current target
+@parallel saxpy!(Y, α, X)                                               # 6 Launch kernel on the current target
 
 # --- Reselect runtime hardware to CUDA-capable GPU and run again -------
-@select_hardware(:gpu_cuda)                                             # 6 Switch runtime hardware target to CUDA-capable GPU
-println("Current runtime hardware target: ", @current_hardware())       # 7 Confirm the CUDA-capable GPU runtime hardware target
-X = @rand(N)                                                            # 8 Allocate data on the new target
-Y = @rand(N)                                                            # 8 Allocate data on the new target
-@parallel saxpy!(Y, α, X)                                               # 9 Launch kernel on the new target without redefining anything
+@select_hardware(:gpu_cuda)                                             # 7 Switch runtime hardware target to CUDA-capable GPU
+println("Current runtime hardware target: ", @current_hardware())       # 8 Confirm the CUDA-capable GPU runtime hardware target
+X = @rand(N)                                                            # 9 Allocate data on the new target
+Y = @rand(N)                                                            # 9 Allocate data on the new target
+@parallel saxpy!(Y, α, X)                                               # 10 Launch kernel on the new target without redefining anything
 ```
 Type `?@select_hardware` and `?@current_hardware` in the [Julia REPL] to see what runtime hardware targets are supported and which symbols to use to select them.
 Note that the KernelAbstractions backend comes with a trade-off: the convenience `Data`/`TData` modules for fixed data types and single-architecture backends are not available, as well as the warp-level primitives in `@parallel_indices` kernels (see [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming) and the hide communication feature, described in the next section, is implemented to have no effect for KernelAbstractions (but it nevertheless executes correctly).
