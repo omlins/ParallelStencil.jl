@@ -55,7 +55,9 @@ eval(:(
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
                     call = @prettystring(1, @parallel f(A))
-                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))); nthreads_x_max = 32)) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))); nthreads_x_max = 32) stream = CUDA.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
+                    @test occursin("CUDA.@cuda", call)
+                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("nb_parallel_indices", call)
                     @test occursin("CUDA.synchronize(CUDA.stream(); blocking = true)", call)
                     call = @prettystring(1, @parallel ranges f(A))
                     @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)); nthreads_x_max = 32)) threads = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)); nthreads_x_max = 32) stream = CUDA.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
@@ -71,7 +73,9 @@ eval(:(
                     @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                 elseif $package == $PKG_AMDGPU
                     call = @prettystring(1, @parallel f(A))
-                    @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))); nthreads_x_max = 64)) groupsize = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))); nthreads_x_max = 64) stream = AMDGPU.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
+                    @test occursin("AMDGPU.@roc", call)
+                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("nb_parallel_indices", call)
                     @test occursin("AMDGPU.synchronize(AMDGPU.stream(); blocking = true)", call)
                     call = @prettystring(1, @parallel ranges f(A))
                     @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)); nthreads_x_max = 64)) groupsize = ParallelStencil.ParallelKernel.compute_nthreads(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)); nthreads_x_max = 64) stream = AMDGPU.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
@@ -91,6 +95,8 @@ eval(:(
                     @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     @test occursin("compute_nblocks", call)
                     @test occursin("compute_nthreads", call)
+                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("nb_parallel_indices", call)
                     @test !occursin("CUDA.@cuda", call)
                     @test !occursin("AMDGPU.@roc", call)
                     call = @prettystring(1, @parallel ranges f(A))
@@ -110,11 +116,17 @@ eval(:(
                     # call = @prettystring(2, @parallel ranges memopt=true f(A))
                     # @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                 elseif @iscpu($package)
-                    @test @prettystring(1, @parallel f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
+                    call = @prettystring(1, @parallel f(A))
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
+                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("nb_parallel_indices", call)
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                     @test @prettystring(1, @parallel nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))"
                     @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
-                    @test @prettystring(1, @parallel stream=mystream f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
+                    call = @prettystring(1, @parallel stream=mystream f(A))
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
+                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("nb_parallel_indices", call)
                     # @test @prettystring(2, @parallel memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
                     @test @prettystring(2, @parallel ranges memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                 end;
@@ -1230,6 +1242,66 @@ eval(:(
                 @test_throws ArgumentError validate_body(:(a = b + 1; @all(A) = @all(B) + 1))
                 @test_throws ArgumentError validate_body(:(A = @all(B) + 1; @all(A) = @all(B) + 1))
             end;
+            @testset "automatic ranges: error if not all parallel indices are used" begin
+                @parallel_indices (ix, iy, iz) function write_xy_plane!(A)
+                    A[ix, iy, 1] = A[ix, iy, 1]
+                    return
+                end
+                @parallel_indices (ix, iy) function write_y_line!(A)
+                    A[1, iy] = A[1, iy]
+                    return
+                end
+                A3 = @zeros(4, 5, 6)
+                A2 = @zeros(4, 5)
+                @test_throws ArgumentError @parallel write_xy_plane!(A3)
+                @test_throws ArgumentError @parallel write_y_line!(A2)
+            end;
+            @testset "automatic ranges: error if input array has more dimensions than parallel indices" begin
+                @parallel_indices (ix, iy) function write_xy_plane!(A)
+                    A[ix, iy, 1] = A[ix, iy, 1]
+                    A[ix, iy, 2] = A[ix, iy, 2]
+                    return
+                end
+                @parallel_indices (ix) function write_x_line!(A)
+                    A[ix, 1] = A[ix, 1]
+                    A[ix, 2] = A[ix, 2]
+                    return
+                end
+                A3 = @zeros(4, 5, 6)
+                A2 = @zeros(4, 5)
+                @test_throws ArgumentError @parallel write_xy_plane!(A3)
+                @test_throws ArgumentError @parallel write_x_line!(A2)
+            end;
+            @testset "automatic ranges (memopt): error if not all parallel indices are used" begin
+                @parallel_indices (ix, iy, iz) memopt=true function write_xy_plane!(A)
+                    A[ix, iy, 1] = A[ix, iy, 1]
+                    return
+                end
+                @parallel_indices (ix, iy) memopt=true function write_y_line!(A)
+                    A[1, iy] = A[1, iy]
+                    return
+                end
+                A3 = @zeros(4, 5, 6)
+                A2 = @zeros(4, 5)
+                @test_throws ArgumentError @parallel memopt=true write_xy_plane!(A3)
+                @test_throws ArgumentError @parallel memopt=true write_y_line!(A2)
+            end;
+            @testset "automatic ranges (memopt): error if input array has more dimensions than parallel indices" begin
+                @parallel_indices (ix, iy) memopt=true function write_xy_plane!(A)
+                    A[ix, iy, 1] = A[ix, iy, 1]
+                    A[ix, iy, 2] = A[ix, iy, 2]
+                    return
+                end
+                @parallel_indices (ix) memopt=true function write_x_line!(A)
+                    A[ix, 1] = A[ix, 1]
+                    A[ix, 2] = A[ix, 2]
+                    return
+                end
+                A3 = @zeros(4, 5, 6)
+                A2 = @zeros(4, 5)
+                @test_throws ArgumentError @parallel memopt=true write_xy_plane!(A3)
+                @test_throws ArgumentError @parallel memopt=true write_x_line!(A2)
+            end;             
             @reset_parallel_stencil()
         end;
     end;
