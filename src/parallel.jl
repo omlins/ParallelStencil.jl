@@ -231,15 +231,15 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
             if memopt
                 quote
-                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                     $metadata_function
+                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                 end
             else
                 kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
                 kernel = ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
                 quote
-                    $kernel
                     $metadata_function
+                    $kernel
                 end
             end
         end
@@ -343,16 +343,16 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if memopt
         expanded_kernel = macroexpand(caller, kernel)
         quote
-            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
             $metadata_function
+            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
         end
     else
         if package == PKG_KERNELABSTRACTIONS
             kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
         end
         return quote
-            $kernel
             $metadata_function
+            $kernel
         end # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
