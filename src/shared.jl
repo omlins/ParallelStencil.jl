@@ -97,3 +97,11 @@ check_nonconst_metadata(nonconst_metadata) = ( if !isa(nonconst_metadata, Bool) 
 ## FUNCTIONS/MACROS FOR DIVERSE SYNTAX SUGAR
 
 hasmeta_PS(caller::Module) = isdefined(caller, MOD_METADATA_PS)
+
+
+## FUNCTIONS AND MACROS FOR UNIT TESTS
+
+macro metadata(kernelcall)
+    if !is_call(kernelcall) @ArgumentError("@metadata: the argument must be a kernel call (obtained: $kernelcall).") end
+    return esc(create_metadata_call(kernelcall))
+end
