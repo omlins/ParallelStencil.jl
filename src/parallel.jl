@@ -360,29 +360,6 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function add_nb_parallel_indices_check(ranges::Union{Symbol,Expr}, configcall::Expr)
-    checked_ranges      = gensym_world("ranges", @__MODULE__)
-    nb_parallel_indices = gensym_world("nb_parallel_indices", @__MODULE__)
-    nb_input_dims       = gensym_world("nb_input_dims", @__MODULE__)
-    metadata_call       = create_metadata_call(configcall)
-    return quote
-        $checked_ranges      = $ranges
-        $nb_parallel_indices = ($metadata_call).nb_parallel_indices
-        $nb_input_dims       = ParallelStencil.get_nb_input_dims($(configcall.args[2:end]...))
-        if $nb_input_dims != $nb_parallel_indices
-            ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL)
-        end
-        $checked_ranges
-    end
-end
-
-get_nb_input_dims(args...)                             = maximum((get_nb_input_dims(arg) for arg in args); init=1)
-get_nb_input_dims(t::T) where T<:Union{Tuple,NamedTuple} = get_nb_input_dims(t...)
-get_nb_input_dims(A::AbstractArray)                   = ndims(A)
-get_nb_input_dims(A::SubArray)                        = ndims(A.parent)
-get_nb_input_dims(a::Number)                          = 1
-get_nb_input_dims(x)                                  = isbitstype(typeof(x)) ? 1 : @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars nor any other bitstypes nor (named) tuple containing any of the former. Specify ranges or nthreads and nblocks manually.")
-
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
@@ -677,3 +654,21 @@ function create_onthefly_macro(caller, m, expr, var, indices, indices_dir)
     @eval(caller, $m_macro)
     return
 end
+
+
+## FUNCTIONS TO CHECK THE AUTOMATIC DETERMINATION OF RANGES AND NB_PARALLEL_INDICES
+
+function add_nb_parallel_indices_check(ranges::Union{Symbol,Expr}, configcall::Expr)
+    metadata_call       = create_metadata_call(configcall)
+    nb_parallel_indices = :(($metadata_call).nb_parallel_indices)
+    nb_input_dims       = :(ParallelStencil.get_nb_input_dims($(configcall.args[2:end]...)))
+    errorcall           = :(ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL))
+    return :(($nb_input_dims != $nb_parallel_indices && $errorcall; $ranges))
+end
+
+get_nb_input_dims(args...)                             = maximum((get_nb_input_dims(arg) for arg in args); init=1)
+get_nb_input_dims(t::T) where T<:Union{Tuple,NamedTuple} = get_nb_input_dims(t...)
+get_nb_input_dims(A::AbstractArray)                   = ndims(A)
+get_nb_input_dims(A::SubArray)                        = ndims(A.parent)
+get_nb_input_dims(a::Number)                          = 1
+get_nb_input_dims(x)                                  = isbitstype(typeof(x)) ? 1 : @ArgumentError("automatic detection of ranges not possible in @parallel <kernelcall>: some kernel arguments are neither arrays nor scalars nor any other bitstypes nor (named) tuple containing any of the former. Specify ranges or nthreads and nblocks manually.")
