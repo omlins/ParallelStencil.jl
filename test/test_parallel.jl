@@ -2,7 +2,7 @@ using Test
 using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, @select_hardware, @current_hardware, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
-import ParallelStencil: checkargs_parallel, validate_body, parallel
+import ParallelStencil: checkargs_parallel, validate_body, parallel, parallel_indices
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
 using ParallelStencil.FieldAllocators
@@ -39,6 +39,9 @@ end
     import Polyester
 end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+
+parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=ParallelStencil.ParallelKernel.get_package(@__MODULE__)) = (ParallelStencil.checkargs_parallel_indices(args...); ParallelStencil.parallel_indices(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, args...; package=package))
+
 
 @static for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
@@ -1243,65 +1246,65 @@ eval(:(
                 @test_throws ArgumentError validate_body(:(A = @all(B) + 1; @all(A) = @all(B) + 1))
             end;
             @testset "automatic ranges: error if not all parallel indices are used" begin
-                @parallel_indices (ix, iy, iz) function write_xy_plane!(A)
-                    A[ix, iy, 1] = A[ix, iy, 1]
+                @test_throws ArgumentError parallel_indices(:((ix, iy, iz)), 
+                :(function write_xy_plane!(A)
+                    A[ix, iy, 1] = 2.0 * A[ix, iy, 1]
                     return
-                end
-                @parallel_indices (ix, iy) function write_y_line!(A)
-                    A[1, iy] = A[1, iy]
+                end))
+                @test_throws ArgumentError parallel_indices(:((ix, iy)), 
+                :(function write_y_line!(A)
+                    A[1, iy] = 2.0 * A[1, iy]
                     return
-                end
-                A3 = @zeros(4, 5, 6)
-                A2 = @zeros(4, 5)
-                @test_throws ArgumentError @parallel write_xy_plane!(A3)
-                @test_throws ArgumentError @parallel write_y_line!(A2)
+                end))
             end;
             @testset "automatic ranges: error if input array has more dimensions than parallel indices" begin
                 @parallel_indices (ix, iy) function write_xy_plane!(A)
-                    A[ix, iy, 1] = A[ix, iy, 1]
-                    A[ix, iy, 2] = A[ix, iy, 2]
+                    A[ix, iy, 1] = 2.0 * A[ix, iy, 1]
+                    A[ix, iy, 2] = 2.0 * A[ix, iy, 2]
                     return
                 end
                 @parallel_indices (ix) function write_x_line!(A)
-                    A[ix, 1] = A[ix, 1]
-                    A[ix, 2] = A[ix, 2]
+                    A[ix, 1] = 2.0 * A[ix, 1]
+                    A[ix, 2] = 2.0 * A[ix, 2]
                     return
                 end
-                A3 = @zeros(4, 5, 6)
-                A2 = @zeros(4, 5)
+                A3 = @ones(4, 5, 2)
+                A2 = @ones(4, 2)
                 @test_throws ArgumentError @parallel write_xy_plane!(A3)
                 @test_throws ArgumentError @parallel write_x_line!(A2)
+                @parallel (1:size(A3,1), 1:size(A3,2)) write_xy_plane!(A3)
+                @parallel (1:size(A2,1)) write_x_line!(A2)
+                @test A3 == 2.0 .* @ones(4, 5, 2)
+                @test A2 == 2.0 .* @ones(4, 2)
             end;
             @testset "automatic ranges (memopt): error if not all parallel indices are used" begin
-                @parallel_indices (ix, iy, iz) memopt=true function write_xy_plane!(A)
-                    A[ix, iy, 1] = A[ix, iy, 1]
+                @test_throws ArgumentError parallel_indices(:((ix, iy, iz)), :(memopt=true), 
+                :(function write_xy_plane!(A, B)
+                    A[ix, iy, 1] = 2.0 * A[ix, iy, 1] + B[ix, iy, 1]
                     return
-                end
-                @parallel_indices (ix, iy) memopt=true function write_y_line!(A)
-                    A[1, iy] = A[1, iy]
+                end))
+                @test_throws ArgumentError parallel_indices(:((ix, iy)), :(memopt=true), 
+                :(function write_y_line!(A, B)
+                    A[1, iy] = 2.0 * A[1, iy] + B[1, iy]
                     return
-                end
-                A3 = @zeros(4, 5, 6)
-                A2 = @zeros(4, 5)
-                @test_throws ArgumentError @parallel memopt=true write_xy_plane!(A3)
-                @test_throws ArgumentError @parallel memopt=true write_y_line!(A2)
+                end))
             end;
-            @testset "automatic ranges (memopt): error if input array has more dimensions than parallel indices" begin
-                @parallel_indices (ix, iy) memopt=true function write_xy_plane!(A)
-                    A[ix, iy, 1] = A[ix, iy, 1]
-                    A[ix, iy, 2] = A[ix, iy, 2]
-                    return
-                end
-                @parallel_indices (ix) memopt=true function write_x_line!(A)
-                    A[ix, 1] = A[ix, 1]
-                    A[ix, 2] = A[ix, 2]
-                    return
-                end
-                A3 = @zeros(4, 5, 6)
-                A2 = @zeros(4, 5)
-                @test_throws ArgumentError @parallel memopt=true write_xy_plane!(A3)
-                @test_throws ArgumentError @parallel memopt=true write_x_line!(A2)
-            end;             
+            @static if $package != $PKG_KERNELABSTRACTIONS
+                @testset "automatic ranges (memopt): error if input array has more dimensions than parallel indices" begin
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,0:0),) function write_xy_plane!(A, B, D)
+                        A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
+                        return
+                    end
+                    A3 = @zeros(4, 5, 6)
+                    B3 = @ones(4, 5, 6)
+                    D4 = @ones(4, 5, 6, 2)
+                    @test_throws ArgumentError @parallel memopt=true write_xy_plane!(A3, B3, D4)
+                    @static if $package in [$PKG_CUDA, $PKG_AMDGPU]
+                        @parallel (1:size(A3,1), 1:size(A3,2), 1:size(A3,3)) memopt=true write_xy_plane!(A3, B3, D4)
+                        @test A3 == 2.0 .* @ones(4, 5, 6)
+                    end
+                end;
+            end;
             @reset_parallel_stencil()
         end;
     end;
