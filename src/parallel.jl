@@ -539,7 +539,15 @@ function get_indices_dir_expr(ndims::Integer)
     end
 end
 
-determine_nb_parallel_indices(caller::Module, body::Expr, indices) = count(index -> inexpr_walk(macroexpand(caller, body), index), indices)
+function determine_nb_parallel_indices(caller::Module, body::Expr, indices)
+    body = macroexpand(caller, body)
+    used_indices = filter(index -> inexpr_walk(body, index), indices)
+    if 0 < length(used_indices) < length(indices)
+        unused_indices = filter(index -> !inexpr_walk(body, index), indices)
+        @ArgumentError("@parallel_indices: all parallel indices must be used in the kernel body (unused indices: $(join(string.(unused_indices), ", "))).")
+    end
+    return length(indices)
+end
 
 
 ## FUNCTIONS TO CREATE METADATA STORAGE
