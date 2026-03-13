@@ -1277,6 +1277,7 @@ eval(:(
                     @test metadata.shmem_dim1 == 1
                     @test metadata.shmem_dim2 == 2
                     @test metadata.shmem_optvars == ()
+                    @test metadata.shmem_optvars isa NTuple{0,Symbol}
                     @test metadata.shmem_spans == (B = (0, 0),)
                     @test metadata.stencilranges == (B = (0:0, 0:0, 0:0),)
                     @test metadata.use_any_shmem == false
@@ -1287,9 +1288,28 @@ eval(:(
                     end
                     metadata_z = @metadata metadata_memopt_zstencil_probe!(A, B, D)
                     @test metadata_z.shmem_optvars == ()
+                    @test metadata_z.shmem_optvars isa NTuple{0,Symbol}
                     @test metadata_z.shmem_spans == (B = (0, 0),)
                     @test metadata_z.stencilranges == (B = (0:0, 0:0, -1:1),)
                     @test metadata_z.use_any_shmem == false
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B function metadata_memopt_fullstencil_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix-1, iy-1, iz-1] + B[ix, iy, iz] + B[ix+1, iy+1, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
+                    @static if @isgpu($package)
+                        @test metadata_full.shmem_optvars == (:B,)
+                        @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
+                        @test metadata_full.shmem_spans == (B = (2, 2),)
+                        @test metadata_full.stencilranges == (B = (-1:1, -1:1, -1:1),)
+                        @test metadata_full.use_any_shmem == true
+                    else
+                        @test metadata_full.shmem_optvars == ()
+                        @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
+                        @test metadata_full.shmem_spans == (B = (0, 0),)
+                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:0),)
+                        @test metadata_full.use_any_shmem == false
+                    end
                     @test all(Array(A) .== 0)
                 end;
             end;
