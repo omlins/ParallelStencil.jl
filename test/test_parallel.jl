@@ -1263,18 +1263,53 @@ eval(:(
                     metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                     @test metadata isa Module
                     @test length(names(metadata)) == 1
-                    @test metadata_symbols == [:is_parallel_kernel, :loopdim, :loopsize, :memopt, :nb_parallel_indices, :nonconst_metadata, :offsets, :optranges, :optvars, :stencilranges, :use_shmemhalos]
+                    @test metadata_symbols == [:is_parallel_kernel, :loopdim, :loopsize, :loopsizes, :memopt, :nb_parallel_indices, :nonconst_metadata, :offsets, :optranges, :optvars, :shmem_dim1, :shmem_dim2, :shmem_optvars, :shmem_spans, :stencilranges, :use_any_shmem, :use_shmemhalos]
                     @test metadata.is_parallel_kernel == false
                     @test metadata.loopdim == 3
                     @test metadata.loopsize == 3
+                    @test metadata.loopsizes == (1, 1, 3)
                     @test metadata.memopt == true
                     @test metadata.nb_parallel_indices == 3
                     @test metadata.nonconst_metadata == true
                     @test metadata.offsets[:B][(0, 0)][0] == 1
                     @test metadata.optranges[:B] == (0:0, 0:0, 0:0)
                     @test metadata.optvars == (:B,)
+                    @test metadata.shmem_dim1 == 1
+                    @test metadata.shmem_dim2 == 2
+                    @test metadata.shmem_optvars == ()
+                    @test metadata.shmem_optvars isa NTuple{0,Symbol}
+                    @test metadata.shmem_spans == (B = (0, 0),)
                     @test metadata.stencilranges == (B = (0:0, 0:0, 0:0),)
+                    @test metadata.use_any_shmem == false
                     @test metadata.use_shmemhalos[:B] == true
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,-1:1),) function metadata_memopt_zstencil_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix, iy, iz-1] + B[ix, iy, iz] + B[ix, iy, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_z = @metadata metadata_memopt_zstencil_probe!(A, B, D)
+                    @test metadata_z.shmem_optvars == ()
+                    @test metadata_z.shmem_optvars isa NTuple{0,Symbol}
+                    @test metadata_z.shmem_spans == (B = (0, 0),)
+                    @test metadata_z.stencilranges == (B = (0:0, 0:0, -1:1),)
+                    @test metadata_z.use_any_shmem == false
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B function metadata_memopt_fullstencil_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix-1, iy-1, iz-1] + B[ix, iy, iz] + B[ix+1, iy+1, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
+                    @static if @isgpu($package)
+                        @test metadata_full.shmem_optvars == (:B,)
+                        @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
+                        @test metadata_full.shmem_spans == (B = (2, 2),)
+                        @test metadata_full.stencilranges == (B = (-1:1, -1:1, -1:1),)
+                        @test metadata_full.use_any_shmem == true
+                    else
+                        @test metadata_full.shmem_optvars == ()
+                        @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
+                        @test metadata_full.shmem_spans == (B = (0, 0),)
+                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:0),)
+                        @test metadata_full.use_any_shmem == false
+                    end
                     @test all(Array(A) .== 0)
                 end;
             end;
@@ -1357,12 +1392,6 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
-    end;
-))
-
-eval(:(
-    @testset "$(basename(@__FILE__)) metadata (package: $(nameof($package)))" begin
-        
     end;
 ))
 

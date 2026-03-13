@@ -369,20 +369,21 @@ function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernel
     configcall_kwarg_expr = :(configcall=$configcall)
     metadata_call   = create_metadata_call(configcall)
     metadata_module = metadata_call
+    loopdim         = :($(metadata_module).loopdim)
+    loopsizes       = :($(metadata_module).loopsizes)
     stencilranges   = :($(metadata_module).stencilranges)
     use_shmemhalos  = :($(metadata_module).use_shmemhalos)
-    optvars         = :($(metadata_module).optvars)
-    loopdim          = :($(metadata_module).loopdim)
-    loopsize        = :($(metadata_module).loopsize)
-    loopsizes       = :(($loopdim==3) ? (1, 1, $loopsize) : ($loopdim==2) ? (1, $loopsize, 1) : ($loopsize, 1, 1))
+    use_any_shmem   = :($(metadata_module).use_any_shmem)
+    shmem_dim1      = :($(metadata_module).shmem_dim1)
+    shmem_dim2      = :($(metadata_module).shmem_dim2)
+    shmem_optvars   = :($(metadata_module).shmem_optvars)
+    shmem_spans     = :($(metadata_module).shmem_spans)
     maxsize         = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
     nthreads        = :( ParallelStencil.compute_nthreads_memopt($nthreads_x_max, $nthreads_max_memopt, $maxsize, $loopdim, $stencilranges) )
     nblocks         = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     numbertype      = get_numbertype(caller) # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
-    dim1 = :(($loopdim==3) ? 1 : ($loopdim==2) ? 1 : 2) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
-    dim2 = :(($loopdim==3) ? 2 : ($loopdim==2) ? 3 : 3) # TODO: to be determined if that is what is desired for loopdim 1 and 2.
     A = gensym("A")
-    shmem = :(sum(($nthreads[$dim1]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim1])-1))*($nthreads[$dim2]+$use_shmemhalos[$A]*(length($(stencilranges)[$A][$dim2])-1))*sizeof($numbertype) for $A in $optvars))
+    shmem = :($use_any_shmem ? sum(($nthreads[$shmem_dim1] + $use_shmemhalos[$A] * ($(shmem_spans)[$A][1])) * ($nthreads[$shmem_dim2] + $use_shmemhalos[$A] * ($(shmem_spans)[$A][2])) * sizeof($numbertype) for $A in $shmem_optvars) : 0)
     if (async) return :(@parallel_async memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
     else       return :(@parallel       memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
     end
