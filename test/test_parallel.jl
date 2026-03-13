@@ -1,7 +1,7 @@
 using Test
 using ParallelStencil
 import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, @select_hardware, @current_hardware, INDICES, INDICES_INN, INDICES_DIR, ARRAYTYPES, FIELDTYPES, SCALARTYPES
-import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate
+import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @metadata
 import ParallelStencil: checkargs_parallel, validate_body, parallel, parallel_indices
 using ParallelStencil.Exceptions
 using ParallelStencil.FiniteDifferences3D
@@ -1230,8 +1230,58 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
-        @testset "6. Exceptions" begin
-            @init_parallel_stencil($package, $FloatDefault, 3)
+        @testset "6. metadata" begin
+            @require !@is_initialized()
+            @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
+            @require @is_initialized()
+            @testset "standard" begin
+                @parallel_indices (ix, iy, iz) function metadata_probe!(A, B, D)
+                    A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
+                    return
+                end
+                A = @zeros(4, 5, 6)
+                B = @ones(4, 5, 6)
+                D = @ones(4, 5, 6, 2)
+                metadata = @metadata metadata_probe!(A, B, D)
+                metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
+                @test metadata isa Module
+                @test length(names(metadata)) == 1
+                @test metadata_symbols == [:nb_parallel_indices]
+                @test metadata.nb_parallel_indices == 3
+                @test all(Array(A) .== 0)
+            end;
+            @static if $package != $PKG_KERNELABSTRACTIONS
+                @testset "memopt" begin
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,0:0),) function metadata_memopt_probe!(A, B, D)
+                        A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
+                        return
+                    end
+                    A = @zeros(4, 5, 6)
+                    B = @ones(4, 5, 6)
+                    D = @ones(4, 5, 6, 2)
+                    metadata = @metadata metadata_memopt_probe!(A, B, D)
+                    metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
+                    @test metadata isa Module
+                    @test length(names(metadata)) == 1
+                    @test metadata_symbols == [:is_parallel_kernel, :loopdim, :loopsize, :memopt, :nb_parallel_indices, :nonconst_metadata, :offsets, :optranges, :optvars, :stencilranges, :use_shmemhalos]
+                    @test metadata.is_parallel_kernel == false
+                    @test metadata.loopdim == 3
+                    @test metadata.loopsize == 3
+                    @test metadata.memopt == true
+                    @test metadata.nb_parallel_indices == 3
+                    @test metadata.nonconst_metadata == true
+                    @test metadata.offsets[:B][(0, 0)][0] == 1
+                    @test metadata.optranges[:B] == (0:0, 0:0, 0:0)
+                    @test metadata.optvars == (:B,)
+                    @test metadata.stencilranges == (B = (0:0, 0:0, 0:0),)
+                    @test metadata.use_shmemhalos[:B] == true
+                    @test all(Array(A) .== 0)
+                end;
+            end;
+            @reset_parallel_stencil()
+        end;
+        @testset "7. Exceptions" begin
+            @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
             @require @is_initialized
             @testset "arguments @parallel" begin
                 @test_throws ArgumentError checkargs_parallel();                                                  # Error: isempty(args)
@@ -1307,6 +1357,12 @@ eval(:(
             end;
             @reset_parallel_stencil()
         end;
+    end;
+))
+
+eval(:(
+    @testset "$(basename(@__FILE__)) metadata (package: $(nameof($package)))" begin
+        
     end;
 ))
 
