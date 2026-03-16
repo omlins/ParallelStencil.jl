@@ -1011,7 +1011,7 @@ eval(:(
         @testset "3. parallel <kernel> (with Fields)" begin
             @static if $package != $PKG_POLYESTER # TODO: this needs to be removed once Polyester supports padding
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+                @init_parallel_stencil($package, $FloatDefault, 3, padding=true, nonconst_metadata=true)
                 @require @is_initialized()
                 @testset "padding" begin
                     @testset "@parallel <kernel> (3D, @all)" begin
@@ -1063,7 +1063,7 @@ eval(:(
         @testset "4. global defaults" begin
             @testset "inbounds=true" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 1, inbounds=true)
+                @init_parallel_stencil($package, $FloatDefault, 1, inbounds=true, nonconst_metadata=true)
                 @require @is_initialized
                 expansion = @prettystring(1, @parallel_indices (ix) inbounds=true f(A) = (2*A; return))
                 @test occursin("Base.@inbounds begin", expansion)
@@ -1076,7 +1076,7 @@ eval(:(
             @testset "padding=true" begin
                 @static if $package != $PKG_POLYESTER # TODO: this needs to be removed once Polyester supports padding
                     @require !@is_initialized()
-                    @init_parallel_stencil($package, $FloatDefault, 3, padding=true)
+                    @init_parallel_stencil($package, $FloatDefault, 3, padding=true, nonconst_metadata=true)
                     @require @is_initialized
                     @testset "apply masks | handling padding (padding=true (globally))" begin
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
@@ -1097,7 +1097,7 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (1D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 1)
+                @init_parallel_stencil($package, $FloatDefault, 1, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
                 one = $FloatDefault(1)
@@ -1111,7 +1111,7 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (2D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 2)
+                @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
                 one = $FloatDefault(1)
@@ -1125,7 +1125,7 @@ eval(:(
             end;
             @testset "@parallel_indices (I...) (3D)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 3)
+                @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
                 one = $FloatDefault(1)
@@ -1140,7 +1140,7 @@ eval(:(
         end;
         @testset "5. parallel macros (numbertype and ndims ommited)" begin
             @require !@is_initialized()
-            @init_parallel_stencil(package = $package)
+            @init_parallel_stencil(package = $package, nonconst_metadata=true)
             @require @is_initialized
             $(interpolate(:__T__, ARRAYTYPES, :(
                 @testset "Data.__T__{T} to Data.Device.__T__{T}" begin
