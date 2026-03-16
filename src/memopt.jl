@@ -90,6 +90,7 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
         loopstart          = minimum(values(loopentrys))
         loopend            = loopsize
         use_any_shmem      = any(values(use_shmems))
+        shmem_optvars      = tuple((A for A in optvars if use_shmems[A])...)::Tuple{Vararg{Symbol}}
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, loopdim)
         shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim)
         shmem_exprs        = define_shmem_exprs(shmem_vars, loopdim)
@@ -469,7 +470,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     else
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, loopdim, loopsize, optranges, use_shmemhalos)
+    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, shmem_optvars, use_any_shmem, loopdim, loopsize, optranges, use_shmemhalos)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
@@ -1019,10 +1020,15 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, shmem_optvars::NTuple{M,Symbol} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
     stencilranges     = NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars)
+    use_shmemhalos    = NamedTuple(A => use_shmemhalos[A] for A in optvars)
+    loopsizes         = (loopdim==3) ? (1, 1, loopsize) : (loopdim==2) ? (1, loopsize, 1) : (loopsize, 1, 1)
+    shmem_dim1        = (loopdim==3) ? 1 : (loopdim==2) ? 1 : 2
+    shmem_dim2        = (loopdim==3) ? 2 : (loopdim==2) ? 3 : 3
+    shmem_spans       = NamedTuple(A => (length(stencilranges[A][shmem_dim1]) - 1, length(stencilranges[A][shmem_dim2]) - 1) for A in optvars)
     if nonconst_metadata
         storeexpr = quote
             is_parallel_kernel = $is_parallel_kernel
@@ -1031,9 +1037,15 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             stencilranges      = $stencilranges
             offsets            = $offsets
             optvars            = $optvars
+            shmem_optvars      = $shmem_optvars
+            shmem_spans        = $shmem_spans
             loopdim            = $loopdim
             loopsize           = $loopsize
+            loopsizes          = $loopsizes
+            shmem_dim1         = $shmem_dim1
+            shmem_dim2         = $shmem_dim2
             optranges          = $optranges
+            use_any_shmem      = $use_any_shmem
             use_shmemhalos     = $use_shmemhalos
         end
     else
@@ -1044,9 +1056,15 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             const stencilranges      = $stencilranges
             const offsets            = $offsets
             const optvars            = $optvars
+            const shmem_optvars      = $shmem_optvars
+            const shmem_spans        = $shmem_spans
             const loopdim            = $loopdim
             const loopsize           = $loopsize
+            const loopsizes          = $loopsizes
+            const shmem_dim1         = $shmem_dim1
+            const shmem_dim2         = $shmem_dim2
             const optranges          = $optranges
+            const use_any_shmem      = $use_any_shmem
             const use_shmemhalos     = $use_shmemhalos
         end
     end

@@ -38,7 +38,7 @@ Base.retry_load_extensions()
     eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, $FloatDefault, 3)
+        @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
         @require @is_initialized()
 
         @testset "Pass-through macro mapping" begin
