@@ -36,7 +36,7 @@ eval(:(
         $(interpolate(:__padding__, (false, package!=PKG_POLYESTER), :( #TODO: this needs to be restored to (false, true) when Polyester supports padding.
             @testset "(padding=$__padding__)" begin
                 @require !@is_initialized()
-                @init_parallel_stencil($package, $FloatDefault, 2, padding=__padding__)
+                @init_parallel_stencil($package, $FloatDefault, 2, padding=__padding__, nonconst_metadata=true)
                 @require @is_initialized()
                 nxy = (9, 7)
                 A     =   @IField(nxy,  @rand);
