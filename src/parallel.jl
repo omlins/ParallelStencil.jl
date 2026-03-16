@@ -361,38 +361,6 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-@generated function compute_memopt_shmem(::Val{optvars}, ::Val{use_shmemhalos}, ::Val{shmem_spans}, ::Val{shmem_dim1}, ::Val{shmem_dim2}, nthreads, ::Type{T}) where {optvars, use_shmemhalos, shmem_spans, shmem_dim1, shmem_dim2, T}
-    terms = [:(
-        (nthreads[$shmem_dim1] + $(getproperty(use_shmemhalos, A)) * $(getproperty(shmem_spans, A)[1])) *
-        (nthreads[$shmem_dim2] + $(getproperty(use_shmemhalos, A)) * $(getproperty(shmem_spans, A)[2])) *
-        sizeof(T)
-    ) for A in optvars]
-    if isempty(terms)
-        return :(0)
-    elseif length(terms) == 1
-        return terms[1]
-    else
-        return Expr(:call, :+, terms...)
-    end
-end
-
-@generated function compute_memopt_ranges(::Val{is_parallel_kernel}, ::Val{nb_parallel_indices}, ::Val{loopdim}, nthreads_x_max, nthreads_max_memopt, args...) where {is_parallel_kernel, nb_parallel_indices, loopdim}
-    if is_parallel_kernel
-        range_expr = :(ParallelStencil.get_ranges_memopt(nthreads_x_max, nthreads_max_memopt, $loopdim, args...))
-    else
-        range_expr = :(ParallelStencil.ParallelKernel.get_ranges(args...))
-    end
-    errorcall = :(ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL))
-    return quote
-        nb_input_dims = ParallelStencil.get_nb_input_dims(args...)
-        nb_dims_match = (nb_input_dims == $nb_parallel_indices)
-        if nb_dims_match isa Bool
-            nb_dims_match || $errorcall
-        end
-        $range_expr
-    end
-end
-
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
@@ -494,6 +462,41 @@ function get_ranges_memopt(nthreads_x_max, nthreads_max_memopt, loopdim, args...
                           (rests[3] != 0) ? (nthreads[3] - rests[3]) : 0 )
     ranges = ParallelKernel.compute_ranges(maxsize .+ ranges_adjustment) # NOTE: this makes memopt possible also if the maximum array size is not dividable without rest by the number of threads; however, it requires that all array accesses in the kernel are bounds checked. For parallel indices kernels the user has to guarantee that himself.
     return ranges
+end
+
+
+## FUNCTIONS TO COMPUTE SHARED MEMORY SIZE AND RANGES FOR MEMOPT
+
+@generated function compute_memopt_shmem(::Val{optvars}, ::Val{use_shmemhalos}, ::Val{shmem_spans}, ::Val{shmem_dim1}, ::Val{shmem_dim2}, nthreads, ::Type{T}) where {optvars, use_shmemhalos, shmem_spans, shmem_dim1, shmem_dim2, T}
+    terms = [:(
+        (nthreads[$shmem_dim1] + $(getproperty(use_shmemhalos, A)) * $(getproperty(shmem_spans, A)[1])) *
+        (nthreads[$shmem_dim2] + $(getproperty(use_shmemhalos, A)) * $(getproperty(shmem_spans, A)[2])) *
+        sizeof(T)
+    ) for A in optvars]
+    if isempty(terms)
+        return :(0)
+    elseif length(terms) == 1
+        return terms[1]
+    else
+        return Expr(:call, :+, terms...)
+    end
+end
+
+@generated function compute_memopt_ranges(::Val{is_parallel_kernel}, ::Val{nb_parallel_indices}, ::Val{loopdim}, nthreads_x_max, nthreads_max_memopt, args...) where {is_parallel_kernel, nb_parallel_indices, loopdim}
+    if is_parallel_kernel
+        range_expr = :(ParallelStencil.get_ranges_memopt(nthreads_x_max, nthreads_max_memopt, $loopdim, args...))
+    else
+        range_expr = :(ParallelStencil.ParallelKernel.get_ranges(args...))
+    end
+    errorcall = :(ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL))
+    return quote
+        nb_input_dims = ParallelStencil.get_nb_input_dims(args...)
+        nb_dims_match = (nb_input_dims == $nb_parallel_indices)
+        if nb_dims_match isa Bool
+            nb_dims_match || $errorcall
+        end
+        $range_expr
+    end
 end
 
 
