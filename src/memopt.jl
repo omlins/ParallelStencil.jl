@@ -1024,6 +1024,7 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
     stencilranges     = NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars)
+    use_shmemhalos    = NamedTuple(A => use_shmemhalos[A] for A in optvars)
     loopsizes         = (loopdim==3) ? (1, 1, loopsize) : (loopdim==2) ? (1, loopsize, 1) : (loopsize, 1, 1)
     shmem_dim1        = (loopdim==3) ? 1 : (loopdim==2) ? 1 : 2
     shmem_dim2        = (loopdim==3) ? 2 : (loopdim==2) ? 3 : 3
