@@ -597,8 +597,7 @@ function create_metadata_function(kernel::Expr, metadata_module::Module) # NOTE:
     set_body!(metadata_function, quote
         return $metadata_module
     end)
-    Base.pushmeta!(metadata_function, :inline)
-    return metadata_function
+    return :(@inline $metadata_function)
 end
 
 function create_metadata_call(configcall::Expr)
