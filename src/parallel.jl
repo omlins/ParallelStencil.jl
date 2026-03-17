@@ -38,7 +38,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     Automatic computation of `ranges` for `@parallel <kernelcall>` is only possible if the number of parallel indices used by the kernel is equal to the number of dimensions of the highest-dimensional input arrays. Otherwise, specify the `ranges` manually with `@parallel ranges=... <kernelcall>`.
 
 !!! note "Runtime hardware selection"
-    When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
+    When KernelAbstractions is chosen as the package for parallelization, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 # Arguments
 - `kernelcall`: a call to a kernel that is declared parallel.
@@ -361,15 +361,6 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function precompute_parallel_memopt_arg(arg::Union{Symbol,Expr}, prefix::AbstractString)
-    if isa(arg, Symbol)
-        return Expr[], arg
-    else
-        arg_var = gensym(prefix)
-        return [:(local $arg_var = $arg)], arg_var
-    end
-end
-
 function parallel_call_memopt(caller::Module, metadata_expr::Union{Symbol,Expr}, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
@@ -450,7 +441,7 @@ function compute_loopsize(package::Symbol)
 end
 
 
-## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS
+## FUNCTIONS TO COMPUTE NTHREADS, NBLOCKS, SHARED MEMORY SIZE AND RANGES
 
 function compute_nthreads_memopt(nthreads_x_max, nthreads_max_memopt, maxsize, loopdim, stencilranges) # This is a heuristic, which results typcially in (32,4,1) threads for a 3-D case.
     maxsize = promote_maxsize(maxsize)
@@ -477,8 +468,6 @@ function get_ranges_memopt(nthreads_x_max, nthreads_max_memopt, loopdim, args...
     return ranges
 end
 
-
-## FUNCTIONS TO COMPUTE SHARED MEMORY SIZE AND RANGES FOR MEMOPT
 
 @generated function compute_memopt_shmem(::Val{optvars}, ::Val{use_shmemhalos}, ::Val{shmem_spans}, ::Val{shmem_dim1}, ::Val{shmem_dim2}, nthreads, ::Type{T}) where {optvars, use_shmemhalos, shmem_spans, shmem_dim1, shmem_dim2, T}
     terms = [:(
@@ -537,6 +526,15 @@ end
             nb_dims_match || $errorcall
         end
         $range_expr
+    end
+end
+
+function precompute_parallel_memopt_arg(arg::Union{Symbol,Expr}, prefix::AbstractString)
+    if isa(arg, Symbol)
+        return Expr[], arg
+    else
+        arg_var = gensym(prefix)
+        return [:(local $arg_var = $arg)], arg_var
     end
 end
 
