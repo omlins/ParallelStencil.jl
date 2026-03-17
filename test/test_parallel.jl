@@ -59,7 +59,7 @@ eval(:(
                 @static if $package == $PKG_CUDA
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("CUDA.@cuda", call)
-                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
                     @test occursin("CUDA.synchronize(CUDA.stream(); blocking = true)", call)
                     call = @prettystring(1, @parallel ranges f(A))
@@ -73,11 +73,14 @@ eval(:(
                     call = @prettystring(2, @parallel memopt=true f(A))
                     # @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
                     call = @prettystring(2, @parallel ranges memopt=true f(A))
-                    @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
+                    @test occursin("ParallelStencil.compute_memopt_launch_config(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("CUDA.@cuda blocks = var\"##nblocks", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
                 elseif $package == $PKG_AMDGPU
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("AMDGPU.@roc", call)
-                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
                     @test occursin("AMDGPU.synchronize(AMDGPU.stream(); blocking = true)", call)
                     call = @prettystring(1, @parallel ranges f(A))
@@ -91,14 +94,17 @@ eval(:(
                     call = @prettystring(2, @parallel memopt=true f(A))
                     # @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) groupsize = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = AMDGPU.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
                     call = @prettystring(2, @parallel ranges memopt=true f(A))
-                    @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) groupsize = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = AMDGPU.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
+                    @test occursin("ParallelStencil.compute_memopt_launch_config(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("AMDGPU.@roc gridsize = var\"##nblocks", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
                 elseif $package == $PKG_KERNELABSTRACTIONS
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
                     @test occursin("handle(ParallelStencil.ParallelKernel.current_hardware(@__MODULE__()), :$PKG_KERNELABSTRACTIONS)", call)
                     @test occursin("compute_nblocks", call)
                     @test occursin("compute_nthreads", call)
-                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
                     @test !occursin("CUDA.@cuda", call)
                     @test !occursin("AMDGPU.@roc", call)
@@ -121,17 +127,20 @@ eval(:(
                 elseif @iscpu($package)
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
-                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
                     @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                     @test @prettystring(1, @parallel nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))"
                     @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
                     call = @prettystring(1, @parallel stream=mystream f(A))
                     @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
-                    @test occursin("ParallelStencil.ParallelKernel.get_ranges(A)", call)
+                    @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
                     # @test @prettystring(2, @parallel memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
-                    @test @prettystring(2, @parallel ranges memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
+                    call = @prettystring(2, @parallel ranges memopt=true f(A))
+                    @test occursin("ParallelStencil.compute_memopt_launch_config(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
                 end;
             end;
             @testset "KernelAbstractions runtime reselection" begin
