@@ -361,6 +361,15 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
+function precompute_parallel_memopt_arg(arg::Union{Symbol,Expr}, prefix::AbstractString)
+    if isa(arg, Symbol)
+        return Expr[], arg
+    else
+        arg_var = gensym(prefix)
+        return [:(local $arg_var = $arg)], arg_var
+    end
+end
+
 function parallel_call_memopt(caller::Module, metadata_expr::Union{Symbol,Expr}, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
@@ -368,27 +377,25 @@ function parallel_call_memopt(caller::Module, metadata_expr::Union{Symbol,Expr},
     nthreads_max_memopt = determine_nthreads_max_memopt(package)
     configcall_kwarg_expr = :(configcall=$configcall)
     numbertype      = get_numbertype(caller) # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
-    launch_config_var = gensym("launch_config")
     nblocks_var = gensym("nblocks")
     nthreads_var = gensym("nthreads")
     shmem_var = gensym("shmem")
-    launch_config_expr = :(ParallelStencil.compute_memopt_launch_config(Val($metadata_expr.loopsizes), Val($metadata_expr.loopdim), Val($metadata_expr.stencilranges), $nthreads_x_max, $nthreads_max_memopt, $ranges))
+    range_setup_exprs, range_arg = precompute_parallel_memopt_arg(ranges, "ranges")
+    nthreads_nblocks_expr = :(ParallelStencil.compute_memopt_nthreads_nblocks(Val($metadata_expr.loopsizes), Val($metadata_expr.loopdim), Val($metadata_expr.stencilranges), $nthreads_x_max, $nthreads_max_memopt, $range_arg))
     shmem_expr = :(ParallelStencil.compute_memopt_shmem(Val($metadata_expr.shmem_optvars), Val($metadata_expr.use_shmemhalos), Val($metadata_expr.shmem_spans), Val($metadata_expr.shmem_dim1), Val($metadata_expr.shmem_dim2), $nthreads_var, $numbertype))
     if async
         return quote
-            local $launch_config_var = $launch_config_expr
-            local $nblocks_var = $launch_config_var[1]
-            local $nthreads_var = $launch_config_var[2]
+            $(range_setup_exprs...)
+            local $nblocks_var, $nthreads_var = $nthreads_nblocks_expr
             local $shmem_var = $shmem_expr
-            @parallel_async memopt=false $configcall_kwarg_expr $ranges $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
+            @parallel_async memopt=false $configcall_kwarg_expr $range_arg $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
         end
     else
         return quote
-            local $launch_config_var = $launch_config_expr
-            local $nblocks_var = $launch_config_var[1]
-            local $nthreads_var = $launch_config_var[2]
+            $(range_setup_exprs...)
+            local $nblocks_var, $nthreads_var = $nthreads_nblocks_expr
             local $shmem_var = $shmem_expr
-            @parallel memopt=false $configcall_kwarg_expr $ranges $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
+            @parallel memopt=false $configcall_kwarg_expr $range_arg $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
         end
     end
 end
@@ -488,7 +495,7 @@ end
     end
 end
 
-@generated function compute_memopt_launch_config(::Val{loopsizes}, ::Val{loopdim}, ::Val{stencilranges}, nthreads_x_max, nthreads_max_memopt, ranges) where {loopsizes, loopdim, stencilranges}
+@generated function compute_memopt_nthreads_nblocks(::Val{loopsizes}, ::Val{loopdim}, ::Val{stencilranges}, nthreads_x_max, nthreads_max_memopt, ranges) where {loopsizes, loopdim, stencilranges}
     return quote
         maxsize = cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), $loopsizes)
         nthreads = ParallelStencil.compute_nthreads_memopt(nthreads_x_max, nthreads_max_memopt, maxsize, $loopdim, $stencilranges)
