@@ -191,7 +191,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
         else
             if isempty(posargs)
-                ranges = add_nb_parallel_indices_check(:(ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...))), configcall)
+                ranges = :(ParallelStencil.compute_parallel_ranges(Val(($(create_metadata_call(configcall))).nb_parallel_indices), $(configcall.args[2:end]...)))
                 ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
             else
                 ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
@@ -361,35 +361,44 @@ end
 
 ## @PARALLEL CALL FUNCTIONS
 
-function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
+function parallel_call_memopt(caller::Module, metadata_expr::Union{Symbol,Expr}, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     if haskey(backend_kwargs_expr, :shmem) @KeywordArgumentError("@parallel <kernelcall>: keyword `shmem` is not allowed when memopt=true is set.") end
     package             = get_package(caller)
     nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
     nthreads_max_memopt = determine_nthreads_max_memopt(package)
     configcall_kwarg_expr = :(configcall=$configcall)
-    metadata_call   = create_metadata_call(configcall)
-    metadata_module = metadata_call
-    loopdim         = :($(metadata_module).loopdim)
-    loopsizes       = :($(metadata_module).loopsizes)
-    stencilranges   = :($(metadata_module).stencilranges)
-    use_shmemhalos  = :($(metadata_module).use_shmemhalos)
-    use_any_shmem   = :($(metadata_module).use_any_shmem)
-    shmem_dim1      = :($(metadata_module).shmem_dim1)
-    shmem_dim2      = :($(metadata_module).shmem_dim2)
-    shmem_optvars   = :($(metadata_module).shmem_optvars)
-    shmem_spans     = :($(metadata_module).shmem_spans)
-    maxsize         = :(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges($ranges)), $loopsizes))
-    nthreads        = :( ParallelStencil.compute_nthreads_memopt($nthreads_x_max, $nthreads_max_memopt, $maxsize, $loopdim, $stencilranges) )
-    nblocks         = :( ParallelStencil.ParallelKernel.compute_nblocks($maxsize, $nthreads) )
     numbertype      = get_numbertype(caller) # not :(eltype($(optvars)[1])) # TODO: see how to obtain number type properly for each array: the type of the call call arguments corresponding to the optimization variables should be checked
-    if get_nonconst_metadata(caller)
-        A = gensym("A")
-        shmem = :($use_any_shmem ? sum(($nthreads[$shmem_dim1] + $use_shmemhalos[$A] * ($(shmem_spans)[$A][1])) * ($nthreads[$shmem_dim2] + $use_shmemhalos[$A] * ($(shmem_spans)[$A][2])) * sizeof($numbertype) for $A in $shmem_optvars) : 0)
+    launch_config_var = gensym("launch_config")
+    nblocks_var = gensym("nblocks")
+    nthreads_var = gensym("nthreads")
+    shmem_var = gensym("shmem")
+    launch_config_expr = :(ParallelStencil.compute_memopt_launch_config(Val($metadata_expr.loopsizes), Val($metadata_expr.loopdim), Val($metadata_expr.stencilranges), $nthreads_x_max, $nthreads_max_memopt, $ranges))
+    shmem_expr = :(ParallelStencil.compute_memopt_shmem(Val($metadata_expr.shmem_optvars), Val($metadata_expr.use_shmemhalos), Val($metadata_expr.shmem_spans), Val($metadata_expr.shmem_dim1), Val($metadata_expr.shmem_dim2), $nthreads_var, $numbertype))
+    if async
+        return quote
+            local $launch_config_var = $launch_config_expr
+            local $nblocks_var = $launch_config_var[1]
+            local $nthreads_var = $launch_config_var[2]
+            local $shmem_var = $shmem_expr
+            @parallel_async memopt=false $configcall_kwarg_expr $ranges $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
+        end
     else
-        shmem = :(ParallelStencil.compute_memopt_shmem(Val($shmem_optvars), Val($use_shmemhalos), Val($shmem_spans), Val($shmem_dim1), Val($shmem_dim2), $nthreads, $numbertype))
+        return quote
+            local $launch_config_var = $launch_config_expr
+            local $nblocks_var = $launch_config_var[1]
+            local $nthreads_var = $launch_config_var[2]
+            local $shmem_var = $shmem_expr
+            @parallel memopt=false $configcall_kwarg_expr $ranges $nblocks_var $nthreads_var shmem=$shmem_var $(backend_kwargs_expr...) $kernelcall
+        end
     end
-    if (async) return :(@parallel_async memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs
-    else       return :(@parallel       memopt=false $configcall_kwarg_expr $ranges $nblocks $nthreads shmem=$shmem $(backend_kwargs_expr...) $kernelcall)  #TODO: ...
+end
+
+function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
+    metadata_call = create_metadata_call(configcall)
+    metadata_var = gensym("metadata")
+    quote
+        local $metadata_var = $metadata_call
+        $(parallel_call_memopt(caller, metadata_var, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall))
     end
 end
 
@@ -398,16 +407,13 @@ function parallel_call_memopt(caller::Module, kernelcall::Expr, backend_kwargs_e
     nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
     nthreads_max_memopt = determine_nthreads_max_memopt(package)
     metadata_call       = create_metadata_call(configcall)
-    metadata_module     = metadata_call
-    loopdim             = :($(metadata_module).loopdim)
-    is_parallel_kernel  = :($(metadata_module).is_parallel_kernel)
-    if get_nonconst_metadata(caller)
-        ranges = add_nb_parallel_indices_check(:( ($is_parallel_kernel) ? ParallelStencil.get_ranges_memopt($nthreads_x_max, $nthreads_max_memopt, $loopdim, $(configcall.args[2:end]...)) : ParallelStencil.ParallelKernel.get_ranges($(configcall.args[2:end]...))), configcall)
-    else
-        nb_parallel_indices = :($(metadata_module).nb_parallel_indices)
-        ranges = :(ParallelStencil.compute_memopt_ranges(Val($is_parallel_kernel), Val($nb_parallel_indices), Val($loopdim), $nthreads_x_max, $nthreads_max_memopt, $(configcall.args[2:end]...)))
+    metadata_var = gensym("metadata")
+    ranges_var = gensym("ranges")
+    quote
+        local $metadata_var = $metadata_call
+        local $ranges_var = ParallelStencil.compute_memopt_ranges(Val($metadata_var.is_parallel_kernel), Val($metadata_var.nb_parallel_indices), Val($metadata_var.loopdim), $nthreads_x_max, $nthreads_max_memopt, $(configcall.args[2:end]...))
+        $(parallel_call_memopt(caller, metadata_var, ranges_var, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall))
     end
-    parallel_call_memopt(caller, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall)
 end
 
 
@@ -479,6 +485,34 @@ end
         return terms[1]
     else
         return Expr(:call, :+, terms...)
+    end
+end
+
+@generated function compute_memopt_launch_config(::Val{loopsizes}, ::Val{loopdim}, ::Val{stencilranges}, nthreads_x_max, nthreads_max_memopt, ranges) where {loopsizes, loopdim, stencilranges}
+    return quote
+        maxsize = cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ranges)), $loopsizes)
+        nthreads = ParallelStencil.compute_nthreads_memopt(nthreads_x_max, nthreads_max_memopt, maxsize, $loopdim, $stencilranges)
+        nblocks = ParallelStencil.ParallelKernel.compute_nblocks(maxsize, nthreads)
+        (nblocks, nthreads)
+    end
+end
+
+@generated function check_nb_parallel_indices(::Val{nb_parallel_indices}, args...) where {nb_parallel_indices}
+    errorcall = :(ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL))
+    return quote
+        nb_input_dims = ParallelStencil.get_nb_input_dims(args...)
+        nb_dims_match = (nb_input_dims == $nb_parallel_indices)
+        if nb_dims_match isa Bool
+            nb_dims_match || $errorcall
+        end
+        nothing
+    end
+end
+
+@generated function compute_parallel_ranges(::Val{nb_parallel_indices}, args...) where {nb_parallel_indices}
+    return quote
+        ParallelStencil.check_nb_parallel_indices(Val($nb_parallel_indices), args...)
+        ParallelStencil.ParallelKernel.get_ranges(args...)
     end
 end
 
@@ -708,10 +742,7 @@ end
 
 function add_nb_parallel_indices_check(ranges::Union{Symbol,Expr}, configcall::Expr)
     metadata_call       = create_metadata_call(configcall)
-    nb_parallel_indices = :(($metadata_call).nb_parallel_indices)
-    nb_input_dims       = :(ParallelStencil.get_nb_input_dims($(configcall.args[2:end]...)))
-    errorcall           = :(ParallelStencil.@ArgumentError(ParallelStencil.ERRMSG_AUTOMATIC_RANGES_PARALLEL))
-    return :(($nb_input_dims != $nb_parallel_indices && $errorcall; $ranges))
+    return :(ParallelStencil.check_nb_parallel_indices(Val(($metadata_call).nb_parallel_indices), $(configcall.args[2:end]...)); $ranges)
 end
 
 get_nb_input_dims(args...)                             = maximum((get_nb_input_dims(arg) for arg in args); init=1)
