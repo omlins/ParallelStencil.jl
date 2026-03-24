@@ -60,7 +60,9 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     optranges      = isnothing(optranges) ? optranges : eval_arg(caller, optranges)
     readonlyvars   = find_vars(body, indices; readonly=true)
-    if length(indices) != 3 @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: optimization can only be applied in 3-D @parallel kernels and @parallel_indices kernels with three indices.") end
+    if length(indices) ∉ (2, 3) @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: optimization can only be applied in 2-D and 3-D @parallel kernels and @parallel_indices kernels.") end
+    if loopdim != length(indices) @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: two-index kernels require `loopdim=2` and three-index kernels require `loopdim=3`.") end
+    if loopdim == 2 && !isnothing(use_shmemhalos) @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: shared-memory-related keywords are not supported for two-index memory-optimized kernels.") end
     if optvars == (Symbol(""),)
         optvars = Tuple(keys(readonlyvars))
     else
@@ -83,7 +85,99 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     optranges             = define_optranges(optranges, optvars, offsets, int_type, package)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, loopdim)
 
-    if loopdim == 3
+    if loopdim == 2
+                loopentrys = Dict(A => 1 - (offset_maxs[A][2] - offset_mins[A][2]) for A in optvars)
+                oy_maxs = Dict(A => offset_maxs[A][2] for A in optvars)
+                loopstart = minimum(values(loopentrys))
+                loopend = loopsize
+                use_any_shmem = false
+                shmem_optvars = ()
+                use_shmemhalos = Dict(A => false for A in optvars)
+                ix, iy = indices
+                ranges = RANGES_VARNAME
+                range_y_start = :(($ranges[2])[1])
+                range_y_end = :(($ranges[2])[end])
+                i = gensym_world("i", @__MODULE__)
+                loopoffset = gensym_world("loopoffset", @__MODULE__)
+
+                for A in optvars
+                        regqueue_tail = regqueue_tails[A]
+                        regqueue_head = regqueue_heads[A]
+                        for ox in keys(regqueue_tail)
+                                for oy in keys(regqueue_tail[ox])
+                                        body = substitute(body, regtarget(A, (ox..., oy), indices), regqueue_tail[ox][oy])
+                                end
+                        end
+                        for ox in keys(regqueue_head)
+                                for oy in keys(regqueue_head[ox])
+                                        body = substitute(body, regtarget(A, (ox..., oy), indices), regqueue_head[ox][oy])
+                                end
+                        end
+                end
+
+                body = quote
+                                        $loopoffset = (@blockIdx().y-1)*$loopsize + $range_y_start-1
+$((wrap_loop(i, loopstart:0,
+                quote
+                                                $iy = $i + $loopoffset
+                                                if ($iy > $range_y_end) ParallelStencil.@return_nothing; end
+$((wrap_if(:($i > $(loopentry-1)),
+             :(               $reg       = (0<$ix+$(ox[1])<=size($A,1) && 0<$iy+$oy<=size($A,2)) ? $(regtarget(A, (ox...,oy), indices)) : $reg
+                )
+                ;unless=(loopentry==loopstart)
+        )
+        for A in optvars for (ox, regs) in regqueue_heads[A] for (oy, reg) in regs for loopentry = (loopentrys[A],)
+    )...
+)
+$((
+             :(
+                                                $(regs[oy]) = $(regs[oy+1])
+                )
+        for A in optvars for regs in values(regqueue_tails[A]) for oy in sort(keys(regs)) for (loopentry, oy_max) = ((loopentrys[A], oy_maxs[A]),) if oy<=oy_max-2
+    )...
+)
+$((
+             :(
+                                                $reg           = $(regqueue_heads[A][ox][oy_max])
+                )
+        for A in optvars for (ox, regs) in regqueue_tails[A] for (oy, reg) in regs for (loopentry, oy_max) = ((loopentrys[A], oy_maxs[A]),) if oy==oy_max-1 && haskey(regqueue_heads[A], ox) && haskey(regqueue_heads[A][ox], oy_max)
+    )...
+)
+                end
+        ))
+)
+$((wrap_loop(i, 1:loopend,
+                quote
+                                                $iy = $i + $loopoffset
+                                                if ($iy > $range_y_end) ParallelStencil.@return_nothing; end
+$((wrap_if(:($i > $(loopentry-1)),
+             :(               $reg       = (0<$ix+$(ox[1])<=size($A,1) && 0<$iy+$oy<=size($A,2)) ? $(regtarget(A, (ox...,oy), indices)) : $reg
+                )
+                ;unless=(loopentry<=1)
+        )
+        for A in optvars for (ox, regs) in regqueue_heads[A] for (oy, reg) in regs for loopentry = (loopentrys[A],)
+    )...
+)
+                                                $body
+$((
+             :(
+                                                $(regs[oy]) = $(regs[oy+1])
+                )
+        for A in optvars for regs in values(regqueue_tails[A]) for oy in sort(keys(regs)) for (loopentry, oy_max) = ((loopentrys[A], oy_maxs[A]),) if oy<=oy_max-2
+    )...
+)
+$((
+             :(
+                                                $reg           = $(regqueue_heads[A][ox][oy_max])
+                )
+        for A in optvars for (ox, regs) in regqueue_tails[A] for (oy, reg) in regs for (loopentry, oy_max) = ((loopentrys[A], oy_maxs[A]),) if oy==oy_max-1 && haskey(regqueue_heads[A], ox) && haskey(regqueue_heads[A][ox], oy_max)
+    )...
+)
+                end
+        ))
+)
+                                     end
+    elseif loopdim == 3
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, use_shmemhalos, loopdim)
         oz_span_max        = maximum(values(oz_spans))
         # TODO: this only leads to correct result after row two executions in a row, probably due to the same compiler bug has below. # loopsize           = (oz_span_max<=0) ? 1 : loopsize # NOTE: if the stencilrange in z is only one point, no loop is needed.
@@ -541,6 +635,19 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
                     elseif haskey(offsets_by_z[A], k1)                                    offsets_by_z[A][k1][k2]  = 1
                     else                                                                  offsets_by_z[A][k1]      = Dict(k2 => 1)
                     end
+                elseif loopdim == 2
+                    k1 = (offsets[1],)
+                    k2 = offsets[2]
+                    if     haskey(offsets_by_xy[A], k1) && haskey(offsets_by_xy[A][k1], k2) offsets_by_xy[A][k1][k2] += 1
+                    elseif haskey(offsets_by_xy[A], k1)                                     offsets_by_xy[A][k1][k2]  = 1
+                    else                                                                    offsets_by_xy[A][k1]      = Dict(k2 => 1)
+                    end
+                    k1 = offsets[2]
+                    k2 = (offsets[1],)
+                    if     haskey(offsets_by_z[A], k1) && haskey(offsets_by_z[A][k1], k2) offsets_by_z[A][k1][k2] += 1
+                    elseif haskey(offsets_by_z[A], k1)                                    offsets_by_z[A][k1][k2]  = 1
+                    else                                                                  offsets_by_z[A][k1]      = Dict(k2 => 1)
+                    end
                 else
                     @ArgumentError("memopt: only loopdim=3 is currently supported.")
                 end
@@ -559,18 +666,18 @@ function define_optranges(optranges_arg, optvars, offsets, int_type, package)
     compute_capability = get_compute_capability(package)
     optranges = Dict()
     for A in optvars
-        zspan_max     = 0
-        oxy_zspan_max = ()
-        for oxy in keys(offsets[A])
-            zspan = length(keys(offsets[A][oxy]))
-            if zspan > zspan_max
-                zspan_max     = zspan
-                oxy_zspan_max = oxy
+        loopspan_max = 0
+        offsets_with_max_span = ()
+        for nonloop_offsets in keys(offsets[A])
+            loopspan = length(keys(offsets[A][nonloop_offsets]))
+            if loopspan > loopspan_max
+                loopspan_max = loopspan
+                offsets_with_max_span = nonloop_offsets
             end
         end
         fullrange    = typemin(int_type):typemax(int_type)
-        pointrange_x = oxy_zspan_max[1]: oxy_zspan_max[1]
-        pointrange_y = oxy_zspan_max[2]: oxy_zspan_max[2]
+        pointrange_x = offsets_with_max_span[1]:offsets_with_max_span[1]
+        pointrange_y = (length(offsets_with_max_span) > 1) ? (offsets_with_max_span[2]:offsets_with_max_span[2]) : fullrange
         if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                   optranges[A] = getproperty(optranges_arg, A)
         elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))  optranges[A] = (fullrange,    fullrange,    fullrange)
         elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                          optranges[A] = (fullrange,    fullrange,    fullrange)
@@ -634,6 +741,45 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
                 k2 = oz
                 if haskey(regqueue_head, k1) && haskey(regqueue_head[k1], k2) @ModuleInternalError("regqueue_head entry exists already.") end
                 reg = gensym_world(varname(A, (oxy..., oz)), @__MODULE__);  nb_regs_head += 1
+                if haskey(regqueue_head, k1) regqueue_head[k1][k2] = reg
+                else                         regqueue_head[k1]     = Dict(k2 => reg)
+                end
+            end
+        end
+    elseif loopdim == 2
+        optranges_x = optranges[1]
+        optranges_y = optranges[2]
+        offsets_x = filter(ox -> ox[1] ∈ optranges_x, keys(offsets))
+        if isempty(offsets_x) @IncoherentArgumentError("incoherent argument in memopt: optranges in x dimension do not include any array access.") end
+        offset_min = (typemax(int_type), typemax(int_type), 0)
+        offset_max = (typemin(int_type), typemin(int_type), 0)
+        for ox in offsets_x
+            offsets_y = sort(filter(y -> y ∈ optranges_y, keys(offsets[ox])))
+            if isempty(offsets_y) @IncoherentArgumentError("incoherent argument in memopt: optranges in y dimension do not include any array access.") end
+            offset_min = (min(offset_min[1], ox[1]),
+                          min(offset_min[2], minimum(offsets_y)),
+                          0)
+            offset_max = (max(offset_max[1], ox[1]),
+                          max(offset_max[2], maximum(offsets_y)),
+                          0)
+        end
+        oy_max = offset_max[2]
+        for ox in offsets_x
+            offsets_y = sort(filter(y -> y ∈ optranges_y, keys(offsets[ox])))
+            k1 = ox
+            for oy = offsets_y[1]:oy_max-1
+                k2 = oy
+                if haskey(regqueue_tail, k1) && haskey(regqueue_tail[k1], k2) @ModuleInternalError("regqueue_tail entry exists already.") end
+                reg = gensym_world(varname(A, (ox..., oy)), @__MODULE__);  nb_regs_tail += 1
+                if haskey(regqueue_tail, k1) regqueue_tail[k1][k2] = reg
+                else                         regqueue_tail[k1]     = Dict(k2 => reg)
+                end
+            end
+            oy = offsets_y[end]
+            if oy == oy_max
+                k2 = oy
+                if haskey(regqueue_head, k1) && haskey(regqueue_head[k1], k2) @ModuleInternalError("regqueue_head entry exists already.") end
+                reg = gensym_world(varname(A, (ox..., oy)), @__MODULE__);  nb_regs_head += 1
                 if haskey(regqueue_head, k1) regqueue_head[k1][k2] = reg
                 else                         regqueue_head[k1]     = Dict(k2 => reg)
                 end
@@ -1020,11 +1166,19 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, shmem_optvars::NTuple{M,Symbol} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:Tuple}, offset_maxs::Dict{Symbol, <:Tuple}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, shmem_optvars::NTuple{M,Symbol} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
-    stencilranges     = NamedTuple(A => (offset_mins[A][1]:offset_maxs[A][1], offset_mins[A][2]:offset_maxs[A][2], offset_mins[A][3]:offset_maxs[A][3]) for A in optvars)
-    use_shmemhalos    = NamedTuple(A => use_shmemhalos[A] for A in optvars)
+    stencilranges     = NamedTuple(A => begin
+        offset_min = offset_mins[A]
+        offset_max = offset_maxs[A]
+        ndims = length(offset_min)
+        x = offset_min[1]:offset_max[1]
+        y = (ndims > 1 ? offset_min[2] : 0):(ndims > 1 ? offset_max[2] : 0)
+        z = (ndims > 2 ? offset_min[3] : 0):(ndims > 2 ? offset_max[3] : 0)
+        (x, y, z)
+    end for A in optvars)
+    use_shmemhalos    = NamedTuple(A => get(use_shmemhalos, A, false) for A in optvars)
     loopsizes         = (loopdim==3) ? (1, 1, loopsize) : (loopdim==2) ? (1, loopsize, 1) : (loopsize, 1, 1)
     shmem_dim1        = (loopdim==3) ? 1 : (loopdim==2) ? 1 : 2
     shmem_dim2        = (loopdim==3) ? 2 : (loopdim==2) ? 3 : 3
