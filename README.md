@@ -60,7 +60,7 @@ Automatic advanced fast memory usage optimization (of shared memory and register
     #(...)
 end
 #(...)
-@parallel memopt=true diffusion3D_step!(...)
+@parallel diffusion3D_step!(...)
 ```
 Note that arrays are automatically allocated on the hardware chosen for the computations (GPU or CPU) when using the provided allocation macros:
 - `@zeros`
