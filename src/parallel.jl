@@ -166,6 +166,24 @@ function check_memopt_supported(memopt::Bool, package::Symbol, context::String)
     end
 end
 
+function check_memopt_declaration_args(indices::Union{Symbol,Expr}, loopdim::Integer, useshmemhalos, context::String)
+    nb_parallel_indices = isa(indices, Expr) ? length(indices.args) : 1
+    if nb_parallel_indices == 2
+        if loopdim != 2
+            @IncoherentArgumentError("incoherent arguments memopt in $context: two-index kernels require `loopdim=2`.")
+        end
+        if !isnothing(useshmemhalos)
+            @IncoherentArgumentError("incoherent arguments memopt in $context: shared-memory-related keywords are not supported for two-index memory-optimized kernels.")
+        end
+    elseif nb_parallel_indices == 3
+        if loopdim != 3
+            @IncoherentArgumentError("incoherent arguments memopt in $context: three-index kernels require `loopdim=3`.")
+        end
+    else
+        @IncoherentArgumentError("incoherent arguments memopt in $context: optimization can only be applied in 2-D and 3-D @parallel kernels and @parallel_indices kernels.")
+    end
+end
+
 
 ## GATEWAY FUNCTIONS
 
@@ -198,23 +216,60 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
         kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
-        memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-        check_memopt_supported(memopt, package, "@parallel <kernelcall>")
+        memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : nothing
+        if memopt === true check_memopt_supported(true, package, "@parallel <kernelcall>") end
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
         if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
         if is_ad_highlevel
             ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
-        elseif memopt
+        elseif memopt === true
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
             parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
-        else
+        elseif memopt === false
             if isempty(posargs)
                 ranges = :(ParallelStencil.compute_parallel_ranges(Val(($(create_metadata_call(configcall))).nb_parallel_indices), $(configcall.args[2:end]...)))
                 ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
             else
                 ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+            end
+        else
+            metadata_call = create_metadata_call(configcall)
+            metadata_var = gensym("metadata")
+            ordinary_call = if isempty(posargs)
+                ranges = :(ParallelStencil.compute_parallel_ranges(Val($metadata_var.nb_parallel_indices), $(configcall.args[2:end]...)))
+                ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+            else
+                ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+            end
+            if isempty(posargs)
+                quote
+                    local $metadata_var = $metadata_call
+                    if $metadata_var.memopt
+                        $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                    else
+                        $ordinary_call
+                    end
+                end
+            elseif length(posargs) == 1
+                quote
+                    local $metadata_var = $metadata_call
+                    if $metadata_var.memopt
+                        $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                    else
+                        $ordinary_call
+                    end
+                end
+            else
+                quote
+                    local $metadata_var = $metadata_call
+                    if $metadata_var.memopt
+                        @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                    else
+                        $ordinary_call
+                    end
+                end
             end
         end
     end
@@ -245,7 +300,12 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
                 metadata_module, metadata_function = kwargs.metadata_module, kwargs.metadata_function
             end
             if !haskey(kwargs, :metadata_module)
-                store_metadata(metadata_module, caller, determine_nb_parallel_indices(caller, get_body(kernelarg), extract_tuple(indices_expr)))
+                nb_parallel_indices = determine_nb_parallel_indices(caller, get_body(kernelarg), extract_tuple(indices_expr))
+                if memopt
+                    store_metadata(metadata_module, caller, nb_parallel_indices)
+                else
+                    store_metadata(metadata_module, caller, nb_parallel_indices; memopt=false)
+                end
             end
             inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
             padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
@@ -311,6 +371,8 @@ function parallel_indices_memopt(metadata_module::Module, metadata_function::Exp
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
+    context = is_parallel_kernel ? "@parallel <kernel>" : "@parallel_indices <kernel>"
+    check_memopt_declaration_args(indices, loopdim, useshmemhalos, context)
     body = get_body(kernel)
     body = remove_return(body)
     body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
@@ -327,7 +389,11 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     if !haskey(kwargs, :metadata_module)
-        store_metadata(metadata_module, caller, ndims)
+        if memopt
+            store_metadata(metadata_module, caller, ndims)
+        else
+            store_metadata(metadata_module, caller, ndims; memopt=false)
+        end
     end
     indices = get_indices_expr(ndims).args
     indices_dir = get_indices_dir_expr(ndims).args
@@ -411,6 +477,17 @@ function parallel_call_memopt(caller::Module, metadata_expr::Union{Symbol,Expr},
     end
 end
 
+function parallel_call_memopt_metadata(caller::Module, metadata_expr::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
+    package             = get_package(caller)
+    nthreads_x_max      = ParallelKernel.determine_nthreads_x_max(package)
+    nthreads_max_memopt = determine_nthreads_max_memopt(package)
+    ranges_var = gensym("ranges")
+    quote
+        local $ranges_var = ParallelStencil.compute_memopt_ranges(Val($metadata_expr.is_parallel_kernel), Val($metadata_expr.nb_parallel_indices), Val($metadata_expr.loopdim), $nthreads_x_max, $nthreads_max_memopt, $(configcall.args[2:end]...))
+        $(parallel_call_memopt(caller, metadata_expr, ranges_var, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall))
+    end
+end
+
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     metadata_call = create_metadata_call(configcall)
     metadata_var = gensym("metadata")
@@ -445,7 +522,7 @@ end
 ## FUNCTIONS TO DETERMINE OPTIMIZATION PARAMETERS
 
 determine_nthreads_max_memopt(package::Symbol)  = (package == PKG_AMDGPU) ? NTHREADS_MAX_MEMOPT_AMDGPU : ((package == PKG_CUDA) ? NTHREADS_MAX_MEMOPT_CUDA : ((package == PKG_KERNELABSTRACTIONS) ? NTHREADS_MAX_MEMOPT_KERNELABSTRACTIONS : NTHREADS_MAX_MEMOPT_METAL))
-determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) && (length(indices.args)==3) ? 3 : LOOPDIM_NONE # TODO: currently only loopdim=3 is supported.
+determine_loopdim(indices::Union{Symbol,Expr}) = isa(indices,Expr) ? ((length(indices.args)==2) ? 2 : ((length(indices.args)==3) ? 3 : LOOPDIM_NONE)) : LOOPDIM_NONE
 
 function compute_loopsize(package::Symbol)
     compute_capability = get_compute_capability(package)
@@ -669,15 +746,29 @@ function create_metadata_call(configcall::Expr)
     return metadata_call
 end
 
-function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer)
+function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing)
     nonconst_metadata = get_nonconst_metadata(caller)
     if nonconst_metadata || isdefined(metadata_module, :nb_parallel_indices)
-        storeexpr = quote
-            nb_parallel_indices = $nb_parallel_indices
+        if isnothing(memopt)
+            storeexpr = quote
+                nb_parallel_indices = $nb_parallel_indices
+            end
+        else
+            storeexpr = quote
+                nb_parallel_indices = $nb_parallel_indices
+                memopt = $memopt
+            end
         end
     else
-        storeexpr = quote
-            const nb_parallel_indices = $nb_parallel_indices
+        if isnothing(memopt)
+            storeexpr = quote
+                const nb_parallel_indices = $nb_parallel_indices
+            end
+        else
+            storeexpr = quote
+                const nb_parallel_indices = $nb_parallel_indices
+                const memopt = $memopt
+            end
         end
     end
     @eval(metadata_module, $storeexpr)
