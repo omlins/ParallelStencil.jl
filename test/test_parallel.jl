@@ -4,6 +4,7 @@ import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACK
 import ParallelStencil: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @metadata
 import ParallelStencil: checkargs_parallel, validate_body, parallel, parallel_indices
 using ParallelStencil.Exceptions
+import ParallelStencil.FiniteDifferences2D
 using ParallelStencil.FiniteDifferences3D
 using ParallelStencil.FieldAllocators
 import ParallelStencil.FieldAllocators: @XXYYZField, @XYYZZField
@@ -325,7 +326,7 @@ eval(:(
                         @test !occursin("A2[ix, iy, iz]", expansion)
                         @test !occursin("useshmemhalos", expansion)
                         expansion = @gorgeousstring @parallel ndims=2 memopt=true optvars=B loopdim=2 loopsize=3 function d2_memopt_decl_kernel!(A2, B)
-                            ParallelStencil.FiniteDifferences2D.@inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                            FiniteDifferences2D.@inn(A2) = FiniteDifferences2D.@d2_yi(B)
                             return
                         end
                         @test occursin("function d2_memopt_decl_kernel!(A2, B", expansion)
@@ -1107,7 +1108,7 @@ eval(:(
                         A2_ref = @zeros(nxy...)
                         copy!(B, [ix + (iy - 1) * size(B, 1) for ix=1:size(B, 1), iy=1:size(B, 2)].^3)
                         @parallel ndims=2 memopt=true optvars=B loopdim=2 function d2_memopt_kernel!(A2, B)
-                            @inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                            @inn(A2) = FiniteDifferences2D.@d2_yi(B)
                             return
                         end
                         @parallel d2_memopt_kernel!(A2, B)
@@ -1596,7 +1597,7 @@ eval(:(
                     end))
                     @test_throws ArgumentError parallel(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, :(ndims=2), :(memopt=true), :(optvars=B), :(loopdim=2), :(useshmemhalos=(B=true,)),
                     :(function invalid_2d_memopt_kernel!(A2, B)
-                        @inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                        @inn(A2) = FiniteDifferences2D.@d2_yi(B)
                         return
                     end))
                     @test_throws ArgumentError parallel_indices(:((ix, iy, iz, iw)), :(memopt=true), :(loopdim=4),
