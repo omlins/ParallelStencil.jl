@@ -488,6 +488,10 @@ function parallel_call_memopt_metadata(caller::Module, metadata_expr::Union{Symb
     end
 end
 
+function parallel_call_memopt_metadata(caller::Module, metadata_expr::Union{Symbol,Expr}, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
+    parallel_call_memopt(caller, metadata_expr, ranges, kernelcall, backend_kwargs_expr, async; memopt=memopt, configcall=configcall)
+end
+
 function parallel_call_memopt(caller::Module, ranges::Union{Symbol,Expr}, kernelcall::Expr, backend_kwargs_expr::Array, async::Bool; memopt::Bool=false, configcall::Expr=kernelcall)
     metadata_call = create_metadata_call(configcall)
     metadata_var = gensym("metadata")

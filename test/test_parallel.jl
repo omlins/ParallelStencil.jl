@@ -57,6 +57,18 @@ eval(:(
             end
             @testset "@parallel <kernelcall>" begin # NOTE: calls must go to ParallelStencil.ParallelKernel.parallel and must therefore give the same result as in ParallelKernel, except for memopt tests (tests copied 1-to-1 from there).
                 @static if $package == $PKG_CUDA
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 function f_memopt!(A2, A)
+                        if (1 < iz < size(A2, 3))
+                            A2[ix, iy, iz] = A[ix, iy, iz + 1] - 2 * A[ix, iy, iz] + A[ix, iy, iz - 1]
+                        end
+                        return
+                    end
+                    @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=3 function f_memopt_2d!(A2, A)
+                        if (1 < iy < size(A2, 2))
+                            A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                        end
+                        return
+                    end
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("CUDA.@cuda", call)
                     @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
@@ -70,14 +82,36 @@ eval(:(
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = CUDA.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("CUDA.@cuda blocks = nblocks threads = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
-                    call = @prettystring(2, @parallel memopt=true f(A))
-                    # @test occursin("CUDA.@cuda blocks = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) threads = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = CUDA.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
-                    call = @prettystring(2, @parallel ranges memopt=true f(A))
+                    call = @prettystring(2, @parallel f_memopt!(A2, A))
+                    @test occursin("CUDA.@cuda", call)
+                    @test occursin(".memopt", call)
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
+                    call = @prettystring(2, @parallel ranges f_memopt!(A2, A))
                     @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
                     @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
                     @test occursin("CUDA.@cuda blocks = var\"##nblocks", call)
-                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    call = @prettystring(2, @parallel f_memopt_2d!(A2, A))
+                    @test occursin("CUDA.@cuda", call)
+                    @test occursin(".memopt", call)
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt_2d!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                 elseif $package == $PKG_AMDGPU
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 function f_memopt!(A2, A)
+                        if (1 < iz < size(A2, 3))
+                            A2[ix, iy, iz] = A[ix, iy, iz + 1] - 2 * A[ix, iy, iz] + A[ix, iy, iz - 1]
+                        end
+                        return
+                    end
+                    @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=3 function f_memopt_2d!(A2, A)
+                        if (1 < iy < size(A2, 2))
+                            A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                        end
+                        return
+                    end
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("AMDGPU.@roc", call)
                     @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
@@ -91,13 +125,23 @@ eval(:(
                     @test occursin("AMDGPU.@roc gridsize = nblocks groupsize = nthreads stream = AMDGPU.stream() f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))", call)
                     call = @prettystring(1, @parallel nblocks nthreads stream=mystream f(A))
                     @test occursin("AMDGPU.@roc gridsize = nblocks groupsize = nthreads stream = mystream f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))", call)
-                    call = @prettystring(2, @parallel memopt=true f(A))
-                    # @test occursin("AMDGPU.@roc gridsize = ParallelStencil.ParallelKernel.compute_nblocks(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))),", call) # NOTE: now it is a very long multi line expression; before it continued as follows: (1, 1, 16)), ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1))) groupsize = ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)) stream = AMDGPU.stream() shmem = ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[1] + 3) * ((ParallelStencil.compute_nthreads_memopt(cld.(length.(ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A))), (1, 1, 16)), 3, (-1:1, -1:1, -1:1)))[2] + 3) * sizeof(Float64) f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))", call)
-                    call = @prettystring(2, @parallel ranges memopt=true f(A))
+                    call = @prettystring(2, @parallel f_memopt!(A2, A))
+                    @test occursin("AMDGPU.@roc", call)
+                    @test occursin(".memopt", call)
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
+                    call = @prettystring(2, @parallel ranges f_memopt!(A2, A))
                     @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
                     @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
                     @test occursin("AMDGPU.@roc gridsize = var\"##nblocks", call)
-                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    call = @prettystring(2, @parallel f_memopt_2d!(A2, A))
+                    @test occursin("AMDGPU.@roc", call)
+                    @test occursin(".memopt", call)
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt_2d!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                 elseif $package == $PKG_KERNELABSTRACTIONS
                     call = @prettystring(1, @parallel f(A))
                     @test occursin("ParallelStencil.ParallelKernel.@ka", call)
@@ -129,18 +173,45 @@ eval(:(
                     @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                     @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
-                    @test @prettystring(1, @parallel ranges f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
-                    @test @prettystring(1, @parallel nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads)))[3])))"
-                    @test @prettystring(1, @parallel ranges nblocks nthreads f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ranges))[3])))"
+                    call = @prettystring(1, @parallel ranges f(A))
+                    @test occursin(".memopt", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    call = @prettystring(1, @parallel nblocks nthreads f(A))
+                    @test occursin(".memopt", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.compute_ranges(nblocks .* nthreads))", call)
+                    call = @prettystring(1, @parallel ranges nblocks nthreads f(A))
+                    @test occursin(".memopt", call)
+                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
                     call = @prettystring(1, @parallel stream=mystream f(A))
                     @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                     @test occursin("ParallelStencil.compute_parallel_ranges(Val", call)
                     @test occursin("nb_parallel_indices", call)
-                    # @test @prettystring(2, @parallel memopt=true f(A)) == "f(A, ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[1])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[2])), (Int64)(length((ParallelStencil.ParallelKernel.promote_ranges(ParallelStencil.ParallelKernel.get_ranges(A)))[3])))"
-                    call = @prettystring(2, @parallel ranges memopt=true f(A))
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 function f_memopt!(A2, A)
+                        if (1 < iz < size(A2, 3))
+                            A2[ix, iy, iz] = A[ix, iy, iz + 1] - 2 * A[ix, iy, iz] + A[ix, iy, iz - 1]
+                        end
+                        return
+                    end
+                    @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=3 function f_memopt_2d!(A2, A)
+                        if (1 < iy < size(A2, 2))
+                            A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                        end
+                        return
+                    end
+                    call = @prettystring(2, @parallel f_memopt!(A2, A))
+                    @test occursin(".memopt", call)
                     @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
                     @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
-                    @test occursin("f(A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
+                    call = @prettystring(2, @parallel ranges f_memopt!(A2, A))
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(ranges)", call)
+                    call = @prettystring(2, @parallel f_memopt_2d!(A2, A))
+                    @test occursin(".memopt", call)
+                    @test occursin("ParallelStencil.compute_memopt_nthreads_nblocks(Val", call)
+                    @test occursin("ParallelStencil.compute_memopt_shmem(Val", call)
+                    @test occursin("f_memopt_2d!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                 end;
             end;
             @testset "KernelAbstractions runtime reselection" begin
@@ -239,6 +310,30 @@ eval(:(
                 @testset "addition of range arguments" begin
                     expansion = @gorgeousstring(1, @parallel f(A, B, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                     @test occursin("f(A, B, c::T, ranges::Tuple{UnitRange, UnitRange, UnitRange}, rangelength_x::Int64, rangelength_y::Int64, rangelength_z::Int64", expansion)
+                end
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @testset "memopt (2D)" begin
+                        expansion = @gorgeousstring @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=3 function d2_memopt_decl_indices!(A2, A)
+                            if (1 < iy < size(A2, 2))
+                                A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                            end
+                            return
+                        end
+                        @test occursin("function d2_memopt_decl_indices!(A2, A", expansion)
+                        @test occursin("A2[ix, iy]", expansion)
+                        @test occursin("A[ix, iy + 1]", expansion)
+                        @test !occursin("A2[ix, iy, iz]", expansion)
+                        @test !occursin("useshmemhalos", expansion)
+                        expansion = @gorgeousstring @parallel ndims=2 memopt=true optvars=B loopdim=2 loopsize=3 function d2_memopt_decl_kernel!(A2, B)
+                            ParallelStencil.FiniteDifferences2D.@inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                            return
+                        end
+                        @test occursin("function d2_memopt_decl_kernel!(A2, B", expansion)
+                        @test occursin("A2[ix + 1, iy + 1]", expansion)
+                        @test occursin("B[ix + 1, iy + 2]", expansion)
+                        @test !occursin("A2[ix + 1, iy + 1, iz + 1]", expansion)
+                        @test !occursin("useshmemhalos", expansion)
+                    end;
                 end
                 # NOTE: KernelAbstractions intentionally leaves convenience modules like Data.Device undefined; these checks only validate macro expansion shapes.
                 $(interpolate(:__T__, ARRAYTYPES, :(
@@ -990,29 +1085,96 @@ eval(:(
             @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
             @require @is_initialized()
             @static if $package in [$PKG_CUDA, $PKG_AMDGPU] # TODO add support for Metal
-                    nxyz = (32, 8, 1)
-                    @testset "@parallel_indices <kernel> (2D, memopt, stencilranges=(-1:1,-1:1,0:0))" begin
-                        lam=dt=_dx=_dy = $FloatDefault(1)
-                        T      = @Field(nxyz);
-                        T2     = @Field(nxyz);
-                        T2_ref = @Field(nxyz);
-                        Ci     = @Field(nxyz, @ones);
-                        copy!(T, [ix + (iy-1)*size(T,1) for ix=1:size(T,1), iy=1:size(T,2), iz=1:1]);
-                        @parallel_indices (ix,iy,iz) memopt=true function diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy)
-                            if (1<ix<size(T2,1) && 1<iy<size(T2,2))
-                                T2[ix,iy,iz] = T[ix,iy,iz] + dt*(Ci[ix,iy,iz]*(
-                                                - ((-lam*(T[ix+1,iy,iz] - T[ix,iy,iz])*_dx) - (-lam*(T[ix,iy,iz] - T[ix-1,iy,iz])*_dx))*_dx
-                                                - ((-lam*(T[ix,iy+1,iz] - T[ix,iy,iz])*_dy) - (-lam*(T[ix,iy,iz] - T[ix,iy-1,iz])*_dy))*_dy)
-                                                );
+                    nxy = (32, 8)
+                    @testset "@parallel_indices <kernel> (2D, memopt, stencilranges=(0:0,-1:1,0:0))" begin
+                        A      = @zeros(nxy...)
+                        A2     = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(A, [ix + (iy - 1) * size(A, 1) for ix=1:size(A, 1), iy=1:size(A, 2)].^3)
+                        @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 function d2_memopt_indices!(A2, A)
+                            if (1 < iy < size(A2, 2))
+                                A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
                             end
                             return
                         end
-                        @parallel memopt=true diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy);
-                        T2_ref[2:end-1,2:end-1,1] .= T[2:end-1,2:end-1,1] .+ dt.*(Ci[2:end-1,2:end-1,1].*(
-                                                - ((.-lam.*(T[3:end  ,2:end-1,1] .- T[2:end-1,2:end-1,1]).*_dx) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[1:end-2,2:end-1,1]).*_dx)).*_dx
-                                                - ((.-lam.*(T[2:end-1,3:end  ,1] .- T[2:end-1,2:end-1,1]).*_dy) .- (.-lam.*(T[2:end-1,2:end-1,1] .- T[2:end-1,1:end-2,1]).*_dy)).*_dy)
-                                                );
-                        @test all(Array(T2) .== Array(T2_ref))
+                        @parallel d2_memopt_indices!(A2, A)
+                        A2_ref[:, 2:end-1] .= A[:, 3:end] .- 2 * A[:, 2:end-1] .+ A[:, 1:end-2]
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end;
+                    @testset "@parallel <kernel> (2D, memopt, stencilranges=(0:0,-1:1,0:0))" begin
+                        A2     = @zeros(nxy...)
+                        B      = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(B, [ix + (iy - 1) * size(B, 1) for ix=1:size(B, 1), iy=1:size(B, 2)].^3)
+                        @parallel ndims=2 memopt=true optvars=B loopdim=2 function d2_memopt_kernel!(A2, B)
+                            @inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                            return
+                        end
+                        @parallel d2_memopt_kernel!(A2, B)
+                        A2_ref[2:end-1, 2:end-1] .= B[2:end-1, 3:end] .- 2 * B[2:end-1, 2:end-1] .+ B[2:end-1, 1:end-2]
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end;
+                    @testset "@parallel_indices <kernel> (2D, memopt, optvars=A)" begin
+                        A      = @zeros(nxy...)
+                        B      = @zeros(nxy...)
+                        A2     = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(A, [ix + (iy - 1) * size(A, 1) for ix=1:size(A, 1), iy=1:size(A, 2)].^3)
+                        copy!(B, [2 * ix - iy for ix=1:size(B, 1), iy=1:size(B, 2)])
+                        @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 optvars=A function mixed_memopt_indices!(A2, A, B)
+                            if (1 < ix < size(A2, 1) && 1 < iy < size(A2, 2))
+                                A2[ix, iy] = (A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]) + (B[ix + 1, iy] - 2 * B[ix, iy] + B[ix - 1, iy])
+                            end
+                            return
+                        end
+                        @parallel mixed_memopt_indices!(A2, A, B)
+                        A2_ref[2:end-1, 2:end-1] .= (A[2:end-1, 3:end] .- 2 * A[2:end-1, 2:end-1] .+ A[2:end-1, 1:end-2]) .+ (B[3:end, 2:end-1] .- 2 * B[2:end-1, 2:end-1] .+ B[1:end-2, 2:end-1])
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end;
+                    @testset "@parallel_indices <kernel> (2D, memopt, optranges=(A=(0:0,-1:1,0:0),))" begin
+                        A      = @zeros(nxy...)
+                        A2     = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(A, [ix + (iy - 1) * size(A, 1) for ix=1:size(A, 1), iy=1:size(A, 2)].^3)
+                        @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 optvars=A optranges=(A=(0:0, -1:1, 0:0),) function ranged_memopt_indices!(A2, A)
+                            if (1 < iy < size(A2, 2))
+                                A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                            end
+                            return
+                        end
+                        @parallel ranged_memopt_indices!(A2, A)
+                        A2_ref[:, 2:end-1] .= A[:, 3:end] .- 2 * A[:, 2:end-1] .+ A[:, 1:end-2]
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end;
+                    @testset "@parallel_indices <kernel> (2D, memopt, loopsize=4)" begin
+                        A      = @zeros(nxy...)
+                        A2     = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(A, [ix + (iy - 1) * size(A, 1) for ix=1:size(A, 1), iy=1:size(A, 2)].^3)
+                        @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=4 function loopsize_memopt_indices!(A2, A)
+                            if (1 < iy < size(A2, 2))
+                                A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                            end
+                            return
+                        end
+                        @parallel loopsize_memopt_indices!(A2, A)
+                        A2_ref[:, 2:end-1] .= A[:, 3:end] .- 2 * A[:, 2:end-1] .+ A[:, 1:end-2]
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end;
+                    @testset "@parallel_indices <kernel> (2D, memopt, optimize_halo_read=false)" begin
+                        A      = @zeros(nxy...)
+                        A2     = @zeros(nxy...)
+                        A2_ref = @zeros(nxy...)
+                        copy!(A, [ix + (iy - 1) * size(A, 1) for ix=1:size(A, 1), iy=1:size(A, 2)].^3)
+                        @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 optvars=A optranges=(A=(0:0, -1:1, 0:0),) optimize_halo_read=false function halo_read_memopt_indices!(A2, A)
+                            if (1 < iy < size(A2, 2))
+                                A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                            end
+                            return
+                        end
+                        @parallel halo_read_memopt_indices!(A2, A)
+                        A2_ref[:, 2:end-1] .= A[:, 3:end] .- 2 * A[:, 2:end-1] .+ A[:, 1:end-2]
+                        @test all(Array(A2) .== Array(A2_ref))
                     end;
             end;
             @reset_parallel_stencil()
@@ -1255,7 +1417,8 @@ eval(:(
                 metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                 @test metadata isa Module
                 @test length(names(metadata)) == 1
-                @test metadata_symbols == [:nb_parallel_indices]
+                @test metadata_symbols == [:memopt, :nb_parallel_indices]
+                @test metadata.memopt == false
                 @test metadata.nb_parallel_indices == 3
                 @test all(Array(A) .== 0)
             end;
@@ -1319,6 +1482,31 @@ eval(:(
                         @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:0),)
                         @test metadata_full.use_any_shmem == false
                     end
+                    @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=5 optvars=B optranges=(B=(0:0,-1:1,0:0),) function metadata_memopt_2d_probe!(A, B)
+                        if (1 < iy < size(A, 2))
+                            A[ix, iy] = B[ix, iy - 1] + B[ix, iy] + B[ix, iy + 1]
+                        end
+                        return
+                    end
+                    A2 = @zeros(4, 5)
+                    B2 = @ones(4, 5)
+                    metadata_2d = @metadata metadata_memopt_2d_probe!(A2, B2)
+                    @test metadata_2d.nb_parallel_indices == 2
+                    @test metadata_2d.loopdim == 2
+                    @test metadata_2d.loopsize == 5
+                    @test metadata_2d.loopsizes == (1, 5, 1)
+                    @test metadata_2d.memopt == true
+                    @test metadata_2d.optranges[:B] == (0:0, -1:1, 0:0)
+                    @test metadata_2d.optvars == (:B,)
+                    @test metadata_2d.shmem_dim1 == 1
+                    @test metadata_2d.shmem_dim2 == 3
+                    @test metadata_2d.shmem_optvars == ()
+                    @test metadata_2d.shmem_optvars isa NTuple{0,Symbol}
+                    @test metadata_2d.shmem_spans == (B = (0, 0),)
+                    @test metadata_2d.stencilranges == (B = (0:0, -1:1, 0:0),)
+                    @test metadata_2d.use_any_shmem == false
+                    @test metadata_2d.use_shmemhalos[:B] == false
+                    @test ParallelStencil.compute_memopt_shmem(Val(metadata_2d.shmem_optvars), Val(metadata_2d.use_shmemhalos), Val(metadata_2d.shmem_spans), Val(metadata_2d.shmem_dim1), Val(metadata_2d.shmem_dim2), (8, 4, 1), $FloatDefault) == 0
                     @test all(Array(A) .== 0)
                 end;
             end;
@@ -1397,6 +1585,25 @@ eval(:(
                         @parallel (1:size(A3,1), 1:size(A3,2), 1:size(A3,3)) memopt=true write_xy_plane!(A3, B3, D4)
                         @test A3 == 2.0 .* @ones(4, 5, 6)
                     end
+                end;
+                @testset "declaration (memopt): error if 2-D kernels use shared-memory keywords or unsupported dimensionalities" begin
+                    @test_throws ArgumentError parallel_indices(:((ix, iy)), :(ndims=2), :(memopt=true), :(loopdim=2), :(useshmemhalos=(A=true,)),
+                    :(function invalid_2d_memopt_indices!(A2, A)
+                        if (1 < iy < size(A2, 2))
+                            A2[ix, iy] = A[ix, iy + 1] - 2 * A[ix, iy] + A[ix, iy - 1]
+                        end
+                        return
+                    end))
+                    @test_throws ArgumentError parallel(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, :(ndims=2), :(memopt=true), :(optvars=B), :(loopdim=2), :(useshmemhalos=(B=true,)),
+                    :(function invalid_2d_memopt_kernel!(A2, B)
+                        @inn(A2) = ParallelStencil.FiniteDifferences2D.@d2_yi(B)
+                        return
+                    end))
+                    @test_throws ArgumentError parallel_indices(:((ix, iy, iz, iw)), :(memopt=true), :(loopdim=4),
+                    :(function invalid_4d_memopt_indices!(A2, A)
+                        A2[ix, iy, iz, iw] = A[ix, iy, iz, iw]
+                        return
+                    end))
                 end;
             end;
             @reset_parallel_stencil()
