@@ -117,6 +117,16 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
 
                 body = quote
                                         $loopoffset = (@blockIdx().y-1)*$loopsize + $range_y_start-1
+$((:(               $reg           = 0.0
+        )
+        for A in optvars for regs in values(regqueue_tails[A]) for reg in values(regs)
+    )...
+)
+$((:(               $reg           = 0.0
+        )
+        for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
+    )...
+)
 $((wrap_loop(i, loopstart:0,
                 quote
                                                 $iy = $i + $loopoffset
