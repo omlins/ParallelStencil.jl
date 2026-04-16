@@ -1103,17 +1103,30 @@ eval(:(
                         @test all(Array(A2) .== Array(A2_ref))
                     end;
                     @testset "@parallel <kernel> (2D, memopt, stencilranges=(0:0,-1:1,0:0))" begin
-                        A2     = @zeros(nxy...)
-                        B      = @zeros(nxy...)
-                        A2_ref = @zeros(nxy...)
-                        copy!(B, [ix + (iy - 1) * size(B, 1) for ix=1:size(B, 1), iy=1:size(B, 2)].^3)
-                        @parallel ndims=2 memopt=true optvars=B loopdim=2 function d2_memopt_kernel!(A2, B)
-                            @inn(A2) = FiniteDifferences2D.@d2_yi(B)
-                            return
+                        # Use a dedicated caller module so @within and @inn come from the 2-D finite-difference macro set.
+                        d2_memopt_kernel_ctx = @eval module $(gensym(:d2_memopt_kernel_ctx))
+                            using ParallelStencil
+                            using ParallelStencil.FiniteDifferences2D
+
+                            @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
+
+                            const nxy = (32, 8)
+                            A2     = @zeros(nxy...)
+                            B      = @zeros(nxy...)
+                            A2_ref = @zeros(nxy...)
+                            copy!(B, [ix + (iy - 1) * size(B, 1) for ix=1:size(B, 1), iy=1:size(B, 2)].^3)
+
+                            @parallel ndims=2 memopt=true optvars=B loopdim=2 function d2_memopt_kernel!(A2, B)
+                                @inn(A2) = @d2_yi(B)
+                                return
+                            end
+
+                            @parallel d2_memopt_kernel!(A2, B)
+                            A2_ref[2:end-1, 2:end-1] .= B[2:end-1, 3:end] .- 2 * B[2:end-1, 2:end-1] .+ B[2:end-1, 1:end-2]
+
+                            const ok = all(Array(A2) .== Array(A2_ref))
                         end
-                        @parallel d2_memopt_kernel!(A2, B)
-                        A2_ref[2:end-1, 2:end-1] .= B[2:end-1, 3:end] .- 2 * B[2:end-1, 2:end-1] .+ B[2:end-1, 1:end-2]
-                        @test all(Array(A2) .== Array(A2_ref))
+                        @test getfield(d2_memopt_kernel_ctx, :ok)
                     end;
                     @testset "@parallel_indices <kernel> (2D, memopt, optvars=A)" begin
                         A      = @zeros(nxy...)
