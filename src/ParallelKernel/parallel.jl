@@ -891,7 +891,7 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
             elseif (package == PKG_KERNELABSTRACTIONS) shmem_expr = nothing # KernelAbstractions does not accept dynamic shared-memory sizes here.
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
-            if package != PKG_METAL
+            if !isnothing(shmem_expr)
                 backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
             end
         end
