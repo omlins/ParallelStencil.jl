@@ -237,11 +237,12 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         else
             metadata_call = create_metadata_call(configcall)
             metadata_var = gensym("metadata")
+            ordinary_kernelarg = deepcopy(kernelarg)
             ordinary_call = if isempty(posargs)
                 ranges = :(ParallelStencil.compute_parallel_ranges(Val($metadata_var.nb_parallel_indices), $(configcall.args[2:end]...)))
-                ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, ordinary_kernelarg; package=package, async=async)
             else
-                ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, ordinary_kernelarg; package=package, async=async)
             end
             if isempty(posargs)
                 quote
