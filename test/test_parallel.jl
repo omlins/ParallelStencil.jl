@@ -1438,6 +1438,13 @@ eval(:(
             end;
             @static if $package != $PKG_KERNELABSTRACTIONS
                 @testset "memopt" begin
+                    fullrange = typemin(Int64):typemax(Int64)
+                    tie_offsets = Dict(:B => Dict((0, 0) => Dict(0 => 1), (1, 1) => Dict(0 => 1), (1, 2) => Dict(0 => 1)))
+                    tied_optranges = ParallelStencil.define_optranges(nothing, (:B,), tie_offsets, Int64, ParallelStencil.PKG_THREADS)
+                    @test tied_optranges[:B] == (1:1, 1:1, fullrange)
+                    symmetric_tie_offsets = Dict(:B => Dict((0, 0) => Dict(0 => 1), (0, 2) => Dict(0 => 1), (2, 0) => Dict(0 => 1), (2, 2) => Dict(0 => 1)))
+                    symmetric_tie_optranges = ParallelStencil.define_optranges(nothing, (:B,), symmetric_tie_offsets, Int64, ParallelStencil.PKG_THREADS)
+                    @test symmetric_tie_optranges[:B] == (0:0, 0:0, fullrange)
                     @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,0:0),) function metadata_memopt_probe!(A, B, D)
                         A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
                         return
@@ -1478,24 +1485,17 @@ eval(:(
                     @test metadata_z.shmem_spans == (B = (0, 0),)
                     @test metadata_z.stencilranges == (B = (0:0, 0:0, -1:1),)
                     @test metadata_z.use_any_shmem == false
-                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B function metadata_memopt_fullstencil_probe!(A, B, D)
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(typemin(Int64):typemax(Int64), typemin(Int64):typemax(Int64), typemin(Int64):typemax(Int64)),) function metadata_memopt_fullstencil_probe!(A, B, D)
                         A[ix, iy, iz] = B[ix-1, iy-1, iz-1] + B[ix, iy, iz] + B[ix+1, iy+1, iz+1] + D[ix, iy, iz, 1]
                         return
                     end
                     metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
-                    @static if @isgpu($package)
-                        @test metadata_full.shmem_optvars == (:B,)
-                        @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
-                        @test metadata_full.shmem_spans == (B = (2, 2),)
-                        @test metadata_full.stencilranges == (B = (-1:1, -1:1, -1:1),)
-                        @test metadata_full.use_any_shmem == true
-                    else
-                        @test metadata_full.shmem_optvars == ()
-                        @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
-                        @test metadata_full.shmem_spans == (B = (0, 0),)
-                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:0),)
-                        @test metadata_full.use_any_shmem == false
-                    end
+                    @test metadata_full.optranges[:B] == (fullrange, fullrange, fullrange)
+                    @test metadata_full.shmem_optvars == (:B,)
+                    @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
+                    @test metadata_full.shmem_spans == (B = (2, 2),)
+                    @test metadata_full.stencilranges == (B = (-1:1, -1:1, -1:1),)
+                    @test metadata_full.use_any_shmem == true
                     @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=5 optvars=B optranges=(B=(0:0,-1:1,0:0),) function metadata_memopt_2d_probe!(A, B)
                         if (1 < iy < size(A, 2))
                             A[ix, iy] = B[ix, iy - 1] + B[ix, iy] + B[ix, iy + 1]

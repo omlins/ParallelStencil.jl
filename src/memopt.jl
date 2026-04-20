@@ -672,19 +672,21 @@ function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by
     return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
 end
 
+function score_centered_nonloop_offsets(candidate::Tuple, offsets::Tuple)
+    return sum(sum((candidate[i] - other[i])^2 for i in eachindex(candidate)) for other in offsets)
+end
+
+function select_offsets_with_max_span(offsets::AbstractDict)
+    loopspan_max = maximum(nonloop_offsets -> length(keys(offsets[nonloop_offsets])), keys(offsets))
+    offsets_with_max_span = Tuple(Tuple(nonloop_offsets) for nonloop_offsets in keys(offsets) if length(keys(offsets[nonloop_offsets])) == loopspan_max)
+    return argmin(nonloop_offsets -> (score_centered_nonloop_offsets(nonloop_offsets, offsets_with_max_span), nonloop_offsets), offsets_with_max_span)
+end
+
 function define_optranges(optranges_arg, optvars, offsets, int_type, package)
     compute_capability = get_compute_capability(package)
     optranges = Dict()
     for A in optvars
-        loopspan_max = 0
-        offsets_with_max_span = ()
-        for nonloop_offsets in keys(offsets[A])
-            loopspan = length(keys(offsets[A][nonloop_offsets]))
-            if loopspan > loopspan_max
-                loopspan_max = loopspan
-                offsets_with_max_span = nonloop_offsets
-            end
-        end
+        offsets_with_max_span = select_offsets_with_max_span(offsets[A])
         fullrange    = typemin(int_type):typemax(int_type)
         pointrange_x = offsets_with_max_span[1]:offsets_with_max_span[1]
         pointrange_y = (length(offsets_with_max_span) > 1) ? (offsets_with_max_span[2]:offsets_with_max_span[2]) : fullrange
