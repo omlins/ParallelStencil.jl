@@ -27,6 +27,9 @@ end
 @static if PKG_POLYESTER in TEST_PACKAGES
     import Polyester
 end
+const ENZYME_CUDA_V6_UNSUPPORTED = let cuda_version = isdefined(@__MODULE__, :CUDA) ? Base.pkgversion(CUDA) : nothing
+    !isnothing(cuda_version) && cuda_version >= v"6"
+end
 Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
 
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
@@ -220,7 +223,7 @@ eval(:(
                     @test maxsize(BitstypeStruct(5, 6.0), 8, (x=[9 9; 9 9; 9 9], y=[9 9; 9 9; 9 9]), (x=[7 7 7; 7 7 7], y=[7 7 7; 7 7 7])) == (3, 3, 1)
                 end;
             end;
-            @static if $package != $PKG_POLYESTER # Enzyme does not support Polyester.
+            @static if $package != $PKG_POLYESTER && !$ENZYME_CUDA_V6_UNSUPPORTED # Enzyme does not support Polyester and currently does not support CUDA.jl >= 6.
                 @testset "@parallel ∇" begin
                     @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.Const(A), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
                     @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
