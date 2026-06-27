@@ -1151,5 +1151,212 @@ eval(:(
             end;
             @reset_parallel_kernel()
         end;
+        @testset "8. Collection types" begin
+            @require @is_initialized()
+            @testset "ArrayTuple and NamedArrayTuple" begin
+                # Test ArrayTuple with separate type parameters for number of components and dimension
+                arr1 = @zeros(nx, ny)
+                arr2 = @ones(nx, ny)
+                arr_tuple = Data.ArrayTuple{2, 2}((arr1, arr2))
+                @test size(arr_tuple) == (nx, ny)
+                @test eltype(arr_tuple) == eltype(arr1)
+                @test length(arr_tuple) == 2
+                @test arr_tuple[1] === arr1
+                @test arr_tuple[2] === arr2
+                
+                # Test NamedArrayTuple with named access
+                named_arr_tuple = Data.NamedArrayTuple{2, 2, (:a, :b)}((arr1, arr2))
+                @test size(named_arr_tuple) == (nx, ny)
+                @test eltype(named_arr_tuple) == eltype(arr1)
+                @test length(named_arr_tuple) == 2
+                @test getfield(named_arr_tuple, :a) === arr1
+                @test getfield(named_arr_tuple, :b) === arr2
+                
+                # Test 3D case
+                arr3d_1 = @zeros(nx, ny, nz)
+                arr3d_2 = @ones(nx, ny, nz)
+                arr3d_tuple = Data.ArrayTuple{2, 3}((arr3d_1, arr3d_2))
+                @test size(arr3d_tuple) == (nx, ny, nz)
+                @test length(arr3d_tuple) == 2
+                
+                # Test NamedArrayTuple 3D
+                named_arr3d_tuple = Data.NamedArrayTuple{2, 3, (:x, :y)}((arr3d_1, arr3d_2))
+                @test size(named_arr3d_tuple) == (nx, ny, nz)
+                @test getfield(named_arr3d_tuple, :x) === arr3d_1
+                @test getfield(named_arr3d_tuple, :y) === arr3d_2
+            end;
+            @testset "CellArrayTuple and NamedCellArrayTuple" begin
+                # Test CellArrayTuple with separate type parameters for number of components, dimension, and celldims
+                cell1 = @zeros(CellArray, (2,2))
+                cell2 = @ones(CellArray, (2,2))
+                cell_arr_tuple = Data.CellArrayTuple{2, 2, (2,2)}((cell1, cell2))
+                @test length(cell_arr_tuple) == 2
+                @test cell_arr_tuple[1] === cell1
+                @test cell_arr_tuple[2] === cell2
+                
+                # Test NamedCellArrayTuple with named access
+                named_cell_arr_tuple = Data.NamedCellArrayTuple{2, 2, (2,2), (:p, :q)}((cell1, cell2))
+                @test length(named_cell_arr_tuple) == 2
+                @test getfield(named_cell_arr_tuple, :p) === cell1
+                @test getfield(named_cell_arr_tuple, :q) === cell2
+            end;
+            @testset "CellTuple and NamedCellTuple" begin
+                # Test CellTuple with static size
+                static_size = (2, 2)
+                cell_static1 = Data.Cell{static_size}(@zeros(2, 2))
+                cell_static2 = Data.Cell{static_size}(@ones(2, 2))
+                cell_tuple = Data.CellTuple{2, static_size}((cell_static1, cell_static2))
+                @test length(cell_tuple) == 2
+                @test cell_tuple[1] === cell_static1
+                @test cell_tuple[2] === cell_static2
+                
+                # Test NamedCellTuple with named access
+                named_cell_tuple = Data.NamedCellTuple{2, static_size, (:r, :s)}((cell_static1, cell_static2))
+                @test length(named_cell_tuple) == 2
+                @test getfield(named_cell_tuple, :r) === cell_static1
+                @test getfield(named_cell_tuple, :s) === cell_static2
+            end;
+            @testset "NumberTuple and NamedNumberTuple" begin
+                # Test NumberTuple
+                num1 = Data.Number(1)
+                num2 = Data.Number(2)
+                num_tuple = Data.NumberTuple{2}((num1, num2))
+                @test length(num_tuple) == 2
+                @test num_tuple[1] === num1
+                @test num_tuple[2] === num2
+                
+                # Test NamedNumberTuple with named access
+                named_num_tuple = Data.NamedNumberTuple{2, (:i, :j)}((num1, num2))
+                @test length(named_num_tuple) == 2
+                @test getfield(named_num_tuple, :i) === num1
+                @test getfield(named_num_tuple, :j) === num2
+            end;
+            @testset "IndexTuple and NamedIndexTuple" begin
+                # Test IndexTuple
+                idx1 = Data.Index(1)
+                idx2 = Data.Index(2)
+                idx_tuple = Data.IndexTuple{2}((idx1, idx2))
+                @test length(idx_tuple) == 2
+                @test idx_tuple[1] === idx1
+                @test idx_tuple[2] === idx2
+                
+                # Test NamedIndexTuple with named access
+                named_idx_tuple = Data.NamedIndexTuple{2, (:m, :n)}((idx1, idx2))
+                @test length(named_idx_tuple) == 2
+                @test getfield(named_idx_tuple, :m) === idx1
+                @test getfield(named_idx_tuple, :n) === idx2
+            end;
+            @testset "Union collection types" begin
+                # Test ArrayCollection - union of ArrayTuple and NamedArrayTuple
+                arr1 = @zeros(nx, ny)
+                arr2 = @ones(nx, ny)
+                arr_tuple = Data.ArrayTuple{2, 2}((arr1, arr2))
+                named_arr_tuple = Data.NamedArrayTuple{2, 2, (:a, :b)}((arr1, arr2))
+                @test arr_tuple isa Data.ArrayCollection{2, 2}
+                @test named_arr_tuple isa Data.ArrayCollection{2, 2}
+                
+                # Test NumberCollection - union of NumberTuple and NamedNumberTuple
+                num1 = Data.Number(1)
+                num2 = Data.Number(2)
+                num_tuple = Data.NumberTuple{2}((num1, num2))
+                named_num_tuple = Data.NamedNumberTuple{2, (:i, :j)}((num1, num2))
+                @test num_tuple isa Data.NumberCollection{2}
+                @test named_num_tuple isa Data.NumberCollection{2}
+                
+                # Test IndexCollection - union of IndexTuple and NamedIndexTuple
+                idx1 = Data.Index(1)
+                idx2 = Data.Index(2)
+                idx_tuple = Data.IndexTuple{2}((idx1, idx2))
+                named_idx_tuple = Data.NamedIndexTuple{2, (:m, :n)}((idx1, idx2))
+                @test idx_tuple isa Data.IndexCollection{2}
+                @test named_idx_tuple isa Data.IndexCollection{2}
+                
+                # Test CellCollection - union of CellTuple and NamedCellTuple
+                static_size = (2, 2)
+                cell_static1 = Data.Cell{static_size}(@zeros(2, 2))
+                cell_static2 = Data.Cell{static_size}(@ones(2, 2))
+                cell_tuple = Data.CellTuple{2, static_size}((cell_static1, cell_static2))
+                named_cell_tuple = Data.NamedCellTuple{2, static_size, (:r, :s)}((cell_static1, cell_static2))
+                @test cell_tuple isa Data.CellCollection{2, static_size}
+                @test named_cell_tuple isa Data.CellCollection{2, static_size}
+                
+                # Test CellArrayCollection - union of CellArrayTuple and NamedCellArrayTuple
+                cell1 = @zeros(CellArray, (2,2))
+                cell2 = @ones(CellArray, (2,2))
+                cell_arr_tuple = Data.CellArrayTuple{2, 2, (2,2)}((cell1, cell2))
+                named_cell_arr_tuple = Data.NamedCellArrayTuple{2, 2, (2,2), (:p, :q)}((cell1, cell2))
+                @test cell_arr_tuple isa Data.CellArrayCollection{2, 2, (2,2)}
+                @test named_cell_arr_tuple isa Data.CellArrayCollection{2, 2, (2,2)}
+            end;
+            @reset_parallel_kernel()
+        end;
+        @testset "9. Kernel signature type matching" begin
+            @require @is_initialized()
+            @testset "Separate type parameters for number of components and dimension" begin
+                # Verify that ArrayTuple has separate type parameters for N_tuple (number of components) and N (dimension)
+                arr1 = @zeros(nx, ny)
+                arr2 = @ones(nx, ny)
+                arr_tuple = Data.ArrayTuple{2, 2}((arr1, arr2))
+                @test typeof(arr_tuple).parameters[1] == 2  # N_tuple = 2 (number of components)
+                @test typeof(arr_tuple).parameters[2] == 2  # N = 2 (dimension)
+                
+                # Verify that NamedArrayTuple has separate type parameters
+                named_arr_tuple = Data.NamedArrayTuple{2, 2, (:a, :b)}((arr1, arr2))
+                @test typeof(named_arr_tuple).parameters[1] == 2  # N_tuple
+                @test typeof(named_arr_tuple).parameters[2] == 2  # N
+                @test typeof(named_arr_tuple).parameters[3] == :a  # names
+                
+                # Verify that CellArrayTuple has separate type parameters
+                cell1 = @zeros(CellArray, (2,2))
+                cell2 = @ones(CellArray, (2,2))
+                cell_arr_tuple = Data.CellArrayTuple{2, 2, (2,2)}((cell1, cell2))
+                @test typeof(cell_arr_tuple).parameters[1] == 2  # N_tuple
+                @test typeof(cell_arr_tuple).parameters[2] == 2  # N
+                @test typeof(cell_arr_tuple).parameters[3] == (2,2)  # B (celldims)
+                
+                # Verify that NamedCellArrayTuple has separate type parameters
+                named_cell_arr_tuple = Data.NamedCellArrayTuple{2, 2, (2,2), (:p, :q)}((cell1, cell2))
+                @test typeof(named_cell_arr_tuple).parameters[1] == 2  # N_tuple
+                @test typeof(named_cell_arr_tuple).parameters[2] == 2  # N
+                @test typeof(named_cell_arr_tuple).parameters[3] == (2,2)  # B
+                @test typeof(named_cell_arr_tuple).parameters[4] == :p  # names
+                
+                # Test 3D case - verify dimension is correctly set to 3
+                arr3d_1 = @zeros(nx, ny, nz)
+                arr3d_2 = @ones(nx, ny, nz)
+                arr3d_tuple = Data.ArrayTuple{2, 3}((arr3d_1, arr3d_2))
+                @test typeof(arr3d_tuple).parameters[1] == 2  # N_tuple
+                @test typeof(arr3d_tuple).parameters[2] == 3  # N = 3 for 3D
+            end;
+            @testset "Field types in kernel signatures match field data types" begin
+                # Test VectorField type matching - 3 components, 3D dimension
+                nxyz = (nx, ny, nz)
+                vector_field = @VectorField(nxyz)
+                @test typeof(vector_field) == Data.Fields.VectorField
+                
+                # Test BVectorField type matching
+                bvector_field = @BVectorField(nxyz)
+                @test typeof(bvector_field) == Data.Fields.BVectorField
+                
+                # Test TensorField type matching - 6 components for symmetric tensor, 3D
+                tensor_field = @TensorField(nxyz)
+                @test typeof(tensor_field) == Data.Fields.TensorField
+                
+                # Test 2D cases
+                nxy = (nx, ny)
+                vector_field_2d = @VectorField(nxy)
+                @test typeof(vector_field_2d) == Data.Fields.VectorField
+                
+                tensor_field_2d = @TensorField(nxy)
+                @test typeof(tensor_field_2d) == Data.Fields.TensorField
+                
+                # Verify that field type aliases match the types obtained from field macros
+                # For VectorField: N_tuple=3 (3 components), N=3 (3D) or N=2 (2D)
+                @test Data.Fields.VectorField == typeof(@VectorField(nxyz))
+                @test Data.Fields.BVectorField == typeof(@BVectorField(nxyz))
+                @test Data.Fields.TensorField == typeof(@TensorField(nxyz))
+            end;
+            @reset_parallel_kernel()
+        end;
     end;
 )) end == nothing || true;
