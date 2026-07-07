@@ -1151,8 +1151,10 @@ eval(:(
             end;
             @reset_parallel_kernel()
         end;
+        @require !@is_initialized()
+        @init_parallel_kernel($package, Float16)
+        @require @is_initialized()
         @testset "8. Collection types" begin
-            @require @is_initialized()
             @testset "ArrayTuple and NamedArrayTuple" begin
                 # Test ArrayTuple with separate type parameters for number of components and dimension
                 arr1 = @zeros(nx, ny)
@@ -1290,8 +1292,10 @@ eval(:(
             end;
             @reset_parallel_kernel()
         end;
+        @require !@is_initialized()
+        @init_parallel_kernel($package, Float16)
+        @require @is_initialized()
         @testset "9. Kernel signature type matching" begin
-            @require @is_initialized()
             @testset "Separate type parameters for number of components and dimension" begin
                 # Verify that ArrayTuple has separate type parameters for N_tuple (number of components) and N (dimension)
                 arr1 = @zeros(nx, ny)
