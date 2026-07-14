@@ -24,7 +24,7 @@ Beyond traditional high-performance computing, ParallelStencil supports automati
 - [Seamless interoperability with communication packages and hiding communication](#seamless-interoperability-with-communication-packages-and-hiding-communication)
 - [Support for architecture-agnostic low level kernel programming](#support-for-architecture-agnostic-low-level-kernel-programming)
 - [Support for logical arrays of small arrays / structs](#support-for-logical-arrays-of-small-arrays--structs)
-- [Support for allocating fields of scientific computing applications](#support-for-allocating-fields-of-scientific-computing-applications)
+- [Support for scientific field types](#support-for-scientific-field-types)
 - [Support for automatic differentiation of architecture-agnostic parallel kernels](#support-for-automatic-differentiation-of-architecture-agnostic-parallel-kernels)
 - [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia)
 - [Concise single/multi-xPU miniapps](#concise-singlemulti-xpu-miniapps)
@@ -337,7 +337,7 @@ A = @zeros(nx, ny, nz, celltype=SymmetricTensor3D)
 ```
 Details are found in the [Module documentation callable from the Julia REPL / IJulia](#module-documentation-callable-from-the-julia-repl--ijulia).
 
-## Support for allocating fields of scientific computing applications
+## Support for scientific field types
 Building on the architecture-agnostic allocation macros earlier introduced (see [Parallelization and optimization with one macro call](#parallelization-and-optimization-with-one-macro-call)), ParallelStencil provides dedicated field allocation macros that allocate fields whose number of components and per-component array dimensionality follow the length of the passed `gridsize`; padding, when enabled at package initialization, applies uniformly to all of them. The scalar field macro `@Field` allocates a single array; the component field macros `@XField`/`@YField`/`@ZField`, `@BXField`/`@BYField`/`@BZField`, and `@XXField`/`@YYField`/`@ZZField`/`@XYField`/`@XZField`/`@YZField` allocate the individual components of a vector, vector with boundaries, or tensor field, respectively; `@VectorField` and `@BVectorField` allocate a whole vector field (optionally with boundaries) as a tuple of component arrays; `@TensorField` allocates a whole tensor field as a tuple of component arrays; and `@allocate` allocates multiple kinds of fields at once on a shared `gridsize` (and initializes them).
 ```julia
 # Allocate one scalar field on a 2-D grid
