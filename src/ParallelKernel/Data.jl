@@ -102,7 +102,7 @@ A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `Tenso
 --------------------------------------------------------------------------------
     VectorField
 
-A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`. `VectorField` (and `BVectorField`, see below) keep a single shared parameter between the number of components and the per-component array dimensionality, because their number of components always equals the per-component array dimensionality (`length(gridsize)`).
 
 --------------------------------------------------------------------------------
     BVectorField
@@ -112,7 +112,7 @@ A vector field including boundaries, on a grid of size `gridsize`; allocated wit
 --------------------------------------------------------------------------------
     TensorField
 
-A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `TensorField` takes a separate parameter for the number of components in addition to the per-component array dimensionality, because its number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct from the per-component array dimensionality.
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
@@ -214,7 +214,7 @@ A scalar field of the same size as the {XX|YY|ZZ|XY|XZ|YZ}-component of a `Tenso
 --------------------------------------------------------------------------------
     VectorField
 
-A vector field, on a grid of size `gridsize`; allocated with `@VectorField`.
+A vector field, on a grid of size `gridsize`; allocated with `@VectorField`. `VectorField` (and `BVectorField`, see below) keep a single shared parameter between the number of components and the per-component array dimensionality, because their number of components always equals the per-component array dimensionality (`length(gridsize)`).
 
 --------------------------------------------------------------------------------
     BVectorField
@@ -224,7 +224,7 @@ A vector field including boundaries, on a grid of size `gridsize`; allocated wit
 --------------------------------------------------------------------------------
     TensorField
 
-A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`.
+A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `TensorField` takes a separate parameter for the number of components in addition to the per-component array dimensionality, because its number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct from the per-component array dimensionality.
 """
 
 

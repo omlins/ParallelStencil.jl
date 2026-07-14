@@ -69,6 +69,9 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
 
+!!! note "Field and data type annotations"
+    The host-side `Data.*` / `TData.*` and `Data.Fields.*` / `TData.Fields.*` types (cf. the generated `Data`/`TData` module docstrings) are intended to be usable as argument type annotations in `@parallel` kernel definitions: the parallel kernel declaration and launch system automatically converts these host-side types to the corresponding `Device` types of the active backend so that the resulting device-side kernel signature dispatches correctly when the kernel is launched with a field allocated by the matching field allocation macro (cf. [`ParallelStencil.FieldAllocators`](@ref)).
+
 See also: [`@init_parallel_kernel`](@ref)
 """
 @doc PARALLEL_DOC
@@ -101,6 +104,9 @@ Declare the `kernel` parallel and generate the given parallel `indices` inside t
 
 !!! note "Memory optimization"
     Two-index memory-optimized declarations use register-only caching in the second dimension. Shared-memory caching belongs only to the 3-D memory-optimized declaration surface, where `loopdim=3` and `useshmemhalos` may be used.
+
+!!! note "Field and data type annotations"
+    The host-side `Data.*` / `TData.*` and `Data.Fields.*` / `TData.Fields.*` types (cf. the generated `Data`/`TData` module docstrings) are intended to be usable as argument type annotations in `@parallel_indices` kernel definitions: the parallel kernel declaration and launch system automatically converts these host-side types to the corresponding `Device` types of the active backend so that the resulting device-side kernel signature dispatches correctly when the kernel is launched with a field allocated by the matching field allocation macro (cf. [`ParallelStencil.FieldAllocators`](@ref)).
 
 See also: [`@init_parallel_stencil`](@ref)
 """
