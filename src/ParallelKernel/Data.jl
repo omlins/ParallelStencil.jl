@@ -710,7 +710,7 @@ function T_Fields_exprs()
         export VectorField, BVectorField, TensorField
         const VectorField{T, N, names}  = NamedArrayTuple{N, T, N, names}
         const BVectorField{T, N, names} = NamedArrayTuple{N, T, N, names}
-        const TensorField{T, N, names}  = NamedArrayTuple{N, T, N, names}
+        const TensorField{N_tuple, T, N, names} = NamedArrayTuple{N_tuple, T, N, names}
     end
 end
 
@@ -719,7 +719,7 @@ function Fields_exprs()
         export VectorField, BVectorField, TensorField
         const VectorField{N, names}     = NamedArrayTuple{N, N, names}
         const BVectorField{N, names}    = NamedArrayTuple{N, N, names}
-        const TensorField{N, names}     = NamedArrayTuple{N, N, names}
+        const TensorField{N_tuple, N, names} = NamedArrayTuple{N_tuple, N, names}
     end
 end
 

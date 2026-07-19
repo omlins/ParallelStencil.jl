@@ -1656,9 +1656,9 @@ end == nothing || true;
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, Float64)
+        @init_parallel_stencil(package=$package, numbertype=Float64)
         @require @is_initialized()
-        import .Data.Fields
+        using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
         # Restored runtime-launch sub-testsets for the scalar `Field` kind (one-, two-
         # and three-dimensional `gridsize`), extending the restored macro-expansion
@@ -1829,73 +1829,130 @@ eval(:(
         end;
         @testset "VectorField to Data.Fields.Device.VectorField" begin
             # VectorField's number of components always equals the per-component array dimensionality
-            # (`length(gridsize)`), so the host-side alias is instantiated with the single shared parameter; the
-            # per-component array is what @parallel_indices ranges over and the @test asserts all components.
+            # (`length(gridsize)`), so the host-side alias is instantiated with the single shared parameter;
+            # `@parallel fill_vector_3D!(V_3D)` auto-ranges `ix, iy, iz` over the cross-component maximum, but each
+            # component is shorter than that maximum in at least one dimension (e.g. `V.x = (nx-1, ny-2, nz-2)`),
+            # so each per-component write is guarded by `if ix <= size(comp,1) && iy <= size(comp,2) && iz <= size(comp,3)`.
+            # Named component access (`V.x`, `V.y`, `V.z`) is used for readability, and each `ref_*` is computed from
+            # the per-component's own `size(...)` so the @test references match the kernel writes exactly.
             @parallel_indices (ix,iy,iz) function fill_vector_3D!(V::VectorField)
-                V[1][ix,iy,iz] = ix + (iy-1)*size(V[1],1) + (iz-1)*size(V[1],1)*size(V[1],2)
-                V[2][ix,iy,iz] = ix + (iy-1)*size(V[1],1) + (iz-1)*size(V[1],1)*size(V[1],2)
-                V[3][ix,iy,iz] = ix + (iy-1)*size(V[1],1) + (iz-1)*size(V[1],1)*size(V[1],2)
+                if ix <= size(V.x,1) && iy <= size(V.x,2) && iz <= size(V.x,3)
+                    V.x[ix,iy,iz] = ix + (iy-1)*size(V.x,1) + (iz-1)*size(V.x,1)*size(V.x,2)
+                end
+                if ix <= size(V.y,1) && iy <= size(V.y,2) && iz <= size(V.y,3)
+                    V.y[ix,iy,iz] = ix + (iy-1)*size(V.y,1) + (iz-1)*size(V.y,1)*size(V.y,2)
+                end
+                if ix <= size(V.z,1) && iy <= size(V.z,2) && iz <= size(V.z,3)
+                    V.z[ix,iy,iz] = ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2)
+                end
                 return
             end
             V_3D = @VectorField((nx, ny, nz))
             @parallel fill_vector_3D!(V_3D)
-            ref_3D = [ix + (iy-1)*size(V_3D[1],1) + (iz-1)*size(V_3D[1],1)*size(V_3D[1],2) for ix=1:size(V_3D[1],1), iy=1:size(V_3D[1],2), iz=1:size(V_3D[1],3)]
-            @test all(Array(V_3D[1]) .== ref_3D)
-            @test all(Array(V_3D[2]) .== ref_3D)
-            @test all(Array(V_3D[3]) .== ref_3D)
+            ref_3D_x = [ix + (iy-1)*size(V_3D.x,1) + (iz-1)*size(V_3D.x,1)*size(V_3D.x,2) for ix=1:size(V_3D.x,1), iy=1:size(V_3D.x,2), iz=1:size(V_3D.x,3)]
+            ref_3D_y = [ix + (iy-1)*size(V_3D.y,1) + (iz-1)*size(V_3D.y,1)*size(V_3D.y,2) for ix=1:size(V_3D.y,1), iy=1:size(V_3D.y,2), iz=1:size(V_3D.y,3)]
+            ref_3D_z = [ix + (iy-1)*size(V_3D.z,1) + (iz-1)*size(V_3D.z,1)*size(V_3D.z,2) for ix=1:size(V_3D.z,1), iy=1:size(V_3D.z,2), iz=1:size(V_3D.z,3)]
+            @test all(Array(V_3D.x) .== ref_3D_x)
+            @test all(Array(V_3D.y) .== ref_3D_y)
+            @test all(Array(V_3D.z) .== ref_3D_z)
         end;
         @testset "BVectorField to Data.Fields.Device.BVectorField" begin
-            # BVectorField variant: same shared-parameter scheme as VectorField above.
+            # BVectorField variant: same shared-parameter scheme as VectorField above. With `padding=false` the
+            # three components are `BV.x = (nx+1, ny, nz)`, `BV.y = (nx, ny+1, nz)`, `BV.z = (nx, ny, nz+1)`;
+            # `@parallel fill_bvector_3D!(BV_3D)` therefore auto-ranges `ix, iy, iz` over `1:nx+1, 1:ny+1, 1:nz+1`
+            # (the cross-component maximum), so each per-component write is guarded by a per-component bounds `if`.
+            # Named component access (`BV.x`, `BV.y`, `BV.z`) is used for readability, and each `ref_*` is computed
+            # from the per-component's own `size(...)` so the @test references match the kernel writes exactly.
             @parallel_indices (ix,iy,iz) function fill_bvector_3D!(BV::BVectorField)
-                BV[1][ix,iy,iz] = ix + (iy-1)*size(BV[1],1) + (iz-1)*size(BV[1],1)*size(BV[1],2)
-                BV[2][ix,iy,iz] = ix + (iy-1)*size(BV[1],1) + (iz-1)*size(BV[1],1)*size(BV[1],2)
-                BV[3][ix,iy,iz] = ix + (iy-1)*size(BV[1],1) + (iz-1)*size(BV[1],1)*size(BV[1],2)
+                if ix <= size(BV.x,1) && iy <= size(BV.x,2) && iz <= size(BV.x,3)
+                    BV.x[ix,iy,iz] = ix + (iy-1)*size(BV.x,1) + (iz-1)*size(BV.x,1)*size(BV.x,2)
+                end
+                if ix <= size(BV.y,1) && iy <= size(BV.y,2) && iz <= size(BV.y,3)
+                    BV.y[ix,iy,iz] = ix + (iy-1)*size(BV.y,1) + (iz-1)*size(BV.y,1)*size(BV.y,2)
+                end
+                if ix <= size(BV.z,1) && iy <= size(BV.z,2) && iz <= size(BV.z,3)
+                    BV.z[ix,iy,iz] = ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2)
+                end
                 return
             end
             BV_3D = @BVectorField((nx, ny, nz))
             @parallel fill_bvector_3D!(BV_3D)
-            ref_3D = [ix + (iy-1)*size(BV_3D[1],1) + (iz-1)*size(BV_3D[1],1)*size(BV_3D[1],2) for ix=1:size(BV_3D[1],1), iy=1:size(BV_3D[1],2), iz=1:size(BV_3D[1],3)]
-            @test all(Array(BV_3D[1]) .== ref_3D)
-            @test all(Array(BV_3D[2]) .== ref_3D)
-            @test all(Array(BV_3D[3]) .== ref_3D)
+            ref_3D_x = [ix + (iy-1)*size(BV_3D.x,1) + (iz-1)*size(BV_3D.x,1)*size(BV_3D.x,2) for ix=1:size(BV_3D.x,1), iy=1:size(BV_3D.x,2), iz=1:size(BV_3D.x,3)]
+            ref_3D_y = [ix + (iy-1)*size(BV_3D.y,1) + (iz-1)*size(BV_3D.y,1)*size(BV_3D.y,2) for ix=1:size(BV_3D.y,1), iy=1:size(BV_3D.y,2), iz=1:size(BV_3D.y,3)]
+            ref_3D_z = [ix + (iy-1)*size(BV_3D.z,1) + (iz-1)*size(BV_3D.z,1)*size(BV_3D.z,2) for ix=1:size(BV_3D.z,1), iy=1:size(BV_3D.z,2), iz=1:size(BV_3D.z,3)]
+            @test all(Array(BV_3D.x) .== ref_3D_x)
+            @test all(Array(BV_3D.y) .== ref_3D_y)
+            @test all(Array(BV_3D.z) .== ref_3D_z)
         end;
         @testset "TensorField to Data.Fields.Device.TensorField" begin
             # TensorField's number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct
             # from the per-component array dimensionality (`N`), so the host-side alias is instantiated with a SEPARATE
-            # parameter for the number of components and the per-component array dimensionality. Exercising gridsize of
-            # length 1 (1 component), 2 (3 components), and 3 (6 components); the host-side alias decoupling (and the
-            # exact per-component array dimensionality tracking per channel `size(T[1],*)`) is exercised by the
-            # `ref_*D` host-computed references below.
-            @parallel_indices (ix) function fill_tensor_1D!(T::TensorField); T[1][ix] = ix; return; end
-            T_1D = @TensorField((nx,)); @parallel fill_tensor_1D!(T_1D); @test all(Array(T_1D[1]) .== [ix for ix=1:size(T_1D[1],1)])
+            # parameter for the number of components and the per-component array dimensionality. With `padding=false`
+            # each component (e.g. `T.xx = (nx, ny-2, nz-2)`, `T.yy = (nx-2, ny, nz-2)`, ...) has its OWN shape, so
+            # `@parallel fill_tensor_*D!(T_*D)` auto-ranges over the cross-component maximum and each per-component
+            # write must be guarded by an `if`. Named component access (`T.xx`, `T.yy`, `T.zz`, `T.xy`, `T.xz`, `T.yz`)
+            # is used for readability, and each `ref_*` is computed from the per-component's own `size(...)` so the
+            # @test references match the kernel writes exactly.
+            @parallel_indices (ix) function fill_tensor_1D!(T::TensorField)
+                if ix <= size(T.xx,1)
+                    T.xx[ix] = ix
+                end
+                return
+            end
+            T_1D = @TensorField((nx,)); @parallel fill_tensor_1D!(T_1D); @test all(Array(T_1D.xx) .== [ix for ix=1:size(T_1D.xx,1)])
             @parallel_indices (ix,iy) function fill_tensor_2D!(T::TensorField)
-                T[1][ix,iy] = ix + (iy-1)*size(T[1],1)
-                T[2][ix,iy] = ix + (iy-1)*size(T[1],1)
-                T[3][ix,iy] = ix + (iy-1)*size(T[1],1)
+                if ix <= size(T.xx,1) && iy <= size(T.xx,2)
+                    T.xx[ix,iy] = ix + (iy-1)*size(T.xx,1)
+                end
+                if ix <= size(T.yy,1) && iy <= size(T.yy,2)
+                    T.yy[ix,iy] = ix + (iy-1)*size(T.yy,1)
+                end
+                if ix <= size(T.xy,1) && iy <= size(T.xy,2)
+                    T.xy[ix,iy] = ix + (iy-1)*size(T.xy,1)
+                end
                 return
             end
             T_2D = @TensorField((nx, ny)); @parallel fill_tensor_2D!(T_2D)
-            ref_2D = [ix + (iy-1)*size(T_2D[1],1) for ix=1:size(T_2D[1],1), iy=1:size(T_2D[1],2)]
-            @test all(Array(T_2D[1]) .== ref_2D)
-            @test all(Array(T_2D[2]) .== ref_2D)
-            @test all(Array(T_2D[3]) .== ref_2D)
+            ref_2D_xx = [ix + (iy-1)*size(T_2D.xx,1) for ix=1:size(T_2D.xx,1), iy=1:size(T_2D.xx,2)]
+            ref_2D_yy = [ix + (iy-1)*size(T_2D.yy,1) for ix=1:size(T_2D.yy,1), iy=1:size(T_2D.yy,2)]
+            ref_2D_xy = [ix + (iy-1)*size(T_2D.xy,1) for ix=1:size(T_2D.xy,1), iy=1:size(T_2D.xy,2)]
+            @test all(Array(T_2D.xx) .== ref_2D_xx)
+            @test all(Array(T_2D.yy) .== ref_2D_yy)
+            @test all(Array(T_2D.xy) .== ref_2D_xy)
             @parallel_indices (ix,iy,iz) function fill_tensor_3D!(T::TensorField)
-                T[1][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
-                T[2][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
-                T[3][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
-                T[4][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
-                T[5][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
-                T[6][ix,iy,iz] = ix + (iy-1)*size(T[1],1) + (iz-1)*size(T[1],1)*size(T[1],2)
+                if ix <= size(T.xx,1) && iy <= size(T.xx,2) && iz <= size(T.xx,3)
+                    T.xx[ix,iy,iz] = ix + (iy-1)*size(T.xx,1) + (iz-1)*size(T.xx,1)*size(T.xx,2)
+                end
+                if ix <= size(T.yy,1) && iy <= size(T.yy,2) && iz <= size(T.yy,3)
+                    T.yy[ix,iy,iz] = ix + (iy-1)*size(T.yy,1) + (iz-1)*size(T.yy,1)*size(T.yy,2)
+                end
+                if ix <= size(T.zz,1) && iy <= size(T.zz,2) && iz <= size(T.zz,3)
+                    T.zz[ix,iy,iz] = ix + (iy-1)*size(T.zz,1) + (iz-1)*size(T.zz,1)*size(T.zz,2)
+                end
+                if ix <= size(T.xy,1) && iy <= size(T.xy,2) && iz <= size(T.xy,3)
+                    T.xy[ix,iy,iz] = ix + (iy-1)*size(T.xy,1) + (iz-1)*size(T.xy,1)*size(T.xy,2)
+                end
+                if ix <= size(T.xz,1) && iy <= size(T.xz,2) && iz <= size(T.xz,3)
+                    T.xz[ix,iy,iz] = ix + (iy-1)*size(T.xz,1) + (iz-1)*size(T.xz,1)*size(T.xz,2)
+                end
+                if ix <= size(T.yz,1) && iy <= size(T.yz,2) && iz <= size(T.yz,3)
+                    T.yz[ix,iy,iz] = ix + (iy-1)*size(T.yz,1) + (iz-1)*size(T.yz,1)*size(T.yz,2)
+                end
                 return
             end
             T_3D = @TensorField((nx, ny, nz)); @parallel fill_tensor_3D!(T_3D)
-            ref_3D = [ix + (iy-1)*size(T_3D[1],1) + (iz-1)*size(T_3D[1],1)*size(T_3D[1],2) for ix=1:size(T_3D[1],1), iy=1:size(T_3D[1],2), iz=1:size(T_3D[1],3)]
-            @test all(Array(T_3D[1]) .== ref_3D)
-            @test all(Array(T_3D[2]) .== ref_3D)
-            @test all(Array(T_3D[3]) .== ref_3D)
-            @test all(Array(T_3D[4]) .== ref_3D)
-            @test all(Array(T_3D[5]) .== ref_3D)
-            @test all(Array(T_3D[6]) .== ref_3D)
+            ref_3D_xx = [ix + (iy-1)*size(T_3D.xx,1) + (iz-1)*size(T_3D.xx,1)*size(T_3D.xx,2) for ix=1:size(T_3D.xx,1), iy=1:size(T_3D.xx,2), iz=1:size(T_3D.xx,3)]
+            ref_3D_yy = [ix + (iy-1)*size(T_3D.yy,1) + (iz-1)*size(T_3D.yy,1)*size(T_3D.yy,2) for ix=1:size(T_3D.yy,1), iy=1:size(T_3D.yy,2), iz=1:size(T_3D.yy,3)]
+            ref_3D_zz = [ix + (iy-1)*size(T_3D.zz,1) + (iz-1)*size(T_3D.zz,1)*size(T_3D.zz,2) for ix=1:size(T_3D.zz,1), iy=1:size(T_3D.zz,2), iz=1:size(T_3D.zz,3)]
+            ref_3D_xy = [ix + (iy-1)*size(T_3D.xy,1) + (iz-1)*size(T_3D.xy,1)*size(T_3D.xy,2) for ix=1:size(T_3D.xy,1), iy=1:size(T_3D.xy,2), iz=1:size(T_3D.xy,3)]
+            ref_3D_xz = [ix + (iy-1)*size(T_3D.xz,1) + (iz-1)*size(T_3D.xz,1)*size(T_3D.xz,2) for ix=1:size(T_3D.xz,1), iy=1:size(T_3D.xz,2), iz=1:size(T_3D.xz,3)]
+            ref_3D_yz = [ix + (iy-1)*size(T_3D.yz,1) + (iz-1)*size(T_3D.yz,1)*size(T_3D.yz,2) for ix=1:size(T_3D.yz,1), iy=1:size(T_3D.yz,2), iz=1:size(T_3D.yz,3)]
+            @test all(Array(T_3D.xx) .== ref_3D_xx)
+            @test all(Array(T_3D.yy) .== ref_3D_yy)
+            @test all(Array(T_3D.zz) .== ref_3D_zz)
+            @test all(Array(T_3D.xy) .== ref_3D_xy)
+            @test all(Array(T_3D.xz) .== ref_3D_xz)
+            @test all(Array(T_3D.yz) .== ref_3D_yz)
         end;
         # `@require`-gated assertion sub-testset verifying that the host-side
         # `[T]Data` submodules (`Data.Fields`, `TData.Fields`, `Data.Fields.Device`,

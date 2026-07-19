@@ -425,7 +425,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,), (indices_dir,))
     end
     body = handle_padding(caller, body, padding, indices; handle_indexing=false)
-    if isgpu(package) kernel = insert_device_types(caller, kernel) end
+    kernel = insert_device_types(caller, kernel) # NOTE: we insert the device types not only for GPU kernels but also for CPU kernels to keep the code path the same, allowing for easier testing and debugging; alternative: if isgpu(package) ...
     if !memopt
         kernel = adjust_signatures(kernel, package)
         body   = handle_inverses(body)

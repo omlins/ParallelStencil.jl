@@ -201,7 +201,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package) || isxpu(package) kernel = insert_device_types(caller, kernel) end
+    kernel = insert_device_types(caller, kernel) # NOTE: we insert the device types not only for GPU kernels but also for CPU kernels to keep the code path the same, allowing for easier testing and debugging; alternative: if isgpu(package) || isxpu(package) ...
     kernel = adjust_signatures(kernel, package)
     body   = handle_padding(caller, body, padding, indices)
     body   = handle_inverses(body)
