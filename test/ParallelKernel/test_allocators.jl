@@ -1169,7 +1169,7 @@ eval(:(
 eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_kernel($package, Float16)
+        @init_parallel_kernel($package, Float16, padding=true)
         @require @is_initialized()
         (nx, ny, nz) = (3, 4, 5)
         # Host-side alias matching under independent parameters: for each field kind allocated by
