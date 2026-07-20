@@ -275,9 +275,11 @@ function insert_device_types(caller::Module, kernel::Expr)
     for T in FIELDTYPES
         if !isnothing(eval_try(caller, :(Data.Fields.Device)))
             kernel = substitute(kernel, :(Data.Fields.$T), :(Data.Fields.Device.$T))
+            kernel = substitute(kernel, :(Fields.$T), :(Data.Fields.Device.$T))
         end
         if !isnothing(eval_try(caller, :(TData.Fields.Device)))
             kernel = substitute(kernel, :(TData.Fields.$T), :(TData.Fields.Device.$T))
+            kernel = substitute(kernel, :(Fields.$T), :(TData.Fields.Device.$T))
         end
         Device_val = eval_try(caller, :(Fields.Device))
         if !isnothing(Device_val) && Device_val in (eval_try(caller, :(Data.Fields.Device)), eval_try(caller, :(TData.Fields.Device)))
@@ -294,6 +296,12 @@ function insert_device_types(caller::Module, kernel::Expr)
             T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(TData.Fields.$T))) ? :(TData.Fields.Device.$T) : T_d
         end
         if !isnothing(T_d) kernel = substitute_in_kernel(kernel, T, T_d, signature_only=true) end
+        # In addition, if the unqualified alias `T` (e.g. `Field`) was brought into the caller's scope via `using .Data.Fields` (which makes `T == Data.Fields.T` at *use site* but not necessarily through `eval_try(caller, T)` depending on the macro's caller context), still substitute the unqualified form to the device-side alias whenever the matching qualified form would have been substituted. This mirrors the qualified-form rules added above and ensure "field types must be usable as kernel argument annotations" holds.
+        if isnothing(T_d) && !isnothing(eval_try(caller, :(Data.Fields.Device)))
+            kernel = substitute_in_kernel(kernel, T, :(Data.Fields.Device.$T), signature_only=true)
+        elseif isnothing(T_d) && !isnothing(eval_try(caller, :(TData.Fields.Device)))
+            kernel = substitute_in_kernel(kernel, T, :(TData.Fields.Device.$T), signature_only=true)
+        end
     end
     return kernel
 end
