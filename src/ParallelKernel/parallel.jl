@@ -350,7 +350,7 @@ function parallel_call_cpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::
             return kernelcall
         end
     else
-        return :(@which $kernelcall)
+        return :(() -> $kernelcall) #NOTE: an alternative would be to return :(@which $kernelcall)  , but this would require to import InteractiveUtils...
     end
 end
 
