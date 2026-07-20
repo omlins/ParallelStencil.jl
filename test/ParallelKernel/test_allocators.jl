@@ -1309,7 +1309,7 @@ eval(:(
                                       VectorField  => (V1, V2, V3),
                                       TensorField  => T),
                           allocator = @rand,
-                          eltype    = Float32)
+                          eltype    = Float16)
                 @test typeof(F1) <: Data.Fields.Field{3}
                 @test typeof(F2) <: Data.Fields.Field{3}
                 @test typeof(X)  <: Data.Fields.XField{3}
