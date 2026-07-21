@@ -35,30 +35,30 @@ function init_parallel_kernel(caller::Module, package::Symbol, numbertype::DataT
     if package == PKG_CUDA
         if (isinteractive() && !is_installed("CUDA")) @NotInstalledError("CUDA was selected as package for parallelization, but CUDA.jl is not installed. CUDA functionality is provided as an extension of $parent_module and CUDA.jl needs therefore to be installed independently (type `add CUDA` in the julia package manager).") end
         indextype          = INT_CUDA
-        data_module        = Data_cuda(numbertype, indextype)
-        tdata_module       = TData_cuda()
+        data_module        = Data_cuda(numbertype, indextype, padding)
+        tdata_module       = TData_cuda(padding)
     elseif package == PKG_AMDGPU
         if (isinteractive() && !is_installed("AMDGPU")) @NotInstalledError("AMDGPU was selected as package for parallelization, but AMDGPU.jl is not installed. AMDGPU functionality is provided as an extension of $parent_module and AMDGPU.jl needs therefore to be installed independently (type `add AMDGPU` in the julia package manager).") end
         indextype          = INT_AMDGPU
-        data_module        = Data_amdgpu(numbertype, indextype)
-        tdata_module       = TData_amdgpu()
+        data_module        = Data_amdgpu(numbertype, indextype, padding)
+        tdata_module       = TData_amdgpu(padding)
     elseif package == PKG_METAL
         if (isinteractive() && !is_installed("Metal")) @NotInstalledError("Metal was selected as package for parallelization, but Metal.jl is not installed. Metal functionality is provided as an extension of $parent_module and Metal.jl needs therefore to be installed independently (type `add Metal` in the julia package manager).") end
         indextype          = INT_METAL
-        data_module        = Data_metal(numbertype, indextype)
-        tdata_module       = TData_metal()
+        data_module        = Data_metal(numbertype, indextype, padding)
+        tdata_module       = TData_metal(padding)
     elseif package == PKG_KERNELABSTRACTIONS
         if (isinteractive() && !is_installed("KernelAbstractions")) @NotInstalledError("KernelAbstractions was selected as package for parallelization, but KernelAbstractions.jl is not installed. KernelAbstractions functionality is provided as an extension of $parent_module and KernelAbstractions.jl needs therefore to be installed independently (type `add KernelAbstractions` in the julia package manager).") end
         indextype          = INT_KERNELABSTRACTIONS
     elseif package == PKG_POLYESTER
         if (isinteractive() && !is_installed("Polyester")) @NotInstalledError("Polyester was selected as package for parallelization, but Polyester.jl is not installed. Multi-threading using Polyester is provided as an extension of $parent_module and Polyester.jl needs therefore to be installed independently (type `add Polyester` in the julia package manager).") end
         indextype          = INT_POLYESTER
-        data_module        = Data_cpu(numbertype, indextype)
-        tdata_module       = TData_cpu()
+        data_module        = Data_cpu(numbertype, indextype, padding)
+        tdata_module       = TData_cpu(padding)
     elseif package == PKG_THREADS
         indextype          = INT_THREADS
-        data_module        = Data_cpu(numbertype, indextype)
-        tdata_module       = TData_cpu()
+        data_module        = Data_cpu(numbertype, indextype, padding)
+        tdata_module       = TData_cpu(padding)
     end
     pkg_import_cmd = define_import(caller, package, parent_module)
     # TODO: before it was ParallelStencil.ParallelKernel.PKG_THREADS, which activated it all weight i think, which should not be

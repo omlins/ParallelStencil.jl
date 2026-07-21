@@ -243,7 +243,7 @@ end
 
 # CUDA
 
-function Data_cuda(numbertype::DataType, indextype::DataType)
+function Data_cuda(numbertype::DataType, indextype::DataType, padding::Bool)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
@@ -253,11 +253,12 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             # export CuCellArray
             const Index                     = $indextype
             const Array{T, N}               = CUDA.CuArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = CuCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype)) 
             $(Data_Device_cuda(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     else
         :(baremodule $MODULENAME_DATA
@@ -269,17 +270,18 @@ function Data_cuda(numbertype::DataType, indextype::DataType)
             const Index                     = $indextype
             const Number                    = $numbertype
             const Array{N}                  = CUDA.CuArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}           = CuCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_cuda(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_cuda()
+function TData_cuda(padding::Bool)
     TData_module = :(
         baremodule $MODULENAME_TDATA
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
@@ -288,11 +290,12 @@ function TData_cuda()
             # CellArrays.@define_CuCellArray
             # export CuCellArray
             const Array{T, N}               = CUDA.CuArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = CuCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs())
             $(TData_Device_cuda())
-            $(TData_Fields())
+            $(TData_Fields(padding))
         end
     )
     return prewalk(rmlines, flatten(TData_module))
@@ -304,6 +307,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                     = $indextype
             const Array{T, N}               = CUDA.CuDeviceArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -313,6 +317,7 @@ function Data_Device_cuda(numbertype::DataType, indextype::DataType)
             import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                     = $indextype
             const Array{N}                  = CUDA.CuDeviceArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}           = CellArrays.CellArray{<:Cell,N,B,<:CUDA.CuDeviceArray{$numbertype,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -325,6 +330,7 @@ function TData_Device_cuda()
     :(baremodule $MODULENAME_DEVICE
         import Base, CUDA, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
         const Array{T, N}                   = CUDA.CuDeviceArray{T, N}
+        const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
         const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B}       = CellArrays.CellArray{<:Cell{T_elem},N,B,<:CUDA.CuDeviceArray{T_elem,CellArrays._N}}
         $(TData_xpu_exprs())
@@ -334,7 +340,7 @@ end
 
 # AMDGPU
 
-function Data_amdgpu(numbertype::DataType, indextype::DataType)
+function Data_amdgpu(numbertype::DataType, indextype::DataType, padding::Bool)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DATA
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
@@ -344,11 +350,12 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             # export ROCCellArray
             const Index                      = $indextype
             const Array{T, N}                = AMDGPU.ROCArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_amdgpu(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     else
         :(baremodule $MODULENAME_DATA
@@ -360,17 +367,18 @@ function Data_amdgpu(numbertype::DataType, indextype::DataType)
             const Index                      = $indextype
             const Number                     = $numbertype
             const Array{N}                   = AMDGPU.ROCArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}            = ROCCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_amdgpu(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_amdgpu()
+function TData_amdgpu(padding::Bool)
     TData_module = :(
         baremodule $MODULENAME_TDATA
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
@@ -379,11 +387,12 @@ function TData_amdgpu()
             # CellArrays.@define_ROCCellArray
             # export ROCCellArray
             const Array{T, N}                = AMDGPU.ROCArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = ROCCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs())
             $(TData_Device_amdgpu())
-            $(TData_Fields())
+            $(TData_Fields(padding))
         end
         )
     return prewalk(rmlines, flatten(TData_module))
@@ -395,6 +404,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                      = $indextype
             const Array{T, N}                = AMDGPU.ROCDeviceArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -404,6 +414,7 @@ function Data_Device_amdgpu(numbertype::DataType, indextype::DataType)
             import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                      = $indextype
             const Array{N}                   = AMDGPU.ROCDeviceArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}            = CellArrays.CellArray{<:Cell,N,B,<:AMDGPU.ROCDeviceArray{$numbertype,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -416,6 +427,7 @@ function TData_Device_amdgpu()
     :(baremodule $MODULENAME_DEVICE
         import Base, AMDGPU, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
         const Array{T, N}                    = AMDGPU.ROCDeviceArray{T, N}
+        const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
         const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B}        = CellArrays.CellArray{<:Cell{T_elem},N,B,<:AMDGPU.ROCDeviceArray{T_elem,CellArrays._N}}
         $(TData_xpu_exprs())
@@ -424,18 +436,19 @@ end
 
 # Metal
 
-function Data_metal(numbertype::DataType, indextype::DataType)
+function Data_metal(numbertype::DataType, indextype::DataType, padding::Bool)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DATA # NOTE: there cannot be any newline before 'module Data' or it will create a begin end block and the module creation will fail.
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
             const Index                     = $indextype
             const Array{T, N}               = Metal.MtlArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype)) 
             $(Data_Device_metal(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     else
         :(baremodule $MODULENAME_DATA
@@ -444,27 +457,29 @@ function Data_metal(numbertype::DataType, indextype::DataType)
             const Index                     = $indextype
             const Number                    = $numbertype
             const Array{N}                  = Metal.MtlArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}           = MtlCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_metal(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_metal()
+function TData_metal(padding::Bool)
     TData_module = :(
         baremodule $MODULENAME_TDATA
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const MtlCellArray{T,N,B,T_elem} = CellArrays.CellArray{T,N,B,Metal.MtlArray{T_elem,CellArrays._N}}
             const Array{T, N}               = Metal.MtlArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = MtlCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs())
             $(TData_Device_metal())
-            $(TData_Fields())
+            $(TData_Fields(padding))
         end
     )
     return prewalk(rmlines, flatten(TData_module))
@@ -476,6 +491,7 @@ function Data_Device_metal(numbertype::DataType, indextype::DataType)
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                     = $indextype
             const Array{T, N}               = Metal.MtlDeviceArray{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}   = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -485,6 +501,7 @@ function Data_Device_metal(numbertype::DataType, indextype::DataType)
             import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                     = $indextype
             const Array{N}                  = Metal.MtlDeviceArray{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                   = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}           = CellArrays.CellArray{<:Cell,N,B,<:Metal.MtlDeviceArray{$numbertype,CellArrays._N}}
             $(Data_xpu_exprs(numbertype))
@@ -497,6 +514,7 @@ function TData_Device_metal()
     :(baremodule $MODULENAME_DEVICE
         import Base, Metal, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
         const Array{T, N}                   = Metal.MtlDeviceArray{T, N}
+        const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
         const Cell{T, S}                    = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B}       = CellArrays.CellArray{<:Cell{T_elem},N,B,<:Metal.MtlDeviceArray{T_elem,CellArrays._N}}
         $(TData_xpu_exprs())
@@ -505,17 +523,18 @@ end
 
 # CPU
 
-function Data_cpu(numbertype::DataType, indextype::DataType)
+function Data_cpu(numbertype::DataType, indextype::DataType, padding::Bool)
     Data_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DATA
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                      = $indextype
             const Array{T, N}                = Base.Array{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_cpu(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     else
         :(baremodule $MODULENAME_DATA
@@ -523,26 +542,28 @@ function Data_cpu(numbertype::DataType, indextype::DataType)
             const Index                      = $indextype
             const Number                     = $numbertype
             const Array{N}                   = Base.Array{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}            = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype))
             $(Data_Device_cpu(numbertype, indextype))
-            $(Data_Fields(numbertype, indextype))
+            $(Data_Fields(numbertype, indextype, padding))
         end)
     end
     return prewalk(rmlines, flatten(Data_module))
 end
 
-function TData_cpu()
+function TData_cpu(padding::Bool)
     TData_module = :(
         baremodule $MODULENAME_TDATA
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Array{T, N}                = Base.Array{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             $(TData_xpu_exprs())
             $(TData_Device_cpu())
-            $(TData_Fields())
+            $(TData_Fields(padding))
         end
     )
     return prewalk(rmlines, flatten(TData_module))
@@ -554,6 +575,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                      = $indextype
             const Array{T, N}                = Base.Array{T, N}
+            const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
             const Cell{T, S}                 = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
             const CellArray{T_elem, N, B}    = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
             $(Data_xpu_exprs(numbertype))
@@ -563,6 +585,7 @@ function Data_Device_cpu(numbertype::DataType, indextype::DataType)
             import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
             const Index                      = $indextype
             const Array{N}                   = Base.Array{$numbertype, N}
+            const SubArray{N, P<:Array{N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{$numbertype, N, P, I}
             const Cell{S}                    = Union{StaticArrays.SArray{S, $numbertype}, StaticArrays.FieldArray{S, $numbertype}}
             const CellArray{N, B}            = CellArrays.CPUCellArray{<:Cell,N,B,$numbertype}
             $(Data_xpu_exprs(numbertype))
@@ -575,6 +598,7 @@ function TData_Device_cpu()
     :(baremodule $MODULENAME_DEVICE
         import Base, ParallelStencil.ParallelKernel.CellArrays, ParallelStencil.ParallelKernel.StaticArrays
         const Array{T, N}                    = Base.Array{T, N}
+        const SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}} = Base.SubArray{T, N, P, I}
         const Cell{T, S}                     = Union{StaticArrays.SArray{S, T}, StaticArrays.FieldArray{S, T}}
         const CellArray{T_elem, N, B}        = CellArrays.CPUCellArray{<:Cell{T_elem},N,B,T_elem}
         $(TData_xpu_exprs())
@@ -596,22 +620,26 @@ function T_xpu_exprs()
     quote
         const NumberTuple{N_tuple, T}                           = NTuple{N_tuple, T}
         const ArrayTuple{N_tuple, T, N}                         = NTuple{N_tuple, Array{T, N}}
+        const SubArrayTuple{N_tuple, T, N}                      = NTuple{N_tuple, SubArray{T, N}}
         const CellTuple{N_tuple, T, S}                          = NTuple{N_tuple, Cell{T, S}}
         const CellArrayTuple{N_tuple, T_elem, N, B}             = NTuple{N_tuple, CellArray{T_elem, N, B}}
 
         const NamedNumberTuple{N_tuple, T, names}               = NamedTuple{names, <:NumberTuple{N_tuple, T}}
         const NamedArrayTuple{N_tuple, T, N, names}             = NamedTuple{names, <:ArrayTuple{N_tuple, T, N}}
+        const NamedSubArrayTuple{N_tuple, T, N, names}          = NamedTuple{names, <:SubArrayTuple{N_tuple, T, N}}
         const NamedCellTuple{N_tuple, T, S, names}              = NamedTuple{names, <:CellTuple{N_tuple, T, S}}
         const NamedCellArrayTuple{N_tuple, T_elem, N, B, names} = NamedTuple{names, <:CellArrayTuple{N_tuple, T_elem, N, B}}
 
         const NumberCollection{N_tuple, T}                       = Union{NumberTuple{N_tuple, T}, NamedNumberTuple{N_tuple, T}}
         const ArrayCollection{N_tuple, T, N}                     = Union{ArrayTuple{N_tuple, T, N}, NamedArrayTuple{N_tuple, T, N}}
+        const SubArrayCollection{N_tuple, T, N}                  = Union{SubArrayTuple{N_tuple, T, N}, NamedSubArrayTuple{N_tuple, T, N}}
         const CellCollection{N_tuple, T, S}                      = Union{CellTuple{N_tuple, T, S}, NamedCellTuple{N_tuple, T, S}}
         const CellArrayCollection{N_tuple, T_elem, N, B}         = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}        
 
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
         # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
+        # NamedSubArrayTuple{}(T, t::NamedTuple)                   = Base.map(T, t)  # NOTE: there is no Data.SubArray{T} constructor (Data.SubArray is the backend-specific SubArray alias); the per-field rewrite must keep the SubArray as-is, similarly to how NamedNumberTuple keeps the bare scalar.
         # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
         # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
     end
@@ -622,18 +650,21 @@ function xpu_exprs()
         const IndexTuple{N_tuple}                                = NTuple{N_tuple, Index}
         const NumberTuple{N_tuple}                               = NTuple{N_tuple, Number}
         const ArrayTuple{N_tuple, N}                             = NTuple{N_tuple, Array{N}}
+        const SubArrayTuple{N_tuple, N}                          = NTuple{N_tuple, SubArray{N}}
         const CellTuple{N_tuple, S}                              = NTuple{N_tuple, Cell{S}}
         const CellArrayTuple{N_tuple, N, B}                      = NTuple{N_tuple, CellArray{N, B}}
 
         const NamedIndexTuple{N_tuple, names}                    = NamedTuple{names, <:IndexTuple{N_tuple}}
         const NamedNumberTuple{N_tuple, names}                   = NamedTuple{names, <:NumberTuple{N_tuple}}
         const NamedArrayTuple{N_tuple, N, names}                 = NamedTuple{names, <:ArrayTuple{N_tuple, N}}
+        const NamedSubArrayTuple{N_tuple, N, names}              = NamedTuple{names, <:SubArrayTuple{N_tuple, N}}
         const NamedCellTuple{N_tuple, S, names}                  = NamedTuple{names, <:CellTuple{N_tuple, S}}
         const NamedCellArrayTuple{N_tuple, N, B, names}          = NamedTuple{names, <:CellArrayTuple{N_tuple, N, B}}
 
         const IndexCollection{N_tuple}                           = Union{IndexTuple{N_tuple}, NamedIndexTuple{N_tuple}}
         const NumberCollection{N_tuple}                          = Union{NumberTuple{N_tuple}, NamedNumberTuple{N_tuple}}
         const ArrayCollection{N_tuple, N}                        = Union{ArrayTuple{N_tuple, N}, NamedArrayTuple{N_tuple, N}}
+        const SubArrayCollection{N_tuple, N}                     = Union{SubArrayTuple{N_tuple, N}, NamedSubArrayTuple{N_tuple, N}}
         const CellCollection{N_tuple, S}                         = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
         const CellArrayCollection{N_tuple, N, B}                 = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
         
@@ -649,59 +680,59 @@ end
 
 ## (DATA SUBMODULE FIELDS - xPU)  # NOTE: custom data types could be implemented for each alias.
 
-function Data_Fields(numbertype::DataType, indextype::DataType)
+function Data_Fields(numbertype::DataType, indextype::DataType, padding::Bool)
     Fields_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_FIELDS
             import ..$MODULENAME_DATA                          # NOTE: this requires Julia >=1.10
-            import ..$MODULENAME_DATA: Array, NamedArrayTuple
-            $(generic_Fields_exprs())
-            $(T_Fields_exprs())
-            $(Data_Fields_Device(numbertype, indextype))
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+            $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+            $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype, padding))
         end)
     else
         :(baremodule $MODULENAME_FIELDS
             import ..$MODULENAME_DATA
-            import ..$MODULENAME_DATA: Array, NamedArrayTuple
-            $(generic_Fields_exprs())
-            $(Fields_exprs())
-            $(Data_Fields_Device(numbertype, indextype))
+            import ..$MODULENAME_DATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+            $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+            $(padding ? Fields_padding_exprs() : Fields_exprs())
+            $(Data_Fields_Device(numbertype, indextype, padding))
         end)
     end
     return Fields_module
 end
 
-function TData_Fields()
+function TData_Fields(padding::Bool)
     :(baremodule $MODULENAME_FIELDS
         import ..$MODULENAME_TDATA
-        import ..$MODULENAME_TDATA: Array, NamedArrayTuple
-        $(generic_Fields_exprs())
-        $(T_Fields_exprs())
-        $(TData_Fields_Device())
+        import ..$MODULENAME_TDATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+        $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+        $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+        $(TData_Fields_Device(padding))
     end)
 end
 
-function Data_Fields_Device(numbertype::DataType, indextype::DataType)
+function Data_Fields_Device(numbertype::DataType, indextype::DataType, padding::Bool)
     Device_module = if (numbertype == NUMBERTYPE_NONE)
         :(baremodule $MODULENAME_DEVICE
-            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
-            $(generic_Fields_exprs())
-            $(T_Fields_exprs())
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+            $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+            $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
         end)
     else
         :(baremodule $MODULENAME_DEVICE
-            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
-            $(generic_Fields_exprs())
-            $(Fields_exprs())
+            import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+            $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+            $(padding ? Fields_padding_exprs() : Fields_exprs())
         end)
     end
     return Device_module
 end
 
-function TData_Fields_Device()
+function TData_Fields_Device(padding::Bool)
     :(baremodule $MODULENAME_DEVICE
-        import ..$MODULENAME_TDATA.$MODULENAME_DEVICE: Array, NamedArrayTuple
-        $(generic_Fields_exprs())
-        $(T_Fields_exprs())
+        import ..$MODULENAME_TDATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
+        $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
+        $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
     end)
 end
 
@@ -739,5 +770,53 @@ function generic_Fields_exprs()
         const XYField                   = Array
         const XZField                   = Array
         const YZField                   = Array
+    end
+end
+
+# Padding analog of the three helpers above. When the caller module is created with
+# `padding=true`, the corresponding `Data_*` / `TData_*` builders splice these helpers
+# instead of the non-padding originals so the per-field aliases are backed by the
+# backend-specific `SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}}` alias (rather
+# than by `Array{T, N}` itself). The non-padding originals MUST stay unchanged so
+# `padding=false` keeps the documentation-advertised `Array`-based shapes for `@Field`
+# in that mode (where `@Field` does in fact return a plain backend `Array`). The only
+# substitution in each padding analog is `Array` -> `SubArray` (in generic_Fields_padding_exprs)
+# and `NamedArrayTuple` -> `NamedSubArrayTuple` (in T_Fields_padding_exprs /
+# Fields_padding_exprs); every other token (names, parameters, exports) is identical to
+# the corresponding non-padding helper.
+function T_Fields_padding_exprs()
+    quote
+        export VectorField, BVectorField, TensorField
+        const VectorField{T, N, names}  = NamedSubArrayTuple{N, T, N, names}
+        const BVectorField{T, N, names} = NamedSubArrayTuple{N, T, N, names}
+        const TensorField{N_tuple, T, N, names} = NamedSubArrayTuple{N_tuple, T, N, names}
+    end
+end
+
+function Fields_padding_exprs()
+    quote
+        export VectorField, BVectorField, TensorField
+        const VectorField{N, names}     = NamedSubArrayTuple{N, N, names}
+        const BVectorField{N, names}    = NamedSubArrayTuple{N, N, names}
+        const TensorField{N_tuple, N, names} = NamedSubArrayTuple{N_tuple, N, names}
+    end
+end
+
+function generic_Fields_padding_exprs()
+    quote
+        export Field, XField, YField, ZField, BXField, BYField, BZField, XXField, YYField, ZZField, XYField, XZField, YZField
+        const Field                     = SubArray
+        const XField                    = SubArray
+        const YField                    = SubArray
+        const ZField                    = SubArray
+        const BXField                   = SubArray
+        const BYField                   = SubArray
+        const BZField                   = SubArray
+        const XXField                   = SubArray
+        const YYField                   = SubArray
+        const ZZField                   = SubArray
+        const XYField                   = SubArray
+        const XZField                   = SubArray
+        const YZField                   = SubArray
     end
 end
