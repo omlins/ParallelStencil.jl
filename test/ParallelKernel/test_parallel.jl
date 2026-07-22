@@ -615,7 +615,7 @@ end == nothing || true;
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_kernel($package, Float64, padding=true)
+        @init_parallel_kernel($package, Float64, padding=false)
         @require @is_initialized()
         # `using .Data.Fields` brings both the `Fields` module name (used by the headline macro-expansion assertions in
         # the qualified `Fields.*` form, e.g. `@parallel_indices (ix,iy) f(A::Fields.Field, B::Fields.Field, c::T) where
