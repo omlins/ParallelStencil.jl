@@ -1656,7 +1656,7 @@ end == nothing || true;
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, Float64, 3, padding=true)
+        @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
