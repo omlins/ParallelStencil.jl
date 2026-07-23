@@ -525,7 +525,7 @@ function checksargs_field_macros(args...)
     posargs = clean_args(posargs)
     if isempty(posargs) @ArgumentError("the gridsize positional argument is mandatory.") end
     if length(posargs) > 2 @ArgumentError("too many positional arguments.") end
-    if (length(posargs) == 2) && !(any(is_same.((posargs[2],), (:@zeros, :@ones, :@rand, :@falses, :@trues)))) @ArgumentError("the second positional argument must be a field allocator macro.") end
+    if (length(posargs) == 2) && !(any(is_same.((posargs[2],), (:@zeros, :@ones, :@rand, :@falses, :@trues, :@zeros_cpu, :@ones_cpu, :@rand_cpu, :@falses_cpu, :@trues_cpu)))) @ArgumentError("the second positional argument must be a field allocator macro.") end
     if length(kwargs_expr) > 1 @ArgumentError("the only allowed keyword argument is eltype.") end
 end
 
@@ -616,6 +616,11 @@ function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, siz
     elseif is_same(allocator, :@rand)    arrayalloc = :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
     elseif is_same(allocator, :@falses)  arrayalloc = :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
     elseif is_same(allocator, :@trues)   arrayalloc = :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@zeros_cpu)  arrayalloc = :(ParallelStencil.ParallelKernel.@zeros_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@ones_cpu)   arrayalloc = :(ParallelStencil.ParallelKernel.@ones_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@rand_cpu)   arrayalloc = :(ParallelStencil.ParallelKernel.@rand_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@falses_cpu) arrayalloc = :(ParallelStencil.ParallelKernel.@falses_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@trues_cpu)  arrayalloc = :(ParallelStencil.ParallelKernel.@trues_cpu($arraysize..., eltype=$eltype))
     else @ModuleInternalError("unexpected allocator macro.")
     end
 

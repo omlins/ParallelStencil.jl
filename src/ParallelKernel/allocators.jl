@@ -25,6 +25,13 @@ macro zeros(args...)
     esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
+macro zeros_cpu(args...)
+    check_initialized(__module__)
+    posargs, kwargs_expr = split_args(args)
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros_cpu")
+    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+end
+
 
 ##
 const ONES_DOC = """
@@ -53,6 +60,14 @@ macro ones(args...)
     esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
+macro ones_cpu(args...)
+    check_initialized(__module__)
+    posargs, kwargs_expr = split_args(args)
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones_cpu")
+    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+end
+
+
 ##
 const RAND_DOC = """
     @rand(args...)
@@ -80,6 +95,13 @@ macro rand(args...)
     esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
 end
 
+macro rand_cpu(args...)
+    check_initialized(__module__)
+    posargs, kwargs_expr = split_args(args)
+    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand_cpu")
+    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+end
+
 
 ##
 const FALSES_DOC = """
@@ -103,6 +125,13 @@ macro falses(args...)
     esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength))
 end
 
+macro falses_cpu(args...)
+    check_initialized(__module__)
+    posargs, kwargs_expr = split_args(args)
+    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@falses_cpu")
+    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength, package=PKG_THREADS))
+end
+
 
 ##
 const TRUES_DOC = """
@@ -124,6 +153,13 @@ macro trues(args...)
     posargs, kwargs_expr = split_args(args)
     celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues")
     esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength))
+end
+
+macro trues_cpu(args...)
+    check_initialized(__module__)
+    posargs, kwargs_expr = split_args(args)
+    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues_cpu")
+    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength, package=PKG_THREADS))
 end
 
 
