@@ -1164,7 +1164,8 @@ eval(:(
 # (no `@reset_parallel_kernel` is ever called inside the block). The `PKG_THREADS` symbol is used
 # directly in the `[PKG_THREADS]` array literal; the bare `Threads` resolves to `Base.Threads`
 # (a Module, not the `:Threads` package identifier), which `check_package` rejects.
-@static for package in [PKG_THREADS]
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin

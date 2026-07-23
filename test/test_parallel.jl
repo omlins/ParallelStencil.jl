@@ -1651,7 +1651,8 @@ end == nothing || true;
 # number of components and the per-component array dimensionality for `VectorField`/
 # `BVectorField` and the separate parameter for the number of components and the per-
 # component array dimensionality for `TensorField`.
-@static for package in [PKG_THREADS]
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
@@ -1660,6 +1661,18 @@ eval(:(
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
+        # Helper: transfer a CPU-initialized padded aggregate field (a NamedTuple
+        # of SubArrays of CPU arrays) to the active backend by moving each
+        # component's parent array through Data.Array and rebuilding the same
+        # SubArray view. This lets the following aggregate-field sub-testsets
+        # initialize their source values on the CPU and still exercise the GPU
+        # runtime-launch path when a GPU backend is selected.
+        function to_device_field(F)
+            NamedTuple{keys(F)}(map(values(F)) do comp
+                parent_dev = Data.Array(Array(comp.parent))
+                Base.SubArray(parent_dev, comp.indices)
+            end)
+        end
         # Runtime-launch sub-testsets for the scalar `Field` kind (three-dimensional
         # `gridsize`), extending the restored macro-expansion sub-testsets with the
         # runtime-launch half (because dispatch correctness of the converted device
@@ -1803,25 +1816,32 @@ eval(:(
             # each per-component write via `@all(V.<comp>)` is bounded by `@within("@all", V.<comp>)`
             # against that component's own bounds, so the same kernel body serves with padding enabled
             # or disabled (no code changes required from the user side, exactly as the padding design
-            # intends). The source `B` is pre-filled on the host with the canonical
-            # `ix + (iy-1)*size(B_comp,1) + (iz-1)*size(B_comp,1)*size(B_comp,2)` pattern (via a
-            # Julia `for` loop over each component's own `CartesianIndices`), and the kernel performs
-            # a pure component-wise copy with `@all`, so the @test references — recomputed with the
-            # same per-component's own `size(...)` — match `B` exactly, verifying that the runtime
-            # launch and host-to-device conversion dispatch the aliased kernel signature correctly
-            # regardless of the per-component-shape variation enabled by padding.
+            # intends). To avoid scalar indexing on a GPU-backed source field, a CPU mirror is built
+            # from the backend template (same parent sizes and view indices) and filled with the
+            # canonical `ix + (iy-1)*size(B_comp,1) + (iz-1)*size(B_comp,1)*size(B_comp,2)` pattern
+            # via a Julia `for` loop over each component's own `CartesianIndices`. It is then
+            # transferred to the active backend with `to_device_field`. The kernel performs a pure
+            # component-wise copy with `@all`, so the @test references — recomputed with the same
+            # per-component's own `size(...)` — match `B` exactly, verifying that the runtime launch
+            # and host-to-device conversion dispatch the aliased kernel signature correctly regardless
+            # of the per-component-shape variation enabled by padding.
             @parallel function copy_vectorfield!(A::VectorField, B::VectorField)
                 @all(A.x) = @all(B.x)
                 @all(A.y) = @all(B.y)
                 @all(A.z) = @all(B.z)
                 return
             end
-            V_B = @VectorField((nx, ny, nz))
+            V_B_tmpl = @VectorField((nx, ny, nz))
+            V_B_cpu  = NamedTuple{keys(V_B_tmpl)}(map(values(V_B_tmpl)) do comp
+                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                Base.SubArray(parent_cpu, comp.indices)
+            end)
             for ci in (:x, :y, :z)
-                for iz in 1:size(getfield(V_B, ci), 3), iy in 1:size(getfield(V_B, ci), 2), ix in 1:size(getfield(V_B, ci), 1)
-                    getfield(V_B, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(V_B, ci), 1) + (iz-1)*size(getfield(V_B, ci), 1)*size(getfield(V_B, ci), 2)
+                for iz in 1:size(getfield(V_B_cpu, ci), 3), iy in 1:size(getfield(V_B_cpu, ci), 2), ix in 1:size(getfield(V_B_cpu, ci), 1)
+                    getfield(V_B_cpu, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(V_B_cpu, ci), 1) + (iz-1)*size(getfield(V_B_cpu, ci), 1)*size(getfield(V_B_cpu, ci), 2)
                 end
             end
+            V_B = to_device_field(V_B_cpu)
             V_A = @VectorField((nx, ny, nz))
             @parallel copy_vectorfield!(V_A, V_B)
             ref_3D_x = [ix + (iy-1)*size(V_B.x,1) + (iz-1)*size(V_B.x,1)*size(V_B.x,2) for ix=1:size(V_B.x,1), iy=1:size(V_B.x,2), iz=1:size(V_B.x,3)]
@@ -1836,25 +1856,31 @@ eval(:(
             # write via `@all(BV.<comp>)` is bounded by `@within("@all", BV.<comp>)` against that
             # component's own bounds (e.g. `BV.x = (nx+1, ny, nz)` with padding=false, or the
             # corresponding inner-region shape with padding=true), so the kernel body serves with
-            # padding enabled or disabled. The source `BV_B` is pre-filled on the host with the same
-            # canonical index pattern as `V_B` above (each component using its own
-            # `CartesianIndices`), the kernel performs a pure component-wise copy with `@all`, and
-            # each `ref_*` is computed from the component's own `size(...)` so the @test references
-            # match `BV_B` exactly, verifying the runtime launch and host-to-device conversion
-            # dispatch the aliased kernel signature correctly regardless of the per-component-shape
-            # variation enabled by padding.
+            # padding enabled or disabled. As for VectorField, a CPU mirror is built from the
+            # backend template, filled with the same canonical index pattern via host scalar loops,
+            # and transferred to the active backend with `to_device_field` so that the source field
+            # is GPU-compatible without requiring scalar indexing on device memory. Each `ref_*` is
+            # computed from the component's own `size(...)` so the @test references match `BV_B`
+            # exactly, verifying the runtime launch and host-to-device conversion dispatch the
+            # aliased kernel signature correctly regardless of the per-component-shape variation
+            # enabled by padding.
             @parallel function copy_bvectorfield!(A::BVectorField, B::BVectorField)
                 @all(A.x) = @all(B.x)
                 @all(A.y) = @all(B.y)
                 @all(A.z) = @all(B.z)
                 return
             end
-            BV_B = @BVectorField((nx, ny, nz))
+            BV_B_tmpl = @BVectorField((nx, ny, nz))
+            BV_B_cpu  = NamedTuple{keys(BV_B_tmpl)}(map(values(BV_B_tmpl)) do comp
+                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                Base.SubArray(parent_cpu, comp.indices)
+            end)
             for ci in (:x, :y, :z)
-                for iz in 1:size(getfield(BV_B, ci), 3), iy in 1:size(getfield(BV_B, ci), 2), ix in 1:size(getfield(BV_B, ci), 1)
-                    getfield(BV_B, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(BV_B, ci), 1) + (iz-1)*size(getfield(BV_B, ci), 1)*size(getfield(BV_B, ci), 2)
+                for iz in 1:size(getfield(BV_B_cpu, ci), 3), iy in 1:size(getfield(BV_B_cpu, ci), 2), ix in 1:size(getfield(BV_B_cpu, ci), 1)
+                    getfield(BV_B_cpu, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(BV_B_cpu, ci), 1) + (iz-1)*size(getfield(BV_B_cpu, ci), 1)*size(getfield(BV_B_cpu, ci), 2)
                 end
             end
+            BV_B = to_device_field(BV_B_cpu)
             BV_A = @BVectorField((nx, ny, nz))
             @parallel copy_bvectorfield!(BV_A, BV_B)
             ref_3D_x = [ix + (iy-1)*size(BV_B.x,1) + (iz-1)*size(BV_B.x,1)*size(BV_B.x,2) for ix=1:size(BV_B.x,1), iy=1:size(BV_B.x,2), iz=1:size(BV_B.x,3)]
@@ -1876,19 +1902,21 @@ eval(:(
             # component's own bounds, so the kernel body serves with padding enabled or
             # disabled (no code changes required from the user side, exactly as the padding
             # design intends — see the comment on the `VectorField to Data.Fields.Device.VectorField`
-            # sub-testset above for the rationale). The source `T_B` is pre-filled on the host
-            # with the canonical `ix + (iy-1)*size(comp,1) + (iz-1)*size(comp,1)*size(comp,2)`
-            # pattern (via a Julia `for` loop over each component's own `CartesianIndices`),
-            # and the kernel performs a pure component-wise copy with `@all`. Named component
-            # access (`T.xx`, `T.yy`, `T.zz`, `T.xy`, `T.xz`, `T.yz`) is used for readability,
-            # and each `ref_*` is computed from the component's own `size(...)` so the @test
-            # references match `T_B` exactly, verifying that the runtime launch and
-            # host-to-device conversion dispatch the aliased kernel signature correctly
-            # regardless of the per-component-shape variation enabled by padding. The 1-D and
-            # 2-D variants originally present here have been removed in favour of this 3-D
-            # variant (only FiniteDifferences3D is loaded in this file, so 1-D/2-D `@parallel`
-            # kernels are not supported here either — see the leading comment of the
-            # `Fields.Field to Data.Fields.Device.Field` sub-testset above).
+            # sub-testset above for the rationale). To avoid scalar indexing on GPU-backed
+            # source memory, a CPU mirror is built from the backend template and pre-filled on
+            # the host with the canonical `ix + (iy-1)*size(comp,1) + (iz-1)*size(comp,1)*size(comp,2)`
+            # pattern (via a Julia `for` loop over each component's own `CartesianIndices`), then
+            # transferred to the active backend with `to_device_field`. The kernel performs a
+            # pure component-wise copy with `@all`. Named component access (`T.xx`, `T.yy`,
+            # `T.zz`, `T.xy`, `T.xz`, `T.yz`) is used for readability, and each `ref_*` is
+            # computed from the component's own `size(...)` so the @test references match `T_B`
+            # exactly, verifying that the runtime launch and host-to-device conversion dispatch
+            # the aliased kernel signature correctly regardless of the per-component-shape
+            # variation enabled by padding. The 1-D and 2-D variants originally present here
+            # have been removed in favour of this 3-D variant (only FiniteDifferences3D is
+            # loaded in this file, so 1-D/2-D `@parallel` kernels are not supported here either
+            # — see the leading comment of the `Fields.Field to Data.Fields.Device.Field`
+            # sub-testset above).
             @parallel function copy_tensor_3D!(A::TensorField, B::TensorField)
                 @all(A.xx) = @all(B.xx)
                 @all(A.yy) = @all(B.yy)
@@ -1898,12 +1926,17 @@ eval(:(
                 @all(A.yz) = @all(B.yz)
                 return
             end
-            T_B = @TensorField((nx, ny, nz))
+            T_B_tmpl = @TensorField((nx, ny, nz))
+            T_B_cpu  = NamedTuple{keys(T_B_tmpl)}(map(values(T_B_tmpl)) do comp
+                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                Base.SubArray(parent_cpu, comp.indices)
+            end)
             for ci in (:xx, :yy, :zz, :xy, :xz, :yz)
-                for iz in 1:size(getfield(T_B, ci), 3), iy in 1:size(getfield(T_B, ci), 2), ix in 1:size(getfield(T_B, ci), 1)
-                    getfield(T_B, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(T_B, ci), 1) + (iz-1)*size(getfield(T_B, ci), 1)*size(getfield(T_B, ci), 2)
+                for iz in 1:size(getfield(T_B_cpu, ci), 3), iy in 1:size(getfield(T_B_cpu, ci), 2), ix in 1:size(getfield(T_B_cpu, ci), 1)
+                    getfield(T_B_cpu, ci)[ix, iy, iz] = ix + (iy-1)*size(getfield(T_B_cpu, ci), 1) + (iz-1)*size(getfield(T_B_cpu, ci), 1)*size(getfield(T_B_cpu, ci), 2)
                 end
             end
+            T_B = to_device_field(T_B_cpu)
             T_A = @TensorField((nx, ny, nz))
             @parallel copy_tensor_3D!(T_A, T_B)
             ref_3D_xx = [ix + (iy-1)*size(T_B.xx,1) + (iz-1)*size(T_B.xx,1)*size(T_B.xx,2) for ix=1:size(T_B.xx,1), iy=1:size(T_B.xx,2), iz=1:size(T_B.xx,3)]

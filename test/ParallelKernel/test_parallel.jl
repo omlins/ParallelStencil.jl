@@ -610,7 +610,8 @@ end == nothing || true;
 # and then declares and launches a representative kernel annotated with the same host-side
 # alias on the default CPU host code path, following the established
 # `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
-@static for package in [PKG_THREADS]
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
