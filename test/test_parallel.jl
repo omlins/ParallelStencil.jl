@@ -215,6 +215,33 @@ eval(:(
                     @test occursin("f_memopt_2d!(A2, A, ParallelStencil.ParallelKernel.promote_ranges(", call)
                 end;
             end;
+            @static if $package != $PKG_KERNELABSTRACTIONS
+                @testset "memopt with named-tuple component optvars/optranges" begin
+                    # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
+                    # Before the fix, Julia rejected the named-tuple literal `(V.z = (0:0,0:0,-1:1),)` during
+                    # macro expansion, raising an `ArgumentEvaluationError`. This test exercises the
+                    # default padding=false code path (the padding=true path is covered in the xPU
+                    # second block at the end of this file).
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:0,0:0,-1:1),) function stencil_memopt_vector_z!(A2, V)
+                        if (1 < iz < size(A2, 3))
+                            A2[ix, iy, iz] = V.z[ix, iy, iz + 1] - 2 * V.z[ix, iy, iz] + V.z[ix, iy, iz - 1]
+                        end
+                        return
+                    end
+                    call = @prettystring(2, @parallel stencil_memopt_vector_z!(A2, V))
+                    @test occursin(".memopt", call)
+                    @test occursin("stencil_memopt_vector_z!", call)
+                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:0,0:0,-1:1),) function stencil_memopt_bvector_z!(A2, BV)
+                        if (1 < iz < size(A2, 3))
+                            A2[ix, iy, iz] = BV.z[ix, iy, iz + 1] - 2 * BV.z[ix, iy, iz] + BV.z[ix, iy, iz - 1]
+                        end
+                        return
+                    end
+                    call = @prettystring(2, @parallel stencil_memopt_bvector_z!(A2, BV))
+                    @test occursin(".memopt", call)
+                    @test occursin("stencil_memopt_bvector_z!", call)
+                end;
+            end
             @testset "KernelAbstractions runtime reselection" begin
                 @static if $package == $PKG_KERNELABSTRACTIONS
                     @require KernelAbstractions.functional(KernelAbstractions.CPU())
@@ -1952,6 +1979,32 @@ eval(:(
             @test all(Array(T_A.xz) .== ref_3D_xz)
             @test all(Array(T_A.yz) .== ref_3D_yz)
         end;
+        @static if $package != $PKG_KERNELABSTRACTIONS
+            @testset "memopt with named-tuple component optvars/optranges" begin
+                # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
+                # Before the fix, Julia rejected the named-tuple literal `(V.z = (0:0,0:0,-1:1),)` during
+                # macro expansion, raising an `ArgumentEvaluationError`. This test ensures that such
+                # component-qualified optvars/optranges can be parsed and expanded successfully.
+                @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:0,0:0,-1:1),) function stencil_memopt_vector_z!(A2, V)
+                    if (1 < iz < size(A2, 3))
+                        A2[ix, iy, iz] = V.z[ix, iy, iz + 1] - 2 * V.z[ix, iy, iz] + V.z[ix, iy, iz - 1]
+                    end
+                    return
+                end
+                call = @prettystring(2, @parallel stencil_memopt_vector_z!(A2, V))
+                @test occursin(".memopt", call)
+                @test occursin("stencil_memopt_vector_z!", call)
+                @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:0,0:0,-1:1),) function stencil_memopt_bvector_z!(A2, BV)
+                    if (1 < iz < size(A2, 3))
+                        A2[ix, iy, iz] = BV.z[ix, iy, iz + 1] - 2 * BV.z[ix, iy, iz] + BV.z[ix, iy, iz - 1]
+                    end
+                    return
+                end
+                call = @prettystring(2, @parallel stencil_memopt_bvector_z!(A2, BV))
+                @test occursin(".memopt", call)
+                @test occursin("stencil_memopt_bvector_z!", call)
+            end;
+        end
         # `@require`-gated assertion sub-testset verifying that the host-side
         # `[T]Data` submodules (`Data.Fields`, `TData.Fields`, `Data.Fields.Device`,
         # `TData.Fields.Device`, `Data.Number`, `Data.Index`) are populated at
