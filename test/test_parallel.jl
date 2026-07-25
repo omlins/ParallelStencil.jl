@@ -218,28 +218,36 @@ eval(:(
             @static if $package != $PKG_KERNELABSTRACTIONS
                 @testset "memopt with named-tuple component optvars/optranges" begin
                     # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
-                    # Before the fix, Julia rejected the named-tuple literal `(V.z = (0:0,0:0,-1:1),)` during
-                    # macro expansion, raising an `ArgumentEvaluationError`. This test exercises the
-                    # default padding=false code path (the padding=true path is covered in the xPU
-                    # second block at the end of this file).
-                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:0,0:0,-1:1),) function stencil_memopt_vector_z!(A2, V)
-                        if (1 < iz < size(A2, 3))
-                            A2[ix, iy, iz] = V.z[ix, iy, iz + 1] - 2 * V.z[ix, iy, iz] + V.z[ix, iy, iz - 1]
-                        end
+                    # The explicit dotted identifiers are used in the `optvars`/`optranges` keywords,
+                    # and the kernels are exercised for both macro-expansion shape and runtime
+                    # correctness on synthetic data (default padding=false code path).
+                    nxyz   = (8, 8, 8)
+                    A2     = @Field(nxyz)
+                    A2_ref = @Field(nxyz)
+                    V      = (x=@Field(nxyz), y=@Field(nxyz), z=@Field(nxyz))
+                    BV     = (x=@Field(nxyz), y=@Field(nxyz), z=@Field(nxyz))
+                    @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
+                        @inn(A2) = @d2_zi(V.z)
                         return
                     end
-                    call = @prettystring(2, @parallel stencil_memopt_vector_z!(A2, V))
+                    call = @prettystring(2, @parallel fd_memopt_vector_z!(A2, V))
                     @test occursin(".memopt", call)
-                    @test occursin("stencil_memopt_vector_z!", call)
-                    @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:0,0:0,-1:1),) function stencil_memopt_bvector_z!(A2, BV)
-                        if (1 < iz < size(A2, 3))
-                            A2[ix, iy, iz] = BV.z[ix, iy, iz + 1] - 2 * BV.z[ix, iy, iz] + BV.z[ix, iy, iz - 1]
-                        end
+                    @test occursin("fd_memopt_vector_z!", call)
+                    copy!(V.z, [ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2) for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
+                    @parallel memopt=true fd_memopt_vector_z!(A2, V)
+                    A2_ref[2:end-1,2:end-1,2:end-1] .= (V.z[2:end-1,2:end-1,3:end] .- V.z[2:end-1,2:end-1,2:end-1]) .- (V.z[2:end-1,2:end-1,2:end-1] .- V.z[2:end-1,2:end-1,1:end-2])
+                    @test all(Array(A2) .== Array(A2_ref))
+                    @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z!(A2, BV)
+                        @inn(A2) = @d2_zi(BV.z)
                         return
                     end
-                    call = @prettystring(2, @parallel stencil_memopt_bvector_z!(A2, BV))
+                    call = @prettystring(2, @parallel fd_memopt_bvector_z!(A2, BV))
                     @test occursin(".memopt", call)
-                    @test occursin("stencil_memopt_bvector_z!", call)
+                    @test occursin("fd_memopt_bvector_z!", call)
+                    copy!(BV.z, [ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2) for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
+                    @parallel memopt=true fd_memopt_bvector_z!(A2, BV)
+                    A2_ref[2:end-1,2:end-1,2:end-1] .= (BV.z[2:end-1,2:end-1,3:end] .- BV.z[2:end-1,2:end-1,2:end-1]) .- (BV.z[2:end-1,2:end-1,2:end-1] .- BV.z[2:end-1,2:end-1,1:end-2])
+                    @test all(Array(A2) .== Array(A2_ref))
                 end;
             end
             @testset "KernelAbstractions runtime reselection" begin
@@ -1984,21 +1992,34 @@ eval(:(
                 # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`
                 # under the padding=true xPU path. The kernels are declared with `@parallel` and use
                 # 3D finite-difference operators, because padding has been designed to work with these
-                # kinds of kernels.
-                @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:0,0:0,-1:1),) function fd_memopt_vector_z!(A2, V)
+                # kinds of kernels. Both the macro-expansion shape and the runtime result on synthetic
+                # data are verified.
+                A2     = @Field((nx, ny, nz))
+                A2_ref = @Field((nx, ny, nz))
+                V      = (x=@Field((nx, ny, nz)), y=@Field((nx, ny, nz)), z=@Field((nx, ny, nz)))
+                BV     = (x=@Field((nx, ny, nz)), y=@Field((nx, ny, nz)), z=@Field((nx, ny, nz)))
+                @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
                     @inn(A2) = @d2_zi(V.z)
                     return
                 end
                 call = @prettystring(2, @parallel fd_memopt_vector_z!(A2, V))
                 @test occursin(".memopt", call)
                 @test occursin("fd_memopt_vector_z!", call)
-                @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:0,0:0,-1:1),) function fd_memopt_bvector_z!(A2, BV)
+                copy!(V.z, [ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2) for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
+                @parallel memopt=true fd_memopt_vector_z!(A2, V)
+                A2_ref[2:end-1,2:end-1,2:end-1] .= (V.z[2:end-1,2:end-1,3:end] .- V.z[2:end-1,2:end-1,2:end-1]) .- (V.z[2:end-1,2:end-1,2:end-1] .- V.z[2:end-1,2:end-1,1:end-2])
+                @test all(Array(A2) .== Array(A2_ref))
+                @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z!(A2, BV)
                     @inn(A2) = @d2_zi(BV.z)
                     return
                 end
                 call = @prettystring(2, @parallel fd_memopt_bvector_z!(A2, BV))
                 @test occursin(".memopt", call)
                 @test occursin("fd_memopt_bvector_z!", call)
+                copy!(BV.z, [ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2) for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
+                @parallel memopt=true fd_memopt_bvector_z!(A2, BV)
+                A2_ref[2:end-1,2:end-1,2:end-1] .= (BV.z[2:end-1,2:end-1,3:end] .- BV.z[2:end-1,2:end-1,2:end-1]) .- (BV.z[2:end-1,2:end-1,2:end-1] .- BV.z[2:end-1,2:end-1,1:end-2])
+                @test all(Array(A2) .== Array(A2_ref))
             end;
         end
         # `@require`-gated assertion sub-testset verifying that the host-side
