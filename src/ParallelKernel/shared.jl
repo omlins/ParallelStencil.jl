@@ -402,7 +402,7 @@ function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, ha
     kwargs = split_kwargs(kwargs_expr, separator=separator, keyword_type=keyword_type)
     if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
     for k in keys(kwargs)
-        if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
+        if (k in eval_args) kwargs[k] = eval_arg(caller, normalize_dotted_namedtuple_fields(kwargs[k])) end
     end
     kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
     kwargs_unknown      = (keyword_type == Symbol) ? NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs)) : NamedTuple()
@@ -534,13 +534,70 @@ inexpr_walk(expr,         e::Expr)                          = false
 Base.unquoted(s::Symbol) = s
 Base.unquoted(b::Bool)   = b
 
+function dotted_expr_to_symbol(ex::Union{Symbol,Expr})
+    if isa(ex, Symbol) return ex end
+    if @capture(ex, obj_.field_) && (isa(obj, Symbol) || isa(obj, Expr)) && isa(field, Symbol)
+        return Symbol(string(obj), ".", string(field))
+    end
+    return ex
+end
+
+function normalize_dotted_namedtuple_fields(expr)
+    if isa(expr, Expr) && expr.head == :tuple && any(isa(a, Expr) && a.head == :(=) for a in expr.args)
+        kv = Tuple{Any,Any}[]
+        has_dotted = false
+        for arg in expr.args
+            if isa(arg, Expr) && arg.head == :(=) && length(arg.args) == 2
+                lhs_orig = arg.args[1]
+                lhs_sym = dotted_expr_to_symbol(lhs_orig)
+                is_dotted = (lhs_sym !== lhs_orig)
+                has_dotted = has_dotted || is_dotted
+                rhs = normalize_dotted_namedtuple_fields(arg.args[2])
+                key_expr = is_dotted ? :(Symbol($(string(lhs_sym)))) : lhs_sym
+                push!(kv, (key_expr, rhs))
+            else
+                # Non-assignment entries are preserved as plain values (not expected in keyword named tuples).
+                push!(kv, (nothing, normalize_dotted_namedtuple_fields(arg)))
+            end
+        end
+        if has_dotted
+            keys_exprs = Any[]
+            vals_exprs = Any[]
+            for (k, v) in kv
+                if isnothing(k)
+                    push!(vals_exprs, v)
+                else
+                    push!(keys_exprs, k)
+                    push!(vals_exprs, v)
+                end
+            end
+            keys_tuple = Expr(:tuple, keys_exprs...)
+            vals_tuple = Expr(:tuple, vals_exprs...)
+            return :(NamedTuple{$keys_tuple}($vals_tuple))
+        else
+            return Expr(:tuple, [Expr(:(=), k, v) for (k, v) in kv if !isnothing(k)]...)
+        end
+    elseif isa(expr, Expr)
+        return Expr(expr.head, normalize_dotted_namedtuple_fields.(expr.args)...)
+    else
+        return expr
+    end
+end
+
+function extract_tuple_arg(x)
+    if isa(x, Symbol)        return x
+    elseif isa(x, QuoteNode) return x.value
+    else                     return x
+    end
+end
+
 function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
     if isa(t, Expr) && t.head == :tuple
         if (nested) return t.args
-        else        return Base.unquoted.(t.args)
+        else        return extract_tuple_arg.(t.args)
         end
     else 
-        return [t]
+        return [extract_tuple_arg(t)]
     end
 end
 

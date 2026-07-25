@@ -194,7 +194,7 @@ $((
         loopstart          = minimum(values(loopentrys))
         loopend            = loopsize
         use_any_shmem      = any(values(use_shmems))
-        shmem_optvars      = tuple((A for A in optvars if use_shmems[A])...)::Tuple{Vararg{Symbol}}
+        shmem_optvars      = tuple((A for A in optvars if use_shmems[A])...)
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, loopdim)
         shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim)
         shmem_exprs        = define_shmem_exprs(shmem_vars, loopdim)
@@ -619,7 +619,7 @@ function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symb
     end
 end
 
-function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::NTuple{N,Symbol} where N, loopdim::Integer)
+function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, loopdim::Integer)
     offsets_by_xy = Dict(A => Dict() for A in optvars)
     offsets_by_z  = Dict(A => Dict() for A in optvars)
     postwalk(body) do ex
@@ -669,7 +669,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
 end
 
 function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by_z)
-    return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
+    return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && dotted_expr_to_symbol(A) ∈ keys(optranges_arg)))...)
 end
 
 function define_optranges(optranges_arg, optvars, offsets, int_type, package)
@@ -688,31 +688,31 @@ function define_optranges(optranges_arg, optvars, offsets, int_type, package)
         fullrange    = typemin(int_type):typemax(int_type)
         pointrange_x = offsets_with_max_span[1]:offsets_with_max_span[1]
         pointrange_y = (length(offsets_with_max_span) > 1) ? (offsets_with_max_span[2]:offsets_with_max_span[2]) : fullrange
-        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                   optranges[A] = getproperty(optranges_arg, A)
-        elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))  optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                          optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                          optranges[A] = (pointrange_x, fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                          optranges[A] = (fullrange,    pointrange_y, fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                          optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        if     (!isnothing(optranges_arg) && dotted_expr_to_symbol(A) ∈ keys(optranges_arg)) optranges[A] = getproperty(optranges_arg, dotted_expr_to_symbol(A))
+        elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))       optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                               optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                               optranges[A] = (pointrange_x, fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                               optranges[A] = (fullrange,    pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                               optranges[A] = (pointrange_x, pointrange_y, fullrange)
         end
     end
     return optranges
 end
 
-function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
+function define_regqueues(offsets, optranges::Dict{Any, Any}, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
     regqueue_heads = Dict(A => Dict() for A in optvars)
     regqueue_tails = Dict(A => Dict() for A in optvars)
-    offset_mins    = Dict{Symbol, NTuple{3,Integer}}()
-    offset_maxs    = Dict{Symbol, NTuple{3,Integer}}()
-    nb_regs_heads  = Dict{Symbol, Integer}()
-    nb_regs_tails  = Dict{Symbol, Integer}()
+    offset_mins    = Dict{Any, NTuple{3,Integer}}()
+    offset_maxs    = Dict{Any, NTuple{3,Integer}}()
+    nb_regs_heads  = Dict{Any, Integer}()
+    nb_regs_tails  = Dict{Any, Integer}()
     for A in optvars
         regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A], nb_regs_heads[A], nb_regs_tails[A] = define_regqueue(offsets[A], optranges[A], A, indices, int_type, loopdim)
     end
     return regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails
 end
 
-function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Symbol, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
+function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Union{Symbol,Expr}, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
     regqueue_head = Dict()
     regqueue_tail = Dict()
     nb_regs_head  = 0
@@ -801,7 +801,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
     return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
 end
 
-function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, use_shmemhalos_arg, loopdim::Integer)
+function define_helper_variables(offset_mins, offset_maxs, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, use_shmemhalos_arg, loopdim::Integer)
     oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if loopdim == 3
         for A in optvars
@@ -812,9 +812,9 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
             use_shmem_x    = (hx1 + hx2 > 0)
             use_shmem_y    = (hy1 + hy2 > 0)
             use_shmem      = use_shmem_x || use_shmem_y
-            use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (A ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, A)
-                             elseif !(use_shmem_x && use_shmem_y)                                  USE_SHMEMHALO_1D_DEFAULT
-                             else                                                                  USE_SHMEMHALO_DEFAULT
+            use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (dotted_expr_to_symbol(A) ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, dotted_expr_to_symbol(A))
+                             elseif !(use_shmem_x && use_shmem_y)                                                   USE_SHMEMHALO_1D_DEFAULT
+                             else                                                                                   USE_SHMEMHALO_DEFAULT
                              end
             use_shmemindex = use_shmem && use_shmemhalo && (use_shmem_x && use_shmem_y)
             offset_span    = offset_max .- offset_min
@@ -828,7 +828,7 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
     return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
 end
 
-function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, loopdim::Integer)
+function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, use_shmems::Dict{Any, Any}, loopdim::Integer)
     shmem_index_groups = Dict()
     if loopdim == 3
         for A in optvars
@@ -843,7 +843,7 @@ function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Sym
     return shmem_index_groups
 end
 
-function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, indices, use_shmems::Dict{Any, Any}, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim::Integer)
+function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, indices, use_shmems::Dict{Any, Any}, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim::Integer)
     ix, iy, iz = indices
     shmem_vars = Dict(A => Dict() for A in optvars if use_shmems[A])
     if loopdim == 3
@@ -965,7 +965,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
     return shmem_vars
 end
 
-function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, loopdim::Integer)
+function define_shmem_exprs(shmem_vars, loopdim::Integer)
     exprs = Dict(A => Dict() for A in keys(shmem_vars))
     offset = ()
     if loopdim == 3
@@ -979,7 +979,7 @@ function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, loopdim::I
     return exprs
 end
 
-function define_shmem_z_ranges(offsets_by_z::Dict{Symbol, Dict{Any, Any}}, use_shmems::Dict{Any, Any}, loopdim::Integer)
+function define_shmem_z_ranges(offsets_by_z, use_shmems::Dict{Any, Any}, loopdim::Integer)
     shmem_z_ranges = Dict()
     shmem_As = (A for (A, use_shmem) in use_shmems if use_shmem)
     for A in shmem_As
@@ -1057,7 +1057,7 @@ function define_shmem_loopexit(loopexit, shmem_z_range, offset_max, loopdim::Int
     return shmem_loopexit
 end
 
-function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
+function varname(A::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
     ndims = length(offsets)
     ox    = offsets[1]
     x = if     (ox > 0) i * "p" * string(ox)
@@ -1084,7 +1084,7 @@ function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", 
     end
 end
 
-function regtarget(A::Symbol, offsets::NTuple{N,Integer} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+function regtarget(A::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     ix    = indices[1]
@@ -1114,7 +1114,7 @@ function regtarget(A::Symbol, offsets::NTuple{N,Integer} where N, indices::NTupl
     end
 end
 
-function regsource(A_head::Symbol, offsets::NTuple{N,Integer} where N, local_indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+function regsource(A_head::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N, local_indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     tx    = local_indices[1]
@@ -1176,10 +1176,10 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:Tuple}, offset_maxs::Dict{Symbol, <:Tuple}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, shmem_optvars::NTuple{M,Symbol} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins, offset_maxs, offsets, optvars::NTuple{N,<:Union{Symbol,Expr}} where N, shmem_optvars::NTuple{M,<:Union{Symbol,Expr}} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
-    stencilranges     = NamedTuple(A => begin
+    stencilranges     = NamedTuple(dotted_expr_to_symbol(A) => begin
         offset_min = offset_mins[A]
         offset_max = offset_maxs[A]
         ndims = length(offset_min)
@@ -1188,27 +1188,31 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
         z = (ndims > 2 ? offset_min[3] : 0):(ndims > 2 ? offset_max[3] : 0)
         (x, y, z)
     end for A in optvars)
-    use_shmemhalos    = NamedTuple(A => get(use_shmemhalos, A, false) for A in optvars)
+    use_shmemhalos    = NamedTuple(dotted_expr_to_symbol(A) => get(use_shmemhalos, A, false) for A in optvars)
     loopsizes         = (loopdim==3) ? (1, 1, loopsize) : (loopdim==2) ? (1, loopsize, 1) : (loopsize, 1, 1)
     shmem_dim1        = (loopdim==3) ? 1 : (loopdim==2) ? 1 : 2
     shmem_dim2        = (loopdim==3) ? 2 : (loopdim==2) ? 3 : 3
-    shmem_spans       = NamedTuple(A => (length(stencilranges[A][shmem_dim1]) - 1, length(stencilranges[A][shmem_dim2]) - 1) for A in optvars)
+    shmem_spans       = NamedTuple(dotted_expr_to_symbol(A) => (length(stencilranges[dotted_expr_to_symbol(A)][shmem_dim1]) - 1, length(stencilranges[dotted_expr_to_symbol(A)][shmem_dim2]) - 1) for A in optvars)
+    optvars_meta      = Tuple(dotted_expr_to_symbol(A) for A in optvars)
+    shmem_optvars_meta= Tuple(dotted_expr_to_symbol(A) for A in shmem_optvars)
+    offsets_meta      = Dict(dotted_expr_to_symbol(A) => v for (A, v) in offsets)
+    optranges_meta    = Dict(dotted_expr_to_symbol(A) => v for (A, v) in optranges)
     if nonconst_metadata
         storeexpr = quote
             is_parallel_kernel = $is_parallel_kernel
             memopt             = $memopt
             nonconst_metadata  = $nonconst_metadata
             stencilranges      = $stencilranges
-            offsets            = $offsets
-            optvars            = $optvars
-            shmem_optvars      = $shmem_optvars
+            offsets            = $offsets_meta
+            optvars            = $optvars_meta
+            shmem_optvars      = $shmem_optvars_meta
             shmem_spans        = $shmem_spans
             loopdim            = $loopdim
             loopsize           = $loopsize
             loopsizes          = $loopsizes
             shmem_dim1         = $shmem_dim1
             shmem_dim2         = $shmem_dim2
-            optranges          = $optranges
+            optranges          = $optranges_meta
             use_any_shmem      = $use_any_shmem
             use_shmemhalos     = $use_shmemhalos
         end
@@ -1218,16 +1222,16 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             const memopt             = $memopt
             const nonconst_metadata  = $nonconst_metadata
             const stencilranges      = $stencilranges
-            const offsets            = $offsets
-            const optvars            = $optvars
-            const shmem_optvars      = $shmem_optvars
+            const offsets            = $offsets_meta
+            const optvars            = $optvars_meta
+            const shmem_optvars      = $shmem_optvars_meta
             const shmem_spans        = $shmem_spans
             const loopdim            = $loopdim
             const loopsize           = $loopsize
             const loopsizes          = $loopsizes
             const shmem_dim1         = $shmem_dim1
             const shmem_dim2         = $shmem_dim2
-            const optranges          = $optranges
+            const optranges          = $optranges_meta
             const use_any_shmem      = $use_any_shmem
             const use_shmemhalos     = $use_shmemhalos
         end
