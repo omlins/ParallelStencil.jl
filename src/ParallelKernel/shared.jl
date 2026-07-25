@@ -594,7 +594,7 @@ end
 function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
     if isa(t, Expr) && t.head == :tuple
         if (nested) return t.args
-        else        return extract_tuple_arg.(t.args)
+        else        return extract_tuple_arg.(t.args)  # NOTE: originally, this was: return Base.unquoted.(t.args)
         end
     else 
         return [extract_tuple_arg(t)]
