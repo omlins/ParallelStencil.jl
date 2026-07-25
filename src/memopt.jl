@@ -625,6 +625,7 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            A = ParallelStencil.ParallelKernel.strip_parent(A)
             if A in optvars
                 offsets = ()
                 for i = 1:length(indices)

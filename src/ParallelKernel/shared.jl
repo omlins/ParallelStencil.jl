@@ -306,17 +306,22 @@ function insert_device_types(caller::Module, kernel::Expr)
     return kernel
 end
 
+strip_parent(A::Expr) = (A.head == :. && length(A.args) == 2 && A.args[2] isa QuoteNode && A.args[2].value == :parent) ? strip_parent(A.args[1]) : A
+strip_parent(A)       = A
+
 function find_vars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N; readonly=false)
     vars         = Dict()
     writevars    = Dict()
     postwalk(body) do ex
         if is_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a indices array access could not be pattern matched.")
+            A = strip_parent(A)
             if haskey(vars, A) vars[A] += 1
             else               vars[A]  = 1
             end
         end
         if @capture(ex, (A_[indices_expr__] = rhs_) | (A_[indices_expr__] .= rhs_)) && is_access(:($A[$(indices_expr...)]), indices...)
+            A = strip_parent(A)
             if haskey(writevars, A) writevars[A] += 1
             else                    writevars[A]  = 1
             end
