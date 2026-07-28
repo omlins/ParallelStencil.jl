@@ -218,36 +218,50 @@ eval(:(
             @static if $package != $PKG_KERNELABSTRACTIONS
                 @testset "memopt with named-tuple component optvars/optranges" begin
                     # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
-                    # The explicit dotted identifiers are used in the `optvars`/`optranges` keywords,
-                    # and the kernels are exercised for both macro-expansion shape and runtime
-                    # correctness on synthetic data (default padding=false code path).
+                    # The explicit dotted identifiers select a single component of a `@VectorField`/
+                    # `@BVectorField` for memory optimization. The output field is sized to match the
+                    # respective finite-difference result (`@d_za(V.z)` -> `(nx-2,ny-2,nz-2)`;
+                    # `@d_zi(BV.z)` -> `(nx-2,ny-2,nz)`), so `@all(A2)` writes the whole output.
+                    # The macro-expansion shape is verified on every backend; the runtime result is
+                    # verified against a CPU array-programming reference on the GPU backends, where
+                    # the memory optimization preserves numerical results (the default padding=false
+                    # code path is exercised here).
                     nxyz   = (8, 8, 8)
-                    A2     = @Field(nxyz)
-                    A2_ref = @Field(nxyz)
-                    V      = (x=@Field(nxyz), y=@Field(nxyz), z=@Field(nxyz))
-                    BV     = (x=@Field(nxyz), y=@Field(nxyz), z=@Field(nxyz))
                     @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
-                        @inn(A2) = @d2_zi(V.z)
+                        @all(A2) = @d_za(V.z)
                         return
                     end
                     call = @prettystring(2, @parallel fd_memopt_vector_z!(A2, V))
                     @test occursin(".memopt", call)
                     @test occursin("fd_memopt_vector_z!", call)
-                    copy!(V.z, [ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2) for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
-                    @parallel memopt=true fd_memopt_vector_z!(A2, V)
-                    A2_ref[2:end-1,2:end-1,2:end-1] .= (V.z[2:end-1,2:end-1,3:end] .- V.z[2:end-1,2:end-1,2:end-1]) .- (V.z[2:end-1,2:end-1,2:end-1] .- V.z[2:end-1,2:end-1,1:end-2])
-                    @test all(Array(A2) .== Array(A2_ref))
                     @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z!(A2, BV)
-                        @inn(A2) = @d2_zi(BV.z)
+                        @all(A2) = @d_zi(BV.z)
                         return
                     end
                     call = @prettystring(2, @parallel fd_memopt_bvector_z!(A2, BV))
                     @test occursin(".memopt", call)
                     @test occursin("fd_memopt_bvector_z!", call)
-                    copy!(BV.z, [ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2) for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
-                    @parallel memopt=true fd_memopt_bvector_z!(A2, BV)
-                    A2_ref[2:end-1,2:end-1,2:end-1] .= (BV.z[2:end-1,2:end-1,3:end] .- BV.z[2:end-1,2:end-1,2:end-1]) .- (BV.z[2:end-1,2:end-1,2:end-1] .- BV.z[2:end-1,2:end-1,1:end-2])
-                    @test all(Array(A2) .== Array(A2_ref))
+                    @static if $package in ($PKG_CUDA, $PKG_AMDGPU)
+                        # `V.z` (`@VectorField` z-component) has size `(nx-2,ny-2,nz-1)`, so
+                        # `@d_za(V.z)` has size `(nx-2,ny-2,nz-2)`; `BV.z` (`@BVectorField`
+                        # z-component) has size `(nx,ny,nz+1)`, so `@d_zi(BV.z) = @inn_xy(@d_za(BV.z))`
+                        # has size `(nx-2,ny-2,nz)`. Quadratic synthetic data makes the first
+                        # z-difference vary across the domain (a non-trivial check).
+                        A2     = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]-2))
+                        A2_ref = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]-2))
+                        V      = @VectorField(nxyz)
+                        copy!(V.z, [(ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2))^2 for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
+                        @parallel memopt=true fd_memopt_vector_z!(A2, V)
+                        A2_ref .= V.z[:, :, 2:end] .- V.z[:, :, 1:end-1]
+                        @test all(Array(A2) .== Array(A2_ref))
+                        A2     = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]))
+                        A2_ref = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]))
+                        BV     = @BVectorField(nxyz)
+                        copy!(BV.z, [(ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2))^2 for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
+                        @parallel memopt=true fd_memopt_bvector_z!(A2, BV)
+                        A2_ref .= BV.z[2:end-1, 2:end-1, 2:end] .- BV.z[2:end-1, 2:end-1, 1:end-1]
+                        @test all(Array(A2) .== Array(A2_ref))
+                    end
                 end;
             end
             @testset "KernelAbstractions runtime reselection" begin
@@ -1689,10 +1703,48 @@ end == nothing || true;
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
 
+# NOTE: the memopt `@parallel function` kernels inside the following @testset (the
+# `memopt with named-tuple component optvars/optranges` sub-testset) have, under
+# `padding=true`, kernel-parameter-dependent index expressions such as
+# `0 - (size(A2.parent, 3) > size(V.z.parent, 3)) + 1` that the memopt macro
+# (`src/memopt.jl`, `eval_offsets` -> `src/ParallelKernel/shared.jl`, `eval_arg`)
+# evaluates in `Main` AT PARSE TIME (i.e. while the enclosing `eval(:( @testset …
+# end ))` quote is constructed, BEFORE any of its statements execute). Inside that
+# single quote the kernel *parameters* (`A2`, `V`, `BV`) are therefore not yet
+# bound, so without intervention their `.parent` sizes are undefined and the whole
+# xPU group would abort with `ArgumentEvaluationError: … could not be evaluated at
+# parse time` -- a test-harness particularity with no analogue in normal user code
+# (where the same `@parallel function` runs at literal top level AFTER the fields
+# are allocated, and only the numerical result is wrong, exactly as captured by
+# the `@test all(...)` below). To preserve the kernel bodies / fields / data /
+# references byte-for-byte and reproduce that user-code failure (options (c)/drop and
+# (d)/catch would defeat the purpose and are NOT used), we (1) execute the
+# `@init_parallel_stencil(..., padding=true)` -- and the bounds-check helpers it
+# enables -- in a SMALL SEPARATE `eval(:( … ))` placed IMMEDIATELY BEFORE the
+# @testset, then (2) hoist allocations of `A2`, `A2_ref`, `V`, `BV` as `global`s in
+# `Main` into the SAME preceding `eval`, padded so their `.parent` sizes are real;
+# the @testset then re-allocates `A2`/`A2_ref`/`V`/`BV` (sized to the @d_za/@d_zi
+# results) before each runtime launch, exactly as before, and the kernels are
+# suffixed `_p` so they do not redefine the first test set's kernels in `Main`.
+eval(quote
+    @require !@is_initialized()
+    @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
+    @require @is_initialized()
+    # Hoisted (see the NOTE above the @testset below): the memopt kernel PARAMETERS
+    # are named `A2`/`V`/`BV`, so these exact names (NOT suffixed) must be bound in
+    # `Main` BEFORE the @testset's `@parallel function` declarations are lowered.
+    # They are RE-ALLOCATED inside the @testset before every runtime launch (sized
+    # to the @d_za/@d_zi results); these instances exist only to make the
+    # parse-time `size(<param>.parent, …)` expressions evaluable, exactly as the
+    # same names already are in a normal user file where the `@parallel function`
+    # runs at literal top level after the same-named fields are allocated.
+    global A2     = @Field((8-2, 8-2, 8-2))
+    global A2_ref = @Field((8-2, 8-2, 8-2))
+    global V      = @VectorField((8, 8, 8))
+    global BV     = @BVectorField((8, 8, 8))
+end)
 eval(:(
     @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
-        @require !@is_initialized()
-        @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
@@ -1989,37 +2041,75 @@ eval(:(
         end;
         @static if $package != $PKG_KERNELABSTRACTIONS
             @testset "memopt with named-tuple component optvars/optranges" begin
-                # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`
-                # under the padding=true xPU path. The kernels are declared with `@parallel` and use
-                # 3D finite-difference operators, because padding has been designed to work with these
-                # kinds of kernels. Both the macro-expansion shape and the runtime result on synthetic
-                # data are verified.
-                A2     = @Field((nx, ny, nz))
-                A2_ref = @Field((nx, ny, nz))
-                V      = (x=@Field((nx, ny, nz)), y=@Field((nx, ny, nz)), z=@Field((nx, ny, nz)))
-                BV     = (x=@Field((nx, ny, nz)), y=@Field((nx, ny, nz)), z=@Field((nx, ny, nz)))
-                @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
-                    @inn(A2) = @d2_zi(V.z)
+                # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
+                # The explicit dotted identifiers select a single component of a `@VectorField`/
+                # `@BVectorField` for memory optimization. The output field is sized to match the
+                # respective finite-difference result (`@d_za(V.z)` -> `(nx-2,ny-2,nz-2)`;
+                # `@d_zi(BV.z)` -> `(nx-2,ny-2,nz)`), so `@all(A2)` writes the whole output.
+                # The macro-expansion shape is verified on every backend; the runtime result is
+                # verified against a CPU array-programming reference on the GPU backends, where
+                # the memory optimization preserves numerical results (the padding=true xPU code
+                # path is exercised here, in the same way as the default padding=false path in the
+                # first test set above).
+                # NOTE: this test set is, by design, identical to the first one above except for
+                # changes required by its integration into the xPU test group (which wraps it in an
+                # `eval(:( @testset … ))` quote). Under `padding=true`, the memopt macro
+                # (`src/memopt.jl`, `eval_offsets`) lowers the kernel index expression
+                # `0 - (size(A2.parent, ) > size(<optvar>.parent, )) + 1` and evaluates it in
+                # `Main` AT PARSE TIME. Inside one `eval(:( … @parallel function … end …))` quote
+                # the kernel *parameters* (`A2`, `V`, `BV`) are not yet bound, so that evaluation
+                # would raise `ArgumentEvaluationError: … could not be evaluated at parse time`
+                # and abort the whole xPU group -- a test-harness particularity with no analogue in
+                # normal user code (there the declaration runs to completion and only the numerical
+                # result is wrong, exactly as captured below). To avoid the harness-only crash
+                # WITHOUT changing the kernel bodies / fields / data / references (only (c)/drop and
+                # (d)/catch would defeat the purpose, and are NOT used) we hoist, into a SMALL SEPARATE
+                # `eval(:( … ))` placed IMMEDIATELY BEFORE this `@testset`, the allocations of
+                # `A2`, `A2_ref`, `V`, `BV`. They are declared `global` so that when this
+                # `@testset`'s `@parallel function` declarations are subsequently lowered, the
+                # parse-time `size(<param>.parent, …)` expressions resolve to real padded fields.
+                # The kernels are suffixed `_p` (`fd_memopt_vector_z_p!`/`fd_memopt_bvector_z_p!`)
+                # so they do not redefine the first test set's kernels in the shared `Main` module.
+                # The runtime run + `@test all(...)` are restricted to `$package in ($PKG_CUDA,
+                # $PKG_AMDGPU)` exactly as in the first test set; there they fail the same way
+                # the corresponding plain user code fails under `padding=true` (a bounded set of
+                # zero/shifted output planes), which is the implementation issue to fix later.
+                nxyz   = (8, 8, 8)
+                @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z_p!(A2, V)
+                    @all(A2) = @d_za(V.z)
                     return
                 end
-                call = @prettystring(2, @parallel fd_memopt_vector_z!(A2, V))
+                call = @prettystring(2, @parallel fd_memopt_vector_z_p!(A2, V))
                 @test occursin(".memopt", call)
-                @test occursin("fd_memopt_vector_z!", call)
-                copy!(V.z, [ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2) for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
-                @parallel memopt=true fd_memopt_vector_z!(A2, V)
-                A2_ref[2:end-1,2:end-1,2:end-1] .= (V.z[2:end-1,2:end-1,3:end] .- V.z[2:end-1,2:end-1,2:end-1]) .- (V.z[2:end-1,2:end-1,2:end-1] .- V.z[2:end-1,2:end-1,1:end-2])
-                @test all(Array(A2) .== Array(A2_ref))
-                @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z!(A2, BV)
-                    @inn(A2) = @d2_zi(BV.z)
+                @test occursin("fd_memopt_vector_z_p!", call)
+                @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z_p!(A2, BV)
+                    @all(A2) = @d_zi(BV.z)
                     return
                 end
-                call = @prettystring(2, @parallel fd_memopt_bvector_z!(A2, BV))
+                call = @prettystring(2, @parallel fd_memopt_bvector_z_p!(A2, BV))
                 @test occursin(".memopt", call)
-                @test occursin("fd_memopt_bvector_z!", call)
-                copy!(BV.z, [ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2) for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
-                @parallel memopt=true fd_memopt_bvector_z!(A2, BV)
-                A2_ref[2:end-1,2:end-1,2:end-1] .= (BV.z[2:end-1,2:end-1,3:end] .- BV.z[2:end-1,2:end-1,2:end-1]) .- (BV.z[2:end-1,2:end-1,2:end-1] .- BV.z[2:end-1,2:end-1,1:end-2])
-                @test all(Array(A2) .== Array(A2_ref))
+                @test occursin("fd_memopt_bvector_z_p!", call)
+                @static if $package in ($PKG_CUDA, $PKG_AMDGPU)
+                    # `V.z` (`@VectorField` z-component) has size `(nx-2,ny-2,nz-1)`, so
+                    # `@d_za(V.z)` has size `(nx-2,ny-2,nz-2)`; `BV.z` (`@BVectorField`
+                    # z-component) has size `(nx,ny,nz+1)`, so `@d_zi(BV.z) = @inn_xy(@d_za(BV.z))`
+                    # has size `(nx-2,ny-2,nz)`. Quadratic synthetic data makes the first
+                    # z-difference vary across the domain (a non-trivial check).
+                    A2     = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]-2))
+                    A2_ref = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]-2))
+                    V      = @VectorField(nxyz)
+                    copy!(V.z, [(ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2))^2 for ix=1:size(V.z,1), iy=1:size(V.z,2), iz=1:size(V.z,3)])
+                    @parallel memopt=true fd_memopt_vector_z_p!(A2, V)
+                    A2_ref .= V.z[:, :, 2:end] .- V.z[:, :, 1:end-1]
+                    @test all(Array(A2) .== Array(A2_ref))
+                    A2     = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]))
+                    A2_ref = @Field((nxyz[1]-2, nxyz[2]-2, nxyz[3]))
+                    BV     = @BVectorField(nxyz)
+                    copy!(BV.z, [(ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2))^2 for ix=1:size(BV.z,1), iy=1:size(BV.z,2), iz=1:size(BV.z,3)])
+                    @parallel memopt=true fd_memopt_bvector_z_p!(A2, BV)
+                    A2_ref .= BV.z[2:end-1, 2:end-1, 2:end] .- BV.z[2:end-1, 2:end-1, 1:end-1]
+                    @test all(Array(A2) .== Array(A2_ref))
+                end
             end;
         end
         # `@require`-gated assertion sub-testset verifying that the host-side
