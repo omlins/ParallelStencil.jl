@@ -221,24 +221,69 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         end
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
+        kwargs, backend_kwargs_expr, ~, kwargs_unknown_dict = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations, :swap_double_buffers), "@parallel <kernelcall>", true; eval_args=(:memopt, :swap_double_buffers))
         memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : nothing
         if memopt === true check_memopt_supported(true, package, "@parallel <kernelcall>") end
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
         if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
+        # Read launch and swap_double_buffers for the double-buffering swap gate.
+        # `launch` is an unknown kwarg (forwarded to ParallelKernel via backend_kwargs_expr);
+        # read it from kwargs_unknown_dict (default true). `swap_double_buffers` is a known
+        # kwarg consumed by ParallelStencil (default true).
+        launch_val            = haskey(kwargs_unknown_dict, :launch) ? kwargs_unknown_dict[:launch] : true
+        swap_double_buffers   = haskey(kwargs, :swap_double_buffers) ? kwargs.swap_double_buffers : true
         if is_ad_highlevel
             ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
         elseif memopt === true
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
-            parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+            let
+                md_var = gensym("metadata")
+                db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                launch_call = parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+                if isnothing(db_swap)
+                    launch_call
+                else
+                    quote
+                        local $md_var = $(create_metadata_call(configcall))
+                        $launch_call
+                        $db_swap
+                    end
+                end
+            end
         elseif memopt === false
             if isempty(posargs)
                 ranges = :(ParallelStencil.compute_parallel_ranges(Val(($(create_metadata_call(configcall))).nb_parallel_indices), $(configcall.args[2:end]...)))
-                ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                let
+                    md_var = gensym("metadata")
+                    db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                    launch_call = ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                    if isnothing(db_swap)
+                        launch_call
+                    else
+                        quote
+                            local $md_var = $(create_metadata_call(configcall))
+                            $launch_call
+                            $db_swap
+                        end
+                    end
+                end
             else
-                ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                let
+                    md_var = gensym("metadata")
+                    db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                    launch_call = ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                    if isnothing(db_swap)
+                        launch_call
+                    else
+                        quote
+                            local $md_var = $(create_metadata_call(configcall))
+                            $launch_call
+                            $db_swap
+                        end
+                    end
+                end
             end
         else
             metadata_call = create_metadata_call(configcall)
@@ -250,6 +295,10 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             else
                 ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, ordinary_kernelarg; package=package, async=async)
             end
+            # Build the double-buffering swap expression (emitted after the kernel launch).
+            # The swap is gated by launch_val && swap_double_buffers at build time, and by
+            # isdefined(metadata, :double_buffer_args) at runtime. When disabled, swap_expr is nothing.
+            swap_expr = build_swap_expr(metadata_var, configcall.args[2:end], launch_val, swap_double_buffers)
             if isempty(posargs)
                 quote
                     local $metadata_var = $metadata_call
@@ -258,6 +307,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                     else
                         $ordinary_call
                     end
+                    $swap_expr
                 end
             elseif length(posargs) == 1
                 quote
@@ -267,6 +317,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                     else
                         $ordinary_call
                     end
+                    $swap_expr
                 end
             else
                 quote
@@ -276,6 +327,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                     else
                         $ordinary_call
                     end
+                    $swap_expr
                 end
             end
         end
@@ -973,6 +1025,37 @@ function substitute_symbol(expr::Expr, A::Symbol, new)
 end
 
 substitute_symbol(expr, A::Symbol, new) = expr
+
+# Build the runtime swap expression for double-buffered arguments. The swap is emitted
+# after the kernel launch, gated by launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args).
+# For each kernel call argument position, a conditional swap is generated: if the position
+# is in metadata.double_buffer_args, the argument is swapped: arg = (in=arg.out, out=arg.in).
+# `metadata_var` is the Symbol bound to the metadata at runtime; `args` are the kernel call
+# argument expressions (configcall.args[2:end]); `launch_val` and `swap_double_buffers` are Bool values.
+function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bool, swap_double_buffers::Bool)
+    if !launch_val || !swap_double_buffers
+        return nothing  # swap disabled — no expression to emit
+    end
+    # Generate conditional swaps for each argument position (1-based).
+    conditional_swaps = Expr[]
+    for (i, arg) in enumerate(args)
+        if arg isa Symbol || arg isa Expr
+            # arg = (in=arg.out, out=arg.in)
+            swap = :($arg = (in = $(arg).out, out = $(arg).in))
+            push!(conditional_swaps, :(if $i in positions; $swap; end))
+        end
+    end
+    if isempty(conditional_swaps)
+        return nothing
+    end
+    return quote
+        if isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args)
+            let positions = $metadata_var.double_buffer_args
+                $(conditional_swaps...)
+            end
+        end
+    end
+end
 
 # Check if a statement is an array assignment with LHS @all(A) for a given A.
 # @all(A) is a macrocall: Expr(:macrocall, Symbol("@all"), LineNumberNode, A).
