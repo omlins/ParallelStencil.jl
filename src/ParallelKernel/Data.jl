@@ -615,7 +615,6 @@ function Data_xpu_exprs(numbertype::DataType)
 end
 
 TData_xpu_exprs() = T_xpu_exprs()
-
 function T_xpu_exprs()
     quote
         const NumberTuple{N_tuple, T}                           = NTuple{N_tuple, T}
@@ -635,6 +634,9 @@ function T_xpu_exprs()
         const SubArrayCollection{N_tuple, T, N}                  = Union{SubArrayTuple{N_tuple, T, N}, NamedSubArrayTuple{N_tuple, T, N}}
         const CellCollection{N_tuple, T, S}                      = Union{CellTuple{N_tuple, T, S}, NamedCellTuple{N_tuple, T, S}}
         const CellArrayCollection{N_tuple, T_elem, N, B}         = Union{CellArrayTuple{N_tuple, T_elem, N, B}, NamedCellArrayTuple{N_tuple, T_elem, N, B}}        
+
+        const Array2B{T, N}                                       = NamedTuple{(:in, :out), Tuple{Array{T, N}, Array{T, N}}}
+        const SubArray2B{T, N}                                    = NamedTuple{(:in, :out), Tuple{SubArray{T, N}, SubArray{T, N}}}
 
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
@@ -668,6 +670,9 @@ function xpu_exprs()
         const CellCollection{N_tuple, S}                         = Union{CellTuple{N_tuple, S}, NamedCellTuple{N_tuple, S}}
         const CellArrayCollection{N_tuple, N, B}                 = Union{CellArrayTuple{N_tuple, N, B}, NamedCellArrayTuple{N_tuple, N, B}}
         
+        const Array2B{N}                                          = NamedTuple{(:in, :out), Tuple{Array{N}, Array{N}}}
+        const SubArray2B{N}                                       = NamedTuple{(:in, :out), Tuple{SubArray{N}, SubArray{N}}}
+
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
         # NamedNumberTuple{}(t::NamedTuple)                        = Base.map(Data.Number, t)
@@ -687,6 +692,8 @@ function Data_Fields(numbertype::DataType, indextype::DataType, padding::Bool)
             import ..$MODULENAME_DATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
             $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
             $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+            $(generic_Fields2B_exprs())
+            $(T_Fields2B_exprs())
             $(Data_Fields_Device(numbertype, indextype, padding))
         end)
     else
@@ -695,6 +702,8 @@ function Data_Fields(numbertype::DataType, indextype::DataType, padding::Bool)
             import ..$MODULENAME_DATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
             $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
             $(padding ? Fields_padding_exprs() : Fields_exprs())
+            $(generic_Fields2B_exprs())
+            $(Fields2B_exprs())
             $(Data_Fields_Device(numbertype, indextype, padding))
         end)
     end
@@ -707,6 +716,8 @@ function TData_Fields(padding::Bool)
         import ..$MODULENAME_TDATA: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
         $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
         $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+        $(generic_Fields2B_exprs())
+        $(T_Fields2B_exprs())
         $(TData_Fields_Device(padding))
     end)
 end
@@ -717,12 +728,16 @@ function Data_Fields_Device(numbertype::DataType, indextype::DataType, padding::
             import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
             $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
             $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+            $(generic_Fields2B_exprs())
+            $(T_Fields2B_exprs())
         end)
     else
         :(baremodule $MODULENAME_DEVICE
             import ..$MODULENAME_DATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
             $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
             $(padding ? Fields_padding_exprs() : Fields_exprs())
+            $(generic_Fields2B_exprs())
+            $(Fields2B_exprs())
         end)
     end
     return Device_module
@@ -733,6 +748,8 @@ function TData_Fields_Device(padding::Bool)
         import ..$MODULENAME_TDATA.$MODULENAME_DEVICE: Array, NamedArrayTuple, SubArray, NamedSubArrayTuple
         $(padding ? generic_Fields_padding_exprs() : generic_Fields_exprs())
         $(padding ? T_Fields_padding_exprs() : T_Fields_exprs())
+        $(generic_Fields2B_exprs())
+        $(T_Fields2B_exprs())
     end)
 end
 
@@ -820,3 +837,60 @@ function generic_Fields_padding_exprs()
         const YZField                   = SubArray
     end
 end
+
+
+## (DATA SUBMODULE FIELDS - 2B / DOUBLE BUFFER)  # NOTE: custom data types for double-buffered fields/arrays.
+
+# Double-buffered ("2B") analogs of the three single-buffer helpers above. Each 2B
+# alias is a `NamedTuple{(:in, :out)}` of the corresponding single-buffer alias, so
+# that `V.in.x` works for a `BVectorField2B` (NamedTuples nest). The non-2B originals
+# MUST stay unchanged so the non-double-buffered path is byte-for-byte identical. The
+# only addition in each 2B helper is the `NamedTuple{(:in, :out), ...}` wrapping;
+# every component name, parameter, and export mirrors the single-buffer helper it wraps.
+# NOTE: there is intentionally NO padding variant of these 2B helpers. Unlike the
+# single-buffer helpers (which reference `NamedArrayTuple`/`NamedSubArrayTuple`
+# directly and thus need padding-aware variants), the 2B helpers only reference the
+# single-buffer *alias names* (`Field`, `VectorField`, ...). Those aliases are emitted
+# by the single-buffer helpers that run *before* the 2B helpers in the same module, so
+# by the time the 2B `const ... = NamedTuple{(:in, :out), Tuple{Field, Field}}`
+# declaration is evaluated, `Field` already resolves to the padding-correct single-
+# buffer alias. The 2B helpers are therefore padding-independent and are spliced
+# unconditionally (no `padding ?` ternary) in `Data_Fields`/`TData_Fields`/
+# `Data_Fields_Device`/`TData_Fields_Device`.
+function T_Fields2B_exprs()
+    quote
+        export VectorField2B, BVectorField2B, TensorField2B
+        const VectorField2B{T, N, names}  = NamedTuple{(:in, :out), Tuple{VectorField{T, N, names}, VectorField{T, N, names}}}
+        const BVectorField2B{T, N, names} = NamedTuple{(:in, :out), Tuple{BVectorField{T, N, names}, BVectorField{T, N, names}}}
+        const TensorField2B{N_tuple, T, N, names} = NamedTuple{(:in, :out), Tuple{TensorField{N_tuple, T, N, names}, TensorField{N_tuple, T, N, names}}}
+    end
+end
+
+function Fields2B_exprs()
+    quote
+        export VectorField2B, BVectorField2B, TensorField2B
+        const VectorField2B{N, names}     = NamedTuple{(:in, :out), Tuple{VectorField{N, names}, VectorField{N, names}}}
+        const BVectorField2B{N, names}    = NamedTuple{(:in, :out), Tuple{BVectorField{N, names}, BVectorField{N, names}}}
+        const TensorField2B{N_tuple, N, names} = NamedTuple{(:in, :out), Tuple{TensorField{N_tuple, N, names}, TensorField{N_tuple, N, names}}}
+    end
+end
+
+function generic_Fields2B_exprs()
+    quote
+        export Field2B, XField2B, YField2B, ZField2B, BXField2B, BYField2B, BZField2B, XXField2B, YYField2B, ZZField2B, XYField2B, XZField2B, YZField2B
+        const Field2B                     = NamedTuple{(:in, :out), Tuple{Field, Field}}
+        const XField2B                    = NamedTuple{(:in, :out), Tuple{XField, XField}}
+        const YField2B                    = NamedTuple{(:in, :out), Tuple{YField, YField}}
+        const ZField2B                    = NamedTuple{(:in, :out), Tuple{ZField, ZField}}
+        const BXField2B                   = NamedTuple{(:in, :out), Tuple{BXField, BXField}}
+        const BYField2B                   = NamedTuple{(:in, :out), Tuple{BYField, BYField}}
+        const BZField2B                   = NamedTuple{(:in, :out), Tuple{BZField, BZField}}
+        const XXField2B                   = NamedTuple{(:in, :out), Tuple{XXField, XXField}}
+        const YYField2B                   = NamedTuple{(:in, :out), Tuple{YYField, YYField}}
+        const ZZField2B                   = NamedTuple{(:in, :out), Tuple{ZZField, ZZField}}
+        const XYField2B                   = NamedTuple{(:in, :out), Tuple{XYField, XYField}}
+        const XZField2B                   = NamedTuple{(:in, :out), Tuple{XZField, XZField}}
+        const YZField2B                   = NamedTuple{(:in, :out), Tuple{YZField, YZField}}
+    end
+end
+
