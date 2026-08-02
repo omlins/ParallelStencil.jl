@@ -235,7 +235,18 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         launch_val            = haskey(kwargs_unknown_dict, :launch) ? kwargs_unknown_dict[:launch] : true
         swap_double_buffers   = haskey(kwargs, :swap_double_buffers) ? kwargs.swap_double_buffers : true
         if is_ad_highlevel
-            ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+            # Double-buffering + AD check (v1): error out if the kernel was double-buffering-transformed
+            # (visible in the declaration metadata via double_buffer_args). No partial support in v1.
+            metadata_call = create_metadata_call(configcall)
+            md_var = gensym("metadata")
+            ad_call = ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+            quote
+                local $md_var = $metadata_call
+                if isdefined($md_var, :double_buffer_args) && !isempty($md_var.double_buffer_args)
+                    @ArgumentError("automatic differentiation (∇) is not yet supported in combination with double buffering (the kernel was transformed with the double buffering rewrite pass).")
+                end
+                $ad_call
+            end
         elseif memopt === true
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
             let
