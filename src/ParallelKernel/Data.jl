@@ -113,6 +113,14 @@ A vector field including boundaries, on a grid of size `gridsize`; allocated wit
     TensorField
 
 A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `TensorField` takes a separate parameter for the number of components in addition to the per-component array dimensionality, because its number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct from the per-component array dimensionality.
+
+--------------------------------------------------------------------------------
+    Double-buffered types (2B suffix)
+
+The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type. They are used with the automatic double buffering optimization of `@parallel` (see the `double_buffering_opt` keyword argument of [`@init_parallel_kernel`](@ref) and [`@parallel`](@ref)):
+- `Data.Array2B` / `Data.SubArray2B`: double-buffered arrays/subarrays.
+- `Field2B`, `{X|Y|Z}Field2B`, `B{X|Y|Z}Field2B`, `{XX|YY|ZZ|XY|XZ|YZ}Field2B`: double-buffered scalar and component fields; allocated with `@Field2B`, `@{X|Y|Z}Field2B`, etc.
+- `VectorField2B`, `BVectorField2B`, `TensorField2B`: double-buffered aggregate fields; allocated with `@VectorField2B`, `@BVectorField2B`, `@TensorField2B`.
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
@@ -225,6 +233,14 @@ A vector field including boundaries, on a grid of size `gridsize`; allocated wit
     TensorField
 
 A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `TensorField` takes a separate parameter for the number of components in addition to the per-component array dimensionality, because its number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct from the per-component array dimensionality.
+
+--------------------------------------------------------------------------------
+    Double-buffered types (2B suffix)
+
+The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type. They are used with the automatic double buffering optimization of `@parallel` (see the `double_buffering_opt` keyword argument of [`@init_parallel_kernel`](@ref) and [`@parallel`](@ref)):
+- `Data.Array2B` / `Data.SubArray2B`: double-buffered arrays/subarrays.
+- `Field2B`, `{X|Y|Z}Field2B`, `B{X|Y|Z}Field2B`, `{XX|YY|ZZ|XY|XZ|YZ}Field2B`: double-buffered scalar and component fields; allocated with `@Field2B`, `@{X|Y|Z}Field2B`, etc.
+- `VectorField2B`, `BVectorField2B`, `TensorField2B`: double-buffered aggregate fields; allocated with `@VectorField2B`, `@BVectorField2B`, `@TensorField2B`.
 """
 
 
