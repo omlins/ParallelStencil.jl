@@ -11,6 +11,7 @@ Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` sel
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -21,15 +22,15 @@ See also: [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref),
 macro zeros(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros")
-    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@zeros")
+    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 macro zeros_cpu(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@zeros_cpu")
-    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@zeros_cpu")
+    esc(_zeros(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered, package=PKG_THREADS))
 end
 
 
@@ -46,6 +47,7 @@ Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -56,15 +58,15 @@ See also: [`@zeros`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 macro ones(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones")
-    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@ones")
+    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 macro ones_cpu(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@ones_cpu")
-    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@ones_cpu")
+    esc(_ones(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered, package=PKG_THREADS))
 end
 
 
@@ -81,6 +83,7 @@ Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -91,15 +94,15 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@falses`](@ref), [`@trues`](@ref)
 macro rand(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand")
-    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@rand")
+    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 macro rand_cpu(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@rand_cpu")
-    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, package=PKG_THREADS))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@rand_cpu")
+    esc(_rand(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered, package=PKG_THREADS))
 end
 
 
@@ -112,6 +115,7 @@ Call `falses(args...)`, where the function `falses` is chosen to be compatible w
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
@@ -121,15 +125,15 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@trues`](@ref), 
 macro falses(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@falses")
-    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength))
+    celldims, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength, :double_buffered), "@falses")
+    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 macro falses_cpu(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@falses_cpu")
-    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength, package=PKG_THREADS))
+    celldims, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength, :double_buffered), "@falses_cpu")
+    esc(_falses(__module__, posargs...; celldims=celldims, blocklength=blocklength, double_buffered=double_buffered, package=PKG_THREADS))
 end
 
 
@@ -142,6 +146,7 @@ Call `trues(args...)`, where the function `trues` is chosen to be compatible wit
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
@@ -151,15 +156,15 @@ See also: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref),
 macro trues(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues")
-    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength))
+    celldims, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength, :double_buffered), "@trues")
+    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 macro trues_cpu(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    celldims, blocklength = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength), "@trues_cpu")
-    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength, package=PKG_THREADS))
+    celldims, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:celldims, :blocklength, :double_buffered), "@trues_cpu")
+    esc(_trues(__module__, posargs...; celldims=celldims, blocklength=blocklength, double_buffered=double_buffered, package=PKG_THREADS))
 end
 
 
@@ -176,6 +181,7 @@ Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numb
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -186,8 +192,8 @@ See also: [`@fill!`](@ref), [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), 
 macro fill(args...)
     check_initialized(__module__)
     posargs, kwargs_expr = split_args(args)
-    eltype, celldims, celltype, blocklength = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength), "@fill")
-    esc(_fill(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength))
+    eltype, celldims, celltype, blocklength, double_buffered = extract_kwargvalues(kwargs_expr, (:eltype, :celldims, :celltype, :blocklength, :double_buffered), "@fill")
+    esc(_fill(__module__, posargs...; eltype=eltype, celldims=celldims, celltype=celltype, blocklength=blocklength, double_buffered=double_buffered))
 end
 
 
@@ -312,100 +318,112 @@ end
 
 ## ALLOCATOR FUNCTIONS
 
-function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _zeros(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.zeros_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.zeros_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.zeros_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.zeros_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.zeros_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
-function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _ones(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.ones_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.ones_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.ones_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.ones_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.ones_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
-function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _rand(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.rand_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.rand_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.rand_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.rand_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.rand_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
-function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _falses(caller::Module, args...; celldims=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.falses_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.falses_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.falses_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.falses_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.falses_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
-function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _trues(caller::Module, args...; celldims=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, Bool, celldims, nothing)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.trues_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.trues_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.trues_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.trues_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.trues_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
-function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, package::Symbol=get_package(caller))
+function _fill(caller::Module, args...; eltype=nothing, celldims=nothing, celltype=nothing, blocklength=nothing, double_buffered=nothing, package::Symbol=get_package(caller))
+    double_buffered = isnothing(double_buffered) ? false : double_buffered
     celltype    = determine_celltype(caller, eltype, celldims, celltype)
     blocklength = determine_blocklength(blocklength, package)
     package_expr = quote_expr(package)
-    if     (package == PKG_CUDA)    return :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_AMDGPU)  return :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
-    elseif (package == PKG_METAL)   return :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
+    if     (package == PKG_CUDA)    alloc = :(ParallelStencil.ParallelKernel.fill_cuda($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_AMDGPU)  alloc = :(ParallelStencil.ParallelKernel.fill_amdgpu($celltype, $blocklength, $(args...)))
+    elseif (package == PKG_METAL)   alloc = :(ParallelStencil.ParallelKernel.fill_metal($celltype, $blocklength, $(args...)))
     elseif (package == PKG_KERNELABSTRACTIONS)
-                                    return :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
+                                    alloc = :(let _hardware = ParallelStencil.ParallelKernel.current_hardware(@__MODULE__)
                                                   ParallelStencil.ParallelKernel.fill_kernelabstractions(ParallelStencil.ParallelKernel.handle(_hardware, $package_expr), $celltype, $blocklength, $(args...))
                                               end)
-    elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
+    elseif iscpu(package)           alloc = :(ParallelStencil.ParallelKernel.fill_cpu($celltype, $blocklength, $(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
     end
+    return double_buffered ? :(in = $alloc, out = $alloc) : alloc
 end
 
 function _fill!(caller::Module, args...; package::Symbol=get_package(caller))
