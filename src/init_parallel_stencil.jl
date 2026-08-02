@@ -14,7 +14,6 @@ When the abstraction-layer backend KernelAbstractions is selected, the concrete 
 - `numbertype::DataType`: the type of numbers used by @zeros, @ones, @rand and @fill and in all array types of module `Data` (e.g. Float32 or Float64). It is contained in `Data.Number` after @init_parallel_stencil. The `numbertype` can be omitted if the other arguments are given as keyword arguments (in that case, the `numbertype` will have to be given explicitly when using the types provided by the module `Data`).
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (overwritable in each kernel definition).
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
-- `padding::Bool=false`: whether to enable padding for stencil computations (overwritable in each kernel definition).
 - `memopt::Bool=false`: whether to enable stencil memory optimization by default (overwritable in each kernel definition).
 - `double_buffering_opt::Bool=true`: whether to attempt the automatic double buffering optimization by default for kernels containing double-buffered (`2B`) fields (overwritable in each kernel definition). See [`@parallel`](@ref) for details.
 
