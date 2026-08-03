@@ -1052,24 +1052,22 @@ function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bo
         return nothing  # swap disabled — no expression to emit
     end
     # Generate conditional swaps for each argument position (1-based).
+    # Each swap is a direct `if` check (no `let` scope) to avoid soft-scope issues:
+    # the swap assignments (e.g. `Pt = (in=Pt.out, out=Pt.in)`) must modify the
+    # caller's variables, whether they are global or local. Using a `let` block or
+    # `global` keyword would break in local-scope contexts (functions, @testset).
     conditional_swaps = Expr[]
     for (i, arg) in enumerate(args)
-        if arg isa Symbol || arg isa Expr
-            # arg = (in=arg.out, out=arg.in)
+        if arg isa Symbol
             swap = :($arg = (in = $(arg).out, out = $(arg).in))
-            push!(conditional_swaps, :(if $i in positions; $swap; end))
+            check = :(isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args) && $i in $metadata_var.double_buffer_args)
+            push!(conditional_swaps, :(if $check; $swap; end))
         end
     end
     if isempty(conditional_swaps)
         return nothing
     end
-    return quote
-        if isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args)
-            let positions = $metadata_var.double_buffer_args
-                $(conditional_swaps...)
-            end
-        end
-    end
+    return quote $(conditional_swaps...) end
 end
 
 # Check if a statement is an array assignment with LHS @all(A) for a given A.
@@ -1158,24 +1156,30 @@ function handle_double_buffering!(metadata_module::Module, metadata_function::Ex
     statements = get_statements(body)
 
     # Classify 2B fields: @all-updated vs partial-updated.
+    # Also check that no field has more than one @all(A)=... assignment (not allowed:
+    # the user must merge multiple updates into a single @all(A)=... statement; for
+    # on-the-fly variables, use a different variable for each case).
     all_updated = Symbol[]
     partial_updated = Symbol[]
     for A in db_fields
-        has_all = false
+        all_count = 0
         has_partial = false
         for stmt in statements
             if is_array_assignment(stmt)
                 fld = get_lhs_field(stmt)
                 if fld == A
                     if is_all_assignment(stmt)
-                        has_all = true
+                        all_count += 1
                     else
                         has_partial = true
                     end
                 end
             end
         end
-        if has_all
+        if all_count > 1
+            @ArgumentError("unsupported kernel statements in @parallel kernel definition: multiple @all($A) = ... statements for the same field $A are not allowed in a kernel; merge them into a single @all($A) = ... (or use different variable names for on-the-fly variables).")
+        end
+        if all_count > 0
             push!(all_updated, A)
         elseif has_partial
             push!(partial_updated, A)
