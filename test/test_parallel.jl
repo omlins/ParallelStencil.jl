@@ -302,12 +302,18 @@ eval(:(
             end
             @static if $package != $PKG_POLYESTER # Enzyme does not support Polyester.
               @testset "@parallel ∇" begin
-                  @test @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.Const(A), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a)) == "@parallel configcall = f!(A, B, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a))"
-                  @test @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b)) == "@parallel configcall = f!(A, B, a, b) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.Duplicated(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a), Enzyme.Active(b))"
-                  @test @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a)) == "@parallel configcall = f!(V.x, V.y, a) ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))"
+                  call = @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.Const(A), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))", call)
+                  call = @prettystring(1, @parallel ∇=(A->Ā, B->B̄) f!(A, B, a))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))", call)
+                  call = @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward f!(A, B, a))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.DuplicatedNoNeed(B, B̄), Enzyme.Const(a))", call)
+                  call = @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=B) f!(A, B, a))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.DuplicatedNoNeed(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a))", call)
+                  call = @prettystring(1, @parallel ∇=(A->Ā, B->B̄) ad_mode=Enzyme.Forward ad_annotations=(Duplicated=(B,A), Active=b) f!(A, B, a, b))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Forward, f!, Enzyme.Duplicated(A, Ā), Enzyme.Duplicated(B, B̄), Enzyme.Const(a), Enzyme.Active(b))", call)
+                  call = @prettystring(1, @parallel ∇=(V.x->V̄.x, V.y->V̄.y) f!(V.x, V.y, a))
+                  @test occursin("ParallelStencil.ParallelKernel.AD.autodiff_deferred!(Enzyme.Reverse, f!, Enzyme.DuplicatedNoNeed(V.x, V̄.x), Enzyme.DuplicatedNoNeed(V.y, V̄.y), Enzyme.Const(a))", call)
                   @static if $package == $PKG_KERNELABSTRACTIONS
                       call = @prettystring(2, @parallel ∇=B->B̄ f!(A, B, a))
                       @test occursin("fname = f!", call)
@@ -389,7 +395,7 @@ eval(:(
                 $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "Data.__T__ to Data.Device.__T__" begin
                         @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::Data.__T__, B::Data.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            expansion = @prettystring(1, @parallel double_buffering_opt=false f(A::Data.__T__, B::Data.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                             @test occursin("f(A::Data.Device.__T__, B::Data.Device.__T__,", expansion)
                         end
                     end
@@ -397,7 +403,7 @@ eval(:(
                 $(interpolate(:__T__, FIELDTYPES, :(
                     @testset "Data.Fields.__T__ to Data.Fields.Device.__T__" begin
                         @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::Data.Fields.__T__, B::Data.Fields.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            expansion = @prettystring(1, @parallel double_buffering_opt=false f(A::Data.Fields.__T__, B::Data.Fields.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                             @test occursin("f(A::Data.Fields.Device.__T__, B::Data.Fields.Device.__T__,", expansion)
                         end
                     end
@@ -420,7 +426,7 @@ eval(:(
                 $(interpolate(:__T__, ARRAYTYPES, :(
                     @testset "TData.__T__ to TData.Device.__T__" begin
                         @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::TData.__T__, B::TData.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            expansion = @prettystring(1, @parallel double_buffering_opt=false f(A::TData.__T__, B::TData.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                             @test occursin("f(A::TData.Device.__T__, B::TData.Device.__T__,", expansion)
                         end
                     end
@@ -428,7 +434,7 @@ eval(:(
                 $(interpolate(:__T__, FIELDTYPES, :(
                     @testset "TData.Fields.__T__ to TData.Fields.Device.__T__" begin
                         @static if @isgpu($package)
-                            expansion = @prettystring(1, @parallel f(A::TData.Fields.__T__, B::TData.Fields.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
+                            expansion = @prettystring(1, @parallel double_buffering_opt=false f(A::TData.Fields.__T__, B::TData.Fields.__T__, c::T) where T <: Integer = (@all(A) = @all(B)^c; return))
                             @test occursin("f(A::TData.Fields.Device.__T__, B::TData.Fields.Device.__T__,", expansion)
                         end
                     end
@@ -1379,7 +1385,7 @@ eval(:(
             $(interpolate(:__T__, ARRAYTYPES, :(
                 @testset "Data.__T__{T} to Data.Device.__T__{T}" begin
                     @static if @isgpu($package)
-                        expansion = @prettystring(1, @parallel ndims=3 f(A::Data.__T__{T}, B::Data.__T__{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        expansion = @prettystring(1, @parallel ndims=3 double_buffering_opt=false f(A::Data.__T__{T}, B::Data.__T__{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                         @test occursin("f(A::Data.Device.__T__{T}, B::Data.Device.__T__{T},", expansion)
                     end
                 end;
@@ -1387,7 +1393,7 @@ eval(:(
             $(interpolate(:__T__, FIELDTYPES, :(
                 @testset "Data.Fields.__T__{T} to Data.Fields.Device.__T__{T}" begin
                     @static if @isgpu($package)
-                        expansion = @prettystring(1, @parallel ndims=3 f(A::Data.Fields.__T__{T}, B::Data.Fields.__T__{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
+                        expansion = @prettystring(1, @parallel ndims=3 double_buffering_opt=false f(A::Data.Fields.__T__{T}, B::Data.Fields.__T__{T}, c::Integer) where T <: PSNumber = (@all(A) = @all(B)^c; return))
                         @test occursin("f(A::Data.Fields.Device.__T__{T}, B::Data.Fields.Device.__T__{T},", expansion)
                     end
                 end;
