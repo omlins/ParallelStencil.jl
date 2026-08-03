@@ -488,6 +488,12 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if !isnothing(db_result)
         return db_result
     end
+    # Consume the double-buffering-specific kwargs (double_buffering_opt, use_old) so they
+    # do not flow further down the call chain to functions that don't accept them (e.g.
+    # parallel_indices_memopt). These kwargs have been consumed by handle_double_buffering!
+    # above (and by store_metadata above); they must not be forwarded.
+    remaining_keys = filter(k -> k ∉ (:double_buffering_opt, :use_old), keys(kwargs))
+    kwargs = NamedTuple{remaining_keys}(kwargs[k] for k in remaining_keys)
     indices = get_indices_expr(ndims).args
     indices_dir = get_indices_dir_expr(ndims).args
     body = get_body(kernel)
