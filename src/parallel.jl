@@ -314,35 +314,66 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             # The swap is gated by launch_val && swap_double_buffers at build time, and by
             # isdefined(metadata, :double_buffer_args) at runtime. When disabled, swap_expr is nothing.
             swap_expr = build_swap_expr(metadata_var, configcall.args[2:end], launch_val, swap_double_buffers)
-            if isempty(posargs)
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
-                    else
-                        $ordinary_call
+            if isnothing(swap_expr)
+                if isempty(posargs)
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
                     end
-                    $swap_expr
-                end
-            elseif length(posargs) == 1
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
-                    else
-                        $ordinary_call
+                elseif length(posargs) == 1
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
                     end
-                    $swap_expr
+                else
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                        else
+                            $ordinary_call
+                        end
+                    end
                 end
             else
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
-                    else
-                        $ordinary_call
+                if isempty(posargs)
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
                     end
-                    $swap_expr
+                elseif length(posargs) == 1
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
+                    end
+                else
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
+                    end
                 end
             end
         end
