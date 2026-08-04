@@ -228,6 +228,81 @@ eval(:(
             @reset_parallel_stencil()
         end;
 
+        @testset "4. double_buffered kwarg for array allocators" begin
+            @require !@is_initialized()
+            @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
+            @require @is_initialized()
+
+            nxyz = (8, 8, 8)
+
+            @testset "@zeros" begin
+                result_default = @zeros(nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @zeros(nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+                @test all(Array(result.in) .== 0.0)
+                @test all(Array(result.out) .== 0.0)
+            end;
+
+            @testset "@ones" begin
+                result_default = @ones(nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @ones(nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+                @test all(Array(result.in) .== 1.0)
+                @test all(Array(result.out) .== 1.0)
+                result_f32 = @zeros(nxyz..., eltype=Float32, double_buffered=true)
+                @test eltype(result_f32.in) == Float32
+                @test eltype(result_f32.out) == Float32
+            end;
+
+            @testset "@rand" begin
+                result_default = @rand(nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @rand(nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+            end;
+
+            @testset "@falses" begin
+                result_default = @falses(nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @falses(nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+                @test all(.!Array(result.in))
+            end;
+
+            @testset "@trues" begin
+                result_default = @trues(nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @trues(nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+                @test all(Array(result.in))
+            end;
+
+            @testset "@fill" begin
+                result_default = @fill(3.0, nxyz...)
+                @test !(result_default isa NamedTuple)
+                result = @fill(3.0, nxyz..., double_buffered=true)
+                @test keys(result) == (:in, :out)
+                @test result.in !== result.out
+                @test size(result.in) == size(result.out) == nxyz
+                @test all(Array(result.in) .== 3.0)
+                @test all(Array(result.out) .== 3.0)
+            end;
+
+            @reset_parallel_stencil()
+        end;
+
         @static if $package != $PKG_POLYESTER # TODO: this needs to be removed once Polyester supports padding
         @testset "2. 2B field allocator macros (padding=true)" begin
             @require !@is_initialized()
