@@ -549,7 +549,7 @@ end
 
 function normalize_dotted_namedtuple_fields(expr)
     if isa(expr, Expr) && expr.head == :tuple && any(isa(a, Expr) && a.head == :(=) for a in expr.args)
-        kv = Tuple{Any,Any}[]
+        kv = Tuple{Any,Any,Any}[]
         has_dotted = false
         for arg in expr.args
             if isa(arg, Expr) && arg.head == :(=) && length(arg.args) == 2
@@ -558,21 +558,27 @@ function normalize_dotted_namedtuple_fields(expr)
                 is_dotted = (lhs_sym !== lhs_orig)
                 has_dotted = has_dotted || is_dotted
                 rhs = normalize_dotted_namedtuple_fields(arg.args[2])
-                key_expr = is_dotted ? :(Symbol($(string(lhs_sym)))) : lhs_sym
-                push!(kv, (key_expr, rhs))
+                # In the dotted path (NamedTuple{...}(...)), ALL keys are wrapped in
+                # Symbol(string(...)) so they evaluate to Symbols at runtime, never as
+                # variable lookups. In the non-dotted path (plain tuple Expr), keys are
+                # kept as raw Symbols (e.g. :B) so Julia's kwargs parser sees them as
+                # plain keyword names.
+                key_expr_dotted = :(Symbol($(string(lhs_sym))))
+                key_expr_plain  = lhs_sym
+                push!(kv, (key_expr_plain, key_expr_dotted, rhs))
             else
                 # Non-assignment entries are preserved as plain values (not expected in keyword named tuples).
-                push!(kv, (nothing, normalize_dotted_namedtuple_fields(arg)))
+                push!(kv, (nothing, nothing, normalize_dotted_namedtuple_fields(arg)))
             end
         end
         if has_dotted
             keys_exprs = Any[]
             vals_exprs = Any[]
-            for (k, v) in kv
-                if isnothing(k)
+            for (k_plain, k_dotted, v) in kv
+                if isnothing(k_plain)
                     push!(vals_exprs, v)
                 else
-                    push!(keys_exprs, k)
+                    push!(keys_exprs, k_dotted)
                     push!(vals_exprs, v)
                 end
             end
@@ -580,7 +586,7 @@ function normalize_dotted_namedtuple_fields(expr)
             vals_tuple = Expr(:tuple, vals_exprs...)
             return :(NamedTuple{$keys_tuple}($vals_tuple))
         else
-            return Expr(:tuple, [Expr(:(=), k, v) for (k, v) in kv if !isnothing(k)]...)
+            return Expr(:tuple, [Expr(:(=), k_plain, v) for (k_plain, k_dotted, v) in kv if !isnothing(k_plain)]...)
         end
     elseif isa(expr, Expr)
         return Expr(expr.head, normalize_dotted_namedtuple_fields.(expr.args)...)
