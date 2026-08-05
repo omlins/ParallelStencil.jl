@@ -225,6 +225,72 @@ eval(:(
                 @test !all(A.out .== 0.0)
             end;
 
+            @testset "2B type aliases" begin
+                # NOTE: `Data` is created by @init_parallel_stencil via @eval(caller, ...baremodule Data ...),
+                # but the `Data` symbol binding inside this eval(:( @testset ...)) was captured BEFORE
+                # @init_parallel_stencil ran, so it refers to the stale empty module. We use bare
+                # eval(:(expr)) to resolve `Data` at runtime in Main (where @init_parallel_stencil
+                # created it), rather than the captured binding.
+                @test eval(:(isdefined(Main, :Data)))
+                @test eval(:(isdefined(Data, :Array2B)))
+                @test eval(:(isdefined(Data, :SubArray2B)))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(isdefined(Data.Device, :Array2B)))
+                    @test eval(:(isdefined(Data.Device, :SubArray2B)))
+                end
+                @test eval(:(isdefined(Main, :TData)))
+                @test eval(:(isdefined(TData, :Array2B)))
+                @test eval(:(isdefined(TData, :SubArray2B)))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(isdefined(TData.Device, :Array2B)))
+                    @test eval(:(isdefined(TData.Device, :SubArray2B)))
+                end
+                @test eval(:(isdefined(Data.Fields, :Field2B)))
+                @test eval(:(isdefined(Data.Fields, :XField2B)))
+                @test eval(:(isdefined(Data.Fields, :YField2B)))
+                @test eval(:(isdefined(Data.Fields, :ZField2B)))
+                @test eval(:(isdefined(Data.Fields, :BXField2B)))
+                @test eval(:(isdefined(Data.Fields, :BYField2B)))
+                @test eval(:(isdefined(Data.Fields, :BZField2B)))
+                @test eval(:(isdefined(Data.Fields, :XXField2B)))
+                @test eval(:(isdefined(Data.Fields, :YYField2B)))
+                @test eval(:(isdefined(Data.Fields, :ZZField2B)))
+                @test eval(:(isdefined(Data.Fields, :XYField2B)))
+                @test eval(:(isdefined(Data.Fields, :XZField2B)))
+                @test eval(:(isdefined(Data.Fields, :YZField2B)))
+                @test eval(:(isdefined(Data.Fields, :VectorField2B)))
+                @test eval(:(isdefined(Data.Fields, :BVectorField2B)))
+                @test eval(:(isdefined(Data.Fields, :TensorField2B)))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(isdefined(Data.Fields.Device, :Field2B)))
+                    @test eval(:(isdefined(Data.Fields.Device, :XField2B)))
+                    @test eval(:(isdefined(Data.Fields.Device, :BVectorField2B)))
+                    @test eval(:(isdefined(Data.Fields.Device, :TensorField2B)))
+                end
+            end;
+
+            @testset "2B field isa checks (NamedTuple covariance fix)" begin
+                result = @Field2B(nxyz)
+                @test eval(:(result isa Data.Fields.Field2B))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(result isa Data.Fields.Device.Field2B))
+                end
+                result = @BVectorField2B(nxyz)
+                @test eval(:(result isa Data.Fields.BVectorField2B))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(result isa Data.Fields.Device.BVectorField2B))
+                end
+                result = @TensorField2B(nxyz)
+                @test eval(:(result isa Data.Fields.TensorField2B))
+                @static if $package != $PKG_KERNELABSTRACTIONS
+                    @test eval(:(result isa Data.Fields.Device.TensorField2B))
+                end
+                result = @XField2B(nxyz)
+                @test eval(:(result isa Data.Fields.XField2B))
+                result = @BZField2B(nxyz)
+                @test eval(:(result isa Data.Fields.BZField2B))
+            end;
+
             @reset_parallel_stencil()
         end;
 
