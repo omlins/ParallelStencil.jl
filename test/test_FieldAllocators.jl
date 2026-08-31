@@ -1,6 +1,6 @@
 using Test
 using ParallelStencil
-import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, FIELDTYPES
 import ParallelStencil: @require
 using ParallelStencil.Exceptions
 using ParallelStencil.FieldAllocators
@@ -343,6 +343,62 @@ eval(:(
         end;
         end
 
+    end;
+))
+
+end == nothing || true;
+
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
+        @require !@is_initialized()
+        @init_parallel_stencil($package, $FloatDefault, 3, padding=true, nonconst_metadata=true)
+        @require @is_initialized()
+        using .Data.Fields
+
+        nxyz = (8, 8, 8)
+
+        @testset "2B type aliases" begin
+            # All 2B field type aliases are defined in Data.Fields and Data.Fields.Device.
+            for T in FIELDTYPES
+                @test isdefined(Data.Fields, T)
+                @test isdefined(Data.Fields.Device, T)
+                @test isdefined(TData.Fields, T)
+                @test isdefined(TData.Fields.Device, T)
+            end
+            # Top-level array type aliases are defined in Data, TData, and their Device submodules.
+            @test isdefined(Data, :Array2B)
+            @test isdefined(Data, :SubArray2B)
+            @test isdefined(Data.Device, :Array2B)
+            @test isdefined(Data.Device, :SubArray2B)
+            @test isdefined(TData, :Array2B)
+            @test isdefined(TData, :SubArray2B)
+            @test isdefined(TData.Device, :Array2B)
+            @test isdefined(TData.Device, :SubArray2B)
+            # NamedTuple covariance: every 2B field allocation must be
+            # isa-compatible with its Data.Fields alias (the <:` in the alias
+            # definition `const Field2B{N} = NamedTuple{(:in, :out), <:Tuple{...}}`
+            # is essential — without it, `Pt isa Field2B` returns `false`).
+            @test (@Field2B(nxyz)) isa Data.Fields.Field2B
+            @test (@XField2B(nxyz)) isa Data.Fields.XField2B
+            @test (@YField2B(nxyz)) isa Data.Fields.YField2B
+            @test (@ZField2B(nxyz)) isa Data.Fields.ZField2B
+            @test (@BXField2B(nxyz)) isa Data.Fields.BXField2B
+            @test (@BYField2B(nxyz)) isa Data.Fields.BYField2B
+            @test (@BZField2B(nxyz)) isa Data.Fields.BZField2B
+            @test (@XXField2B(nxyz)) isa Data.Fields.XXField2B
+            @test (@YYField2B(nxyz)) isa Data.Fields.YYField2B
+            @test (@ZZField2B(nxyz)) isa Data.Fields.ZZField2B
+            @test (@XYField2B(nxyz)) isa Data.Fields.XYField2B
+            @test (@XZField2B(nxyz)) isa Data.Fields.XZField2B
+            @test (@YZField2B(nxyz)) isa Data.Fields.YZField2B
+            @test (@VectorField2B(nxyz)) isa Data.Fields.VectorField2B
+            @test (@BVectorField2B(nxyz)) isa Data.Fields.BVectorField2B
+            @test (@TensorField2B(nxyz)) isa Data.Fields.TensorField2B
+        end;
     end;
 ))
 
