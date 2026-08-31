@@ -300,6 +300,107 @@ eval(:(
                     @test @current_hardware() == :cpu
                 end
             end
+            @testset "double_buffering_opt" begin
+                @testset "no-op when no 2B fields" begin
+                    s = @prettystring(1, @parallel f(A, B) = (@all(A) = @all(B) + 1.0; return))
+                    @test !occursin("double_buffering_opt", s)
+                    @test !occursin("onthefly", s)
+                end;
+                @testset "rewrite with @all-updated 2B field" begin
+                    s = @prettystring(1, @parallel function step_db!(Pt::Field2B, A::Data.Number)
+                        @all(Pt) = @all(A) + 1.0
+                        return
+                    end)
+                    @test occursin("double_buffering_opt", s)
+                    @test occursin("onthefly", s)
+                    @test occursin("Pt.out", s)
+                    s2 = @prettystring(2, @parallel function step_db2!(Pt::Field2B, A::Data.Number)
+                        @all(Pt) = @all(A) + 1.0
+                        return
+                    end)
+                    @test occursin("##META", s2)
+                    @test occursin("onthefly", s2)
+                end;
+                @testset "rewrite with partial-update 2B field" begin
+                    s = @prettystring(1, @parallel function step_db_part!(V::XField2B, A::Field)
+                        @inn(V) = @inn(V) + @all(A)
+                        return
+                    end)
+                    @test occursin("V.out", s)
+                    @test occursin("V.in", s)
+                    @test !occursin("onthefly", s)
+                end;
+                @testset "rewrite with both @all and partial-update 2B fields" begin
+                    s = @prettystring(1, @parallel function step_stokes!(Pt::Field2B, V::BVectorField2B, Mus::Field)
+                        @all(Pt) = @all(Mus)
+                        @inn(V.x) = @inn(V.x) + @all(Pt)
+                        return
+                    end)
+                    @test occursin("V.in.x", s)
+                    @test occursin("onthefly", s)
+                    @test occursin("Pt.out", s)
+                    @test occursin("V.out.x", s)
+                end;
+                @testset "double_buffering_opt=false skips rewrite" begin
+                    s = @prettystring(1, @parallel double_buffering_opt=false function step_db_skip!(Pt::Field2B, A::Data.Number)
+                        @all(Pt) = @all(A) + 1.0
+                        return
+                    end)
+                    @test !occursin("onthefly", s)
+                    @test !occursin("Pt.in", s)
+                    @test !occursin("Pt.out", s)
+                end;
+                @testset "multiple @all(A) error" begin
+                    @test_throws ArgumentError parallel(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, :(ndims=3),
+                    :(function step_db_err!(Pt::Field2B, A::Data.Number)
+                        @all(Pt) = @all(A) + 1.0
+                        @all(Pt) = @all(Pt) * 2.0
+                        return
+                    end))
+                end;
+                @testset "@parallel_indices: 2B fields usable, no rewrite" begin
+                    s = @prettystring(1, @parallel_indices (ix, iy, iz) function copy_db_idx!(A::Array2B, B::Array2B)
+                        A[ix, iy, iz] = B[ix, iy, iz]
+                        return
+                    end)
+                    @test !occursin("onthefly", s)
+                    @test !occursin("double_buffering_opt", s)
+                end;
+            end;
+            @testset "swap_double_buffers" begin
+                @parallel function step_swap!(Pt, A)
+                    @all(Pt) = @all(A) + 1.0
+                    return
+                end
+                @testset "swap emitted in launch" begin
+                    s = @prettystring(1, @parallel step_swap!(Pt, A))
+                    @test occursin("double_buffer_args", s)
+                    @test occursin("isdefined", s)
+                    @test occursin(".out", s)
+                    @test occursin(".in", s)
+                    @test occursin("(in = Pt.out, out = Pt.in)", s)
+                end;
+                @testset "swap_double_buffers=false suppresses swap" begin
+                    s = @prettystring(1, @parallel swap_double_buffers=false step_swap!(Pt, A))
+                    @test !occursin("double_buffer_args", s)
+                    @test !occursin("(in = Pt.out, out = Pt.in)", s)
+                end;
+                @testset "runtime: swap works end-to-end" begin
+                    @parallel function step_rt!(Pt, V, A, factor)
+                        @all(Pt.in) = @all(A) + 1.0
+                        @inn(V.in) = @inn(V.in) + factor * @all(Pt.in)
+                        return
+                    end
+                    Pt_rt = @Field2B((8, 8, 8))
+                    V_rt  = @XField2B((8, 8, 8))
+                    A_rt  = @Field((8, 8, 8))
+                    A_rt .= 10.0
+                    V_rt.in .= 5.0
+                    @parallel step_rt!(Pt_rt, V_rt, A_rt, 2.0)
+                    @test all(Pt_rt.in .== 11.0)
+                    @test all(V_rt.in[2:end-1,2:end-1,2:end-1] .== 27.0)
+                end;
+            end;
             @static if $package != $PKG_POLYESTER # Enzyme does not support Polyester.
               @testset "@parallel ∇" begin
                   call = @prettystring(1, @parallel ∇=B->B̄ f!(A, B, a))
@@ -1709,48 +1810,10 @@ end == nothing || true;
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
 
-# NOTE: the memopt `@parallel function` kernels inside the following @testset (the
-# `memopt with named-tuple component optvars/optranges` sub-testset) have, under
-# `padding=true`, kernel-parameter-dependent index expressions such as
-# `0 - (size(A2.parent, 3) > size(V.z.parent, 3)) + 1` that the memopt macro
-# (`src/memopt.jl`, `eval_offsets` -> `src/ParallelKernel/shared.jl`, `eval_arg`)
-# evaluates in `Main` AT PARSE TIME (i.e. while the enclosing `eval(:( @testset …
-# end ))` quote is constructed, BEFORE any of its statements execute). Inside that
-# single quote the kernel *parameters* (`A2`, `V`, `BV`) are therefore not yet
-# bound, so without intervention their `.parent` sizes are undefined and the whole
-# xPU group would abort with `ArgumentEvaluationError: … could not be evaluated at
-# parse time` -- a test-harness particularity with no analogue in normal user code
-# (where the same `@parallel function` runs at literal top level AFTER the fields
-# are allocated, and only the numerical result is wrong, exactly as captured by
-# the `@test all(...)` below). To preserve the kernel bodies / fields / data /
-# references byte-for-byte and reproduce that user-code failure (options (c)/drop and
-# (d)/catch would defeat the purpose and are NOT used), we (1) execute the
-# `@init_parallel_stencil(..., padding=true)` -- and the bounds-check helpers it
-# enables -- in a SMALL SEPARATE `eval(:( … ))` placed IMMEDIATELY BEFORE the
-# @testset, then (2) hoist allocations of `A2`, `A2_ref`, `V`, `BV` as `global`s in
-# `Main` into the SAME preceding `eval`, padded so their `.parent` sizes are real;
-# the @testset then re-allocates `A2`/`A2_ref`/`V`/`BV` (sized to the @d_za/@d_zi
-# results) before each runtime launch, exactly as before, and the kernels are
-# suffixed `_p` so they do not redefine the first test set's kernels in `Main`.
-eval(quote
-    @require !@is_initialized()
-    @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
-    @require @is_initialized()
-    # Hoisted (see the NOTE above the @testset below): the memopt kernel PARAMETERS
-    # are named `A2`/`V`/`BV`, so these exact names (NOT suffixed) must be bound in
-    # `Main` BEFORE the @testset's `@parallel function` declarations are lowered.
-    # They are RE-ALLOCATED inside the @testset before every runtime launch (sized
-    # to the @d_za/@d_zi results); these instances exist only to make the
-    # parse-time `size(<param>.parent, …)` expressions evaluable, exactly as the
-    # same names already are in a normal user file where the `@parallel function`
-    # runs at literal top level after the same-named fields are allocated.
-    global A2     = @Field((8-2, 8-2, 8-2))
-    global A2_ref = @Field((8-2, 8-2, 8-2))
-    global V      = @VectorField((8, 8, 8))
-    global BV     = @BVectorField((8, 8, 8))
-end)
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
+        @require !@is_initialized()
+        @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
@@ -2045,8 +2108,9 @@ eval(:(
             @test all(Array(T_A.xz) .== ref_3D_xz)
             @test all(Array(T_A.yz) .== ref_3D_yz)
         end;
-        #TODO: re-enable these tests once you implement memopt support for padding=true
+        #TODO: re-enable these tests once memopt supports padding=true.
         # @static if $package != $PKG_KERNELABSTRACTIONS
+            # nxyz = (8, 8, 8)
         #     @testset "memopt with named-tuple component optvars/optranges" begin
         #         # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
         #         # The explicit dotted identifiers select a single component of a `@VectorField`/
@@ -2058,44 +2122,20 @@ eval(:(
         #         # the memory optimization preserves numerical results (the padding=true xPU code
         #         # path is exercised here, in the same way as the default padding=false path in the
         #         # first test set above).
-        #         # NOTE: this test set is, by design, identical to the first one above except for
-        #         # changes required by its integration into the xPU test group (which wraps it in an
-        #         # `eval(:( @testset … ))` quote). Under `padding=true`, the memopt macro
-        #         # (`src/memopt.jl`, `eval_offsets`) lowers the kernel index expression
-        #         # `0 - (size(A2.parent, ) > size(<optvar>.parent, )) + 1` and evaluates it in
-        #         # `Main` AT PARSE TIME. Inside one `eval(:( … @parallel function … end …))` quote
-        #         # the kernel *parameters* (`A2`, `V`, `BV`) are not yet bound, so that evaluation
-        #         # would raise `ArgumentEvaluationError: … could not be evaluated at parse time`
-        #         # and abort the whole xPU group -- a test-harness particularity with no analogue in
-        #         # normal user code (there the declaration runs to completion and only the numerical
-        #         # result is wrong, exactly as captured below). To avoid the harness-only crash
-        #         # WITHOUT changing the kernel bodies / fields / data / references (only (c)/drop and
-        #         # (d)/catch would defeat the purpose, and are NOT used) we hoist, into a SMALL SEPARATE
-        #         # `eval(:( … ))` placed IMMEDIATELY BEFORE this `@testset`, the allocations of
-        #         # `A2`, `A2_ref`, `V`, `BV`. They are declared `global` so that when this
-        #         # `@testset`'s `@parallel function` declarations are subsequently lowered, the
-        #         # parse-time `size(<param>.parent, …)` expressions resolve to real padded fields.
-        #         # The kernels are suffixed `_p` (`fd_memopt_vector_z_p!`/`fd_memopt_bvector_z_p!`)
-        #         # so they do not redefine the first test set's kernels in the shared `Main` module.
-        #         # The runtime run + `@test all(...)` are restricted to `$package in ($PKG_CUDA,
-        #         # $PKG_AMDGPU)` exactly as in the first test set; there they fail the same way
-        #         # the corresponding plain user code fails under `padding=true` (a bounded set of
-        #         # zero/shifted output planes), which is the implementation issue to fix later.
-        #         nxyz   = (8, 8, 8)
-        #         @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z_p!(A2, V)
+        #         @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
         #             @all(A2) = @d_za(V.z)
         #             return
         #         end
-        #         call = @prettystring(2, @parallel fd_memopt_vector_z_p!(A2, V))
+        #         call = @prettystring(2, @parallel fd_memopt_vector_z!(A2, V))
         #         @test occursin(".memopt", call)
-        #         @test occursin("fd_memopt_vector_z_p!", call)
-        #         @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z_p!(A2, BV)
+        #         @test occursin("fd_memopt_vector_z!", call)
+        #         @parallel memopt=true loopsize=3 optvars=BV.z optranges=(BV.z=(0:1,0:1,-1:1),) function fd_memopt_bvector_z!(A2, BV)
         #             @all(A2) = @d_zi(BV.z)
         #             return
         #         end
-        #         call = @prettystring(2, @parallel fd_memopt_bvector_z_p!(A2, BV))
+        #         call = @prettystring(2, @parallel fd_memopt_bvector_z!(A2, BV))
         #         @test occursin(".memopt", call)
-        #         @test occursin("fd_memopt_bvector_z_p!", call)
+        #         @test occursin("fd_memopt_bvector_z!", call)
         #         @static if $package in ($PKG_CUDA, $PKG_AMDGPU)
         #             # `V.z` (`@VectorField` z-component) has size `(nx-2,ny-2,nz-1)`, so
         #             # `@d_za(V.z)` has size `(nx-2,ny-2,nz-2)`; `BV.z` (`@BVectorField`
@@ -2124,11 +2164,7 @@ eval(:(
         # `TData.Fields.Device`, `Data.Number`, `Data.Index`) are populated at
         # runtime on the default CPU host code path — the precondition that the
         # runtime launches implicitly rely on. Expected pre-test conditions are
-        # validated with `@require` (never `@test`), and the second block's
-        # `@static for package in [PKG_THREADS]` is the backend availability
-        # filter (no separate `@static if $package == $PKG_...` branch is needed).
-        # pattern (§8) is the backend availability filter (no separate `@static if $package == $PKG_...` branch is needed
-        # because the second block iterates only `[Threads]`).
+        # validated with `@require` (never `@test`).
         @testset "host-side [T]Data submodules populated" begin
             @require isdefined(@__MODULE__, :Data)
             @require isdefined(@__MODULE__, :TData)
