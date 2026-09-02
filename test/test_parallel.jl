@@ -421,6 +421,16 @@ eval(:(
                   end
                 end;
             end;
+            @testset "AD + double buffering error" begin
+                @parallel function f_db!(Pt, A)
+                    @all(Pt) = @all(A) + 1.0
+                    return
+                end
+                call = @prettystring(1, @parallel ∇=(Pt->Pt̄) f_db!(Pt, A))
+                @test occursin("double_buffer_args", call)
+                @test occursin("ArgumentError", call)
+                @test occursin("automatic differentiation", call)
+            end;
             @testset "@parallel <kernel>" begin
                 @testset "N substitution | ndims tuple expansion" begin
                     @testset "N substitution (N=3)" begin
@@ -2158,6 +2168,31 @@ eval(:(
         #             @test all(Array(A2) .== Array(A2_ref))
         #         end
         #     end;
+        @testset "double_buffer_args and double_buffering_opt" begin
+            @parallel function db_probe!(Pt::Fields.Field2B, V::Fields.BVectorField2B, A::Fields.Field)
+                @all(Pt) = @all(V)
+                @all(A) = @all(Pt)
+                return
+            end
+            Pt_p = @Field2B((4, 5, 6))
+            V_p  = @BVectorField2B((4, 5, 6))
+            A_p  = @Field((4, 5, 6))
+            metadata = @metadata db_probe!(Pt_p, V_p, A_p)
+            @test isdefined(metadata, :double_buffer_args)
+            @test metadata.double_buffer_args == (1, 2)
+            @test isdefined(metadata, :double_buffering_opt)
+            @test metadata.double_buffering_opt == false
+            @parallel function plain!(A, B)
+                @all(A) = @all(B) + 1.0
+                return
+            end
+            A_plain = @zeros(4, 5, 6)
+            B_plain = @ones(4, 5, 6)
+            metadata_plain = @metadata plain!(A_plain, B_plain)
+            @test !isdefined(metadata_plain, :double_buffer_args)
+            @test isdefined(metadata_plain, :double_buffering_opt)
+            @test metadata_plain.double_buffering_opt == true
+        end;
         # end
         # `@require`-gated assertion sub-testset verifying that the host-side
         # `[T]Data` submodules (`Data.Fields`, `TData.Fields`, `Data.Fields.Device`,
