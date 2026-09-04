@@ -1488,6 +1488,54 @@ eval(:(
                 @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 @reset_parallel_stencil()
             end;
+            @testset "double_buffering_opt global default" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
+                @require @is_initialized
+
+                @parallel function opt_default!(A, B)
+                    @all(A) = @all(B)
+                    return
+                end
+                A_d = @zeros(4, 5, 6)
+                B_d = @ones(4, 5, 6)
+                md = @metadata opt_default!(A_d, B_d)
+                @test md.double_buffering_opt == true
+
+                @reset_parallel_stencil()
+            end;
+            @testset "double_buffering_opt=false global" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, double_buffering_opt=false, nonconst_metadata=true)
+                @require @is_initialized
+
+                @parallel function opt_false!(A, B)
+                    @all(A) = @all(B)
+                    return
+                end
+                A_f = @zeros(4, 5, 6)
+                B_f = @ones(4, 5, 6)
+                md = @metadata opt_false!(A_f, B_f)
+                @test md.double_buffering_opt == false
+
+                @reset_parallel_stencil()
+            end;
+            @testset "double_buffering_opt per-kernel override" begin
+                @require !@is_initialized()
+                @init_parallel_stencil($package, $FloatDefault, 3, double_buffering_opt=false, nonconst_metadata=true)
+                @require @is_initialized
+
+                @parallel double_buffering_opt=true function opt_override!(A, B)
+                    @all(A) = @all(B)
+                    return
+                end
+                A_o = @zeros(4, 5, 6)
+                B_o = @ones(4, 5, 6)
+                md = @metadata opt_override!(A_o, B_o)
+                @test md.double_buffering_opt == true
+
+                @reset_parallel_stencil()
+            end;
         end;
         @testset "5. parallel macros (numbertype and ndims ommited)" begin
             @require !@is_initialized()

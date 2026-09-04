@@ -398,6 +398,11 @@ eval(:(
             @test (@VectorField2B(nxyz)) isa Data.Fields.VectorField2B
             @test (@BVectorField2B(nxyz)) isa Data.Fields.BVectorField2B
             @test (@TensorField2B(nxyz)) isa Data.Fields.TensorField2B
+            # AbstractArray2B covers both Array2B and SubArray2B: in non-padding
+            # mode Field=Array so @Field2B is Array2B (AbstractArray2B via
+            # Array <: AbstractArray); in padding mode Field=SubArray so
+            # @Field2B is SubArray2B (AbstractArray2B via SubArray <: AbstractArray).
+            @test (@Field2B(nxyz)) isa Data.AbstractArray2B
         end;
     end;
 ))
