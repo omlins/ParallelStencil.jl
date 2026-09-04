@@ -653,6 +653,7 @@ function T_xpu_exprs()
 
         const Array2B{T, N}                                       = NamedTuple{(:in, :out), <:Tuple{Array{T, N}, Array{T, N}}}
         const SubArray2B{T, N}                                    = NamedTuple{(:in, :out), <:Tuple{SubArray{T, N}, SubArray{T, N}}}
+        const AbstractArray2B{T, N}                               = NamedTuple{(:in, :out), <:Tuple{AbstractArray{T, N}, AbstractArray{T, N}}}
 
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
@@ -688,6 +689,7 @@ function xpu_exprs()
         
         const Array2B{N}                                          = NamedTuple{(:in, :out), <:Tuple{Array{N}, Array{N}}}
         const SubArray2B{N}                                       = NamedTuple{(:in, :out), <:Tuple{SubArray{N}, SubArray{N}}}
+        const AbstractArray2B{N}                                  = NamedTuple{(:in, :out), <:Tuple{AbstractArray{N}, AbstractArray{N}}}
 
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedIndexTuple{}(t::NamedTuple)                         = Base.map(Data.Index, t)
