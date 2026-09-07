@@ -658,7 +658,7 @@ function T_xpu_exprs()
         # TODO: the following constructors lead to pre-compilation issues due to a bug in Julia. They are therefore commented out for now.
         # NamedNumberTuple{}(T, t::NamedTuple)                     = Base.map(T, t)
         # NamedArrayTuple{}(T, t::NamedTuple)                      = Base.map(Data.Array{T}, t)
-        # NamedSubArrayTuple{}(T, t::NamedTuple)                   = Base.map(T, t)  # NOTE: there is no Data.SubArray{T} constructor (Data.SubArray is the backend-specific SubArray alias); the per-field rewrite must keep the SubArray as-is, similarly to how NamedNumberTuple keeps the bare scalar.
+        # NamedSubArrayTuple{}(T, t::NamedTuple)                   = Base.map(T, t)
         # NamedCellTuple{}(T, t::NamedTuple)                       = Base.map(Data.Cell{T}, t)
         # NamedCellArrayTuple{}(T, t::NamedTuple)                  = Base.map(Data.CellArray{T}, t)
     end
@@ -808,17 +808,7 @@ function generic_Fields_exprs()
     end
 end
 
-# Padding analog of the three helpers above. When the caller module is created with
-# `padding=true`, the corresponding `Data_*` / `TData_*` builders splice these helpers
-# instead of the non-padding originals so the per-field aliases are backed by the
-# backend-specific `SubArray{T, N, P<:Array{T, N}, I<:Tuple{Vararg{Any}}}` alias (rather
-# than by `Array{T, N}` itself). The non-padding originals MUST stay unchanged so
-# `padding=false` keeps the documentation-advertised `Array`-based shapes for `@Field`
-# in that mode (where `@Field` does in fact return a plain backend `Array`). The only
-# substitution in each padding analog is `Array` -> `SubArray` (in generic_Fields_padding_exprs)
-# and `NamedArrayTuple` -> `NamedSubArrayTuple` (in T_Fields_padding_exprs /
-# Fields_padding_exprs); every other token (names, parameters, exports) is identical to
-# the corresponding non-padding helper.
+# Padding analogs of the single-buffer helpers: the only substitution is `Array` -> `SubArray` (in generic_Fields_padding_exprs) and `NamedArrayTuple` -> `NamedSubArrayTuple` (in T_Fields_padding_exprs / Fields_padding_exprs); the non-padding originals MUST stay unchanged.
 function T_Fields_padding_exprs()
     quote
         export VectorField, BVectorField, TensorField
@@ -858,23 +848,7 @@ end
 
 
 ## (DATA SUBMODULE FIELDS - 2B / DOUBLE BUFFER)  # NOTE: custom data types for double-buffered fields/arrays.
-
-# Double-buffered ("2B") analogs of the three single-buffer helpers above. Each 2B
-# alias is a `NamedTuple{(:in, :out)}` of the corresponding single-buffer alias, so
-# that `V.in.x` works for a `BVectorField2B` (NamedTuples nest). The non-2B originals
-# MUST stay unchanged so the non-double-buffered path is byte-for-byte identical. The
-# only addition in each 2B helper is the `NamedTuple{(:in, :out), ...}` wrapping;
-# every component name, parameter, and export mirrors the single-buffer helper it wraps.
-# NOTE: there is intentionally NO padding variant of these 2B helpers. Unlike the
-# single-buffer helpers (which reference `NamedArrayTuple`/`NamedSubArrayTuple`
-# directly and thus need padding-aware variants), the 2B helpers only reference the
-# single-buffer *alias names* (`Field`, `VectorField`, ...). Those aliases are emitted
-# by the single-buffer helpers that run *before* the 2B helpers in the same module, so
-# by the time the 2B `const ... = NamedTuple{(:in, :out), Tuple{Field, Field}}`
-# declaration is evaluated, `Field` already resolves to the padding-correct single-
-# buffer alias. The 2B helpers are therefore padding-independent and are spliced
-# unconditionally (no `padding ?` ternary) in `Data_Fields`/`TData_Fields`/
-# `Data_Fields_Device`/`TData_Fields_Device`.
+# 2B helpers are padding-independent (they reference single-buffer alias names that already resolve padding-correctly), so they are spliced unconditionally.
 function T_Fields2B_exprs()
     quote
         export VectorField2B, BVectorField2B, TensorField2B

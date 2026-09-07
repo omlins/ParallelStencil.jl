@@ -511,10 +511,8 @@ macro TensorField2B(args...)
     esc(_tensorfield2B(__module__, posargs...; eltype=eltype))
 end
 
-# Double-buffered component field macros. Each is a NamedTuple{(:in, :out)} of two
-# of the corresponding single-buffer component fields. They share the docstring of
-# their single-buffer counterpart (the only difference is the double-buffering).
-const FIELD2B_COMP_DOC = FIELD2B_DOC  # component 2B fields share the scalar Field2B doc shape
+# Double-buffered (2B) component field macros share the scalar @Field2B docstring.
+const FIELD2B_COMP_DOC = FIELD2B_DOC
 
 @doc FIELD2B_COMP_DOC
 macro XField2B(args...)
@@ -938,13 +936,7 @@ function _tensorfield(caller::Module, gridsize, allocator=:@zeros; eltype=nothin
                                       (xx = ParallelStencil.ParallelKernel.FieldAllocators.@XXField($gridsize, $allocator, eltype=$eltype),))
 end
 
-# Double-buffered ("2B") allocator helpers. Each allocates two single-buffer fields
-# (via the existing _field/_vectorfield/_tensorfield helpers, so padding/subarray
-# handling is reused per-buffer) and returns a NamedTuple (in=..., out=...). The
-# single-buffer helpers MUST stay unchanged; the 2B helpers only add the second
-# allocation and the NamedTuple wrapping. The single-buffer helpers are called at
-# macro-expand time (not inside a returned quote) so that the allocator symbol
-# reaches _field unchanged (is_same compares symbols/macro expressions).
+## DOUBLE-BUFFERED (2B) ALLOCATOR HELPERS
 function _field2B(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
     fld_in  = _field(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)
     fld_out = _field(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)

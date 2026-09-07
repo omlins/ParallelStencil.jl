@@ -232,15 +232,11 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
         if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
-        # Read launch and swap_double_buffers for the double-buffering swap gate.
-        # `launch` is an unknown kwarg (forwarded to ParallelKernel via backend_kwargs_expr);
-        # read it from kwargs_unknown_dict (default true). `swap_double_buffers` is a known
-        # kwarg consumed by ParallelStencil (default true).
+        # Read launch and swap_double_buffers for the double-buffering swap gate. `launch` is an unknown kwarg (forwarded to ParallelKernel via backend_kwargs_expr); read it from kwargs_unknown_dict (default true). `swap_double_buffers` is a known kwarg consumed by ParallelStencil (default true).
         launch_val            = haskey(kwargs_unknown_dict, :launch) ? kwargs_unknown_dict[:launch] : true
         swap_double_buffers   = haskey(kwargs, :swap_double_buffers) ? kwargs.swap_double_buffers : true
         if is_ad_highlevel
-            # Double-buffering + AD check (v1): error out if the kernel was double-buffering-transformed
-            # (visible in the declaration metadata via double_buffer_args). No partial support in v1.
+            # Error out if the kernel was double-buffering-transformed (visible in the metadata via double_buffer_args); automatic differentiation is not yet supported in combination with double buffering.
             metadata_call = create_metadata_call(configcall)
             md_var = gensym("metadata")
             ad_call = ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
@@ -310,9 +306,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             else
                 ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, ordinary_kernelarg; package=package, async=async)
             end
-            # Build the double-buffering swap expression (emitted after the kernel launch).
-            # The swap is gated by launch_val && swap_double_buffers at build time, and by
-            # isdefined(metadata, :double_buffer_args) at runtime. When disabled, swap_expr is nothing.
+            # Build the double-buffering swap expression (emitted after the kernel launch). The swap is gated by launch_val && swap_double_buffers at build time, and by isdefined(metadata, :double_buffer_args) at runtime. When disabled, swap_expr is nothing.
             swap_expr = build_swap_expr(metadata_var, configcall.args[2:end], launch_val, swap_double_buffers)
             if isnothing(swap_expr)
                 if isempty(posargs)
@@ -493,12 +487,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
-    # Compute the positions of double-buffered (2B) arguments in the kernel signature.
-    # Double-buffering: read the per-kernel kwarg (or the init default) and compute the
-    # positions of 2B arguments in the kernel signature. Both are stored in the metadata
-    # module so the launch wrapper (Task 8) knows which arguments to swap and the AD check
-    # (Task 9) knows whether the kernel was double-buffering-transformed. The body rewrite
-    # (Task 7) will use the flag to decide whether to transform the body.
+    # Read the double-buffering opt (per-kernel kwarg or init default) and the 2B argument positions in the kernel signature; both are stored in the metadata module so the launch wrapper knows which arguments to swap and the AD check can detect double-buffered kernels.
     double_buffering_opt = haskey(kwargs, :double_buffering_opt) ? kwargs.double_buffering_opt : get_double_buffering_opt(caller)
     kernelargs_for_db = splitarg.(extract_kernel_args(kernel)[1])
     double_buffer_args = compute_double_buffer_args(kernelargs_for_db)
@@ -509,20 +498,12 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
             store_metadata(metadata_module, caller, ndims; memopt=false, double_buffer_args=double_buffer_args, double_buffering_opt=double_buffering_opt)
         end
     end
-    # Double-buffering body rewrite (Task 7): when enabled and 2B fields are present,
-    # rewrite the body and return a NEW @parallel expression with double_buffering_opt=false
-    # injected (to prevent infinite recursion). The returned expression is let normal Julia
-    # expansion handle (no macroexpand call on it) — this ensures extract_onthefly_arrays!,
-    # handle_padding, memopt, etc. all apply to the rewritten body unchanged. When no 2B fields
-    # are present or the opt is false, handle_double_buffering! returns nothing (no-op).
+    # Double-buffering body rewrite: when enabled and 2B fields are present, rewrite the body and return a NEW @parallel expression with double_buffering_opt=false injected (to prevent infinite recursion); normal Julia expansion then applies extract_onthefly_arrays!, handle_padding, memopt, etc. to the rewritten body. No-op (returns nothing) otherwise.
     db_result = handle_double_buffering!(metadata_module, metadata_function, caller, package, ndims, numbertype, kernel, nothing; kwargs)
     if !isnothing(db_result)
         return db_result
     end
-    # Consume the double-buffering-specific kwargs (double_buffering_opt, use_old) so they
-    # do not flow further down the call chain to functions that don't accept them (e.g.
-    # parallel_indices_memopt). These kwargs have been consumed by handle_double_buffering!
-    # above (and by store_metadata above); they must not be forwarded.
+    # Consume the double-buffering-specific kwargs (double_buffering_opt, use_old) so they do not flow further down the call chain to functions that don't accept them (e.g. parallel_indices_memopt). These kwargs have been consumed by handle_double_buffering! above (and by store_metadata above); they must not be forwarded.
     remaining_keys = filter(k -> k ∉ (:double_buffering_opt, :use_old), keys(kwargs))
     kwargs = NamedTuple{remaining_keys}(kwargs[k] for k in remaining_keys)
     indices = get_indices_expr(ndims).args
@@ -548,7 +529,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,), (indices_dir,))
     end
     body = handle_padding(caller, body, padding, indices; handle_indexing=false)
-    kernel = insert_device_types(caller, kernel) # NOTE: we insert the device types not only for GPU kernels but also for CPU kernels to keep the code path the same, allowing for easier testing and debugging; alternative: if isgpu(package) ...
+    kernel = insert_device_types(caller, kernel) # NOTE: also for CPU, to keep one code path.
     if !memopt
         kernel = adjust_signatures(kernel, package)
         body   = handle_inverses(body)
@@ -906,12 +887,7 @@ function store_metadata(metadata_module::Module, caller::Module, nb_parallel_ind
         end
     end
     @eval(metadata_module, $storeexpr)
-    # Store double_buffering_opt (the per-kernel declaration kwarg, default from @init_parallel_stencil)
-    # and double_buffer_args (the positions of 2B arguments in the kernel signature) so the launch
-    # wrapper knows whether the kernel was double-buffering-transformed and which arguments to swap
-    # after launch. Both honor the nonconst_metadata flag: const when nonconst_metadata=false (first
-    # definition), non-const when nonconst_metadata=true (allows re-definition in the same world age).
-    # double_buffer_args is only stored when non-empty (non-2B kernels leave it undefined).
+    # Store double_buffering_opt and double_buffer_args (the 2B argument positions) so the launch wrapper knows whether the kernel was double-buffering-transformed and which arguments to swap after launch. Both honor nonconst_metadata (first definition is const); double_buffer_args is only stored when non-empty.
     db_storeexprs = Expr(:block)
     if !isnothing(double_buffering_opt)
         if nonconst_metadata || isdefined(metadata_module, :double_buffering_opt)
@@ -1014,11 +990,7 @@ end
 
 ## FUNCTIONS TO DEAL WITH DOUBLE BUFFERING
 
-# Extract the leaf type name from a type annotation expression. The annotation can be:
-#   - a bare Symbol (e.g. :Field2B, :Field)
-#   - a qualified `.` expression (e.g. :(Data.Fields.Field2B), :(Data.Number))
-#   - a parameterized `curly` expression (e.g. :(Data.Fields.BVectorField2B{3, (:x,:y,:z)}))
-# Returns the leaf Symbol (e.g. :Field2B, :Number), or `nothing` if it cannot be extracted.
+# Extract the leaf type name from a type annotation expression. The annotation can be: a bare Symbol (e.g. :Field2B, :Field), a qualified `.` expression (e.g. :(Data.Fields.Field2B), :(Data.Number)), or a parameterized `curly` expression (e.g. :(Data.Fields.BVectorField2B{3, (:x,:y,:z)})). Returns the leaf Symbol (e.g. :Field2B, :Number), or `nothing` if it cannot be extracted.
 function extract_typename(type_expr::Symbol)
     return type_expr
 end
@@ -1039,19 +1011,13 @@ end
 
 extract_typename(::Any) = nothing
 
-# Check whether a type annotation denotes a double-buffered ("2B") type. A type is 2B if
-# its leaf name ends with the suffix "2B" (e.g. Field2B, BVectorField2B, Array2B,
-# SubArray2B, XField2B, ...). This is purely syntactic (no semantic interpretation of
-# parameters) and matches the FIELDTYPES/ARRAYTYPES entries added for the 2B feature.
+# Check whether a type annotation denotes a double-buffered ("2B") type. A type is 2B if its leaf name ends with the suffix "2B" (e.g. Field2B, BVectorField2B, Array2B, SubArray2B, XField2B, ...). This is purely syntactic (no semantic interpretation of parameters) and matches the FIELDTYPES/ARRAYTYPES entries added for the 2B feature.
 function is_2B_type(type_expr)
     name = extract_typename(type_expr)
     return !isnothing(name) && endswith(string(name), "2B")
 end
 
-# Compute the positions (1-based) of double-buffered ("2B") arguments in a kernel
-# signature. `kernelargs` is the result of `splitarg.(extract_kernel_args(kernel)[1])`,
-# where each element is a tuple `(name, type, slack, default)` from MacroTools.splitarg.
-# Returns a tuple of Int positions (e.g. (1, 2) if the 1st and 2nd args are 2B).
+# Compute the positions (1-based) of double-buffered ("2B") arguments in a kernel signature. `kernelargs` is the result of `splitarg.(extract_kernel_args(kernel)[1])`, where each element is a tuple `(name, type, slack, default)` from MacroTools.splitarg. Returns a tuple of Int positions (e.g. (1, 2) if the 1st and 2nd args are 2B).
 function compute_double_buffer_args(kernelargs)
     positions = Int[]
     for (i, ka) in enumerate(kernelargs)
@@ -1063,9 +1029,7 @@ function compute_double_buffer_args(kernelargs)
     return (positions...,)
 end
 
-# Substitute all occurrences of a bare Symbol `A` in `expr` with the replacement `new`.
-# The replacement can be a Symbol (e.g. A_onthefly) or an Expr (e.g. :(A.in)).
-# Only replaces bare Symbol occurrences (not field accesses like A.in which are Expr).
+# Substitute all occurrences of a bare Symbol `A` in `expr` with the replacement `new`. The replacement can be a Symbol (e.g. A_onthefly) or an Expr (e.g. :(A.in)). Only replaces bare Symbol occurrences (not field accesses like A.in which are Expr).
 function substitute_symbol(expr::Symbol, A::Symbol, new)
     return (expr == A) ? new : expr
 end
@@ -1078,21 +1042,12 @@ end
 
 substitute_symbol(expr, A::Symbol, new) = expr
 
-# Build the runtime swap expression for double-buffered arguments. The swap is emitted
-# after the kernel launch, gated by launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args).
-# For each kernel call argument position, a conditional swap is generated: if the position
-# is in metadata.double_buffer_args, the argument is swapped: arg = (in=arg.out, out=arg.in).
-# `metadata_var` is the Symbol bound to the metadata at runtime; `args` are the kernel call
-# argument expressions (configcall.args[2:end]); `launch_val` and `swap_double_buffers` are Bool values.
+# Build the runtime swap expression for double-buffered arguments, emitted after the kernel launch and gated by `launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args)`; for each position in `metadata_var.double_buffer_args` the argument is swapped: `arg = (in=arg.out, out=arg.in)`.
 function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bool, swap_double_buffers::Bool)
     if !launch_val || !swap_double_buffers
         return nothing  # swap disabled — no expression to emit
     end
-    # Generate conditional swaps for each argument position (1-based).
-    # Each swap is a direct `if` check (no `let` scope) to avoid soft-scope issues:
-    # the swap assignments (e.g. `Pt = (in=Pt.out, out=Pt.in)`) must modify the
-    # caller's variables, whether they are global or local. Using a `let` block or
-    # `global` keyword would break in local-scope contexts (functions, @testset).
+    # Generate conditional swaps for each argument position (1-based). Each swap is a direct `if` check (no `let` scope) to avoid soft-scope issues: the swap assignments (e.g. `Pt = (in=Pt.out, out=Pt.in)`) must modify the caller's variables, whether they are global or local. Using a `let` block or `global` keyword would break in local-scope contexts (functions, @testset).
     conditional_swaps = Expr[]
     for (i, arg) in enumerate(args)
         if arg isa Symbol
@@ -1107,8 +1062,7 @@ function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bo
     return quote $(conditional_swaps...) end
 end
 
-# Check if a statement is an array assignment with LHS @all(A) for a given A.
-# @all(A) is a macrocall: Expr(:macrocall, Symbol("@all"), LineNumberNode, A).
+# Check if a statement is an array assignment with LHS @all(A) for a given A. @all(A) is a macrocall: Expr(:macrocall, Symbol("@all"), LineNumberNode, A).
 function is_all_assignment_to(statement, A::Symbol)
     if !is_array_assignment(statement) return false end
     lhs = statement.args[1]  # the macrocall @m_(...)
@@ -1121,8 +1075,7 @@ function is_all_assignment_to(statement, A::Symbol)
     return false
 end
 
-# Extract the field A from a statement's LHS macrocall (e.g. @all(A) → A, @inn(A.x) → A).
-# Returns the Symbol of the field being written to, or nothing if not an array assignment.
+# Extract the field A from a statement's LHS macrocall (e.g. @all(A) → A, @inn(A.x) → A). Returns the Symbol of the field being written to, or nothing if not an array assignment.
 function get_lhs_field(statement)
     if !is_array_assignment(statement) return nothing end
     lhs = statement.args[1]
@@ -1142,8 +1095,7 @@ function is_all_assignment(statement)
     return lhs.head == :macrocall && lhs.args[1] == Symbol("@all")
 end
 
-# Rewrite the LHS of a statement: replace the bare field A with the replacement expr.
-# E.g. @inn(A.x) with A→A.out becomes @inn(A.out.x).
+# Rewrite the LHS of a statement: replace the bare field A with the replacement expr. E.g. @inn(A.x) with A→A.out becomes @inn(A.out.x).
 function rewrite_lhs_field(statement, A::Symbol, new)
     stmt = deepcopy(statement)
     lhs = stmt.args[1]  # macrocall
@@ -1151,13 +1103,7 @@ function rewrite_lhs_field(statement, A::Symbol, new)
     return stmt
 end
 
-# The main double-buffering rewrite pass. When double_buffering_opt=true and the kernel
-# signature contains 2B fields, this rewrites the body (steps 0-3 from the spec) and
-# returns a NEW @parallel expression with double_buffering_opt=false injected (to prevent
-# infinite recursion), use_old consumed, and all other kwargs preserved. The returned
-# expression is returned all the way back to the user code and let normal Julia expansion
-# handle it (no macroexpand call on it). When no 2B fields are present or the opt is false,
-# returns the kernel unchanged (no-op early-return).
+# The main double-buffering rewrite pass. When double_buffering_opt=true and the kernel signature contains 2B fields, this rewrites the body (steps 0-3 from the spec) and returns a NEW @parallel expression with double_buffering_opt=false injected (to prevent infinite recursion), use_old consumed, and all other kwargs preserved. The returned expression is returned all the way back to the user code and let normal Julia expansion handle it (no macroexpand call on it). When no 2B fields are present or the opt is false, returns the kernel unchanged (no-op early-return).
 function handle_double_buffering!(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, ndims::Integer, numbertype::DataType, kernel::Expr, posargs; kwargs::NamedTuple)
     double_buffering_opt = haskey(kwargs, :double_buffering_opt) ? kwargs.double_buffering_opt : get_double_buffering_opt(caller)
     # Early no-op return when the optimization is disabled.
@@ -1175,9 +1121,7 @@ function handle_double_buffering!(metadata_module::Module, metadata_function::Ex
     db_fields = Symbol[ kernelargs[i][1] for i in double_buffer_args ]
     # Read the use_old option (a tuple of field names to use old values for, or nothing).
     use_old = haskey(kwargs, :use_old) ? kwargs.use_old : ()
-    # use_old may arrive as an unevaluated Expr (e.g. :(Pt,) or :((Pt, V))) since it is
-    # not in eval_args (the field names are Symbols, not variables to evaluate). Extract
-    # the Symbols; if it's already a Tuple of Symbols, use it directly.
+    # use_old may arrive as an unevaluated Expr (e.g. :(Pt,) or :((Pt, V))) since it is not in eval_args (the field names are Symbols, not variables to evaluate). Extract the Symbols; if it's already a Tuple of Symbols, use it directly.
     if use_old isa Expr && use_old.head == :tuple
         use_old = Tuple(arg isa QuoteNode ? arg.value : arg for arg in use_old.args)
     elseif use_old isa Symbol
@@ -1188,14 +1132,10 @@ function handle_double_buffering!(metadata_module::Module, metadata_function::Ex
     use_old_set = Set(use_old)
 
     body = get_body(kernel)
-    # NOTE: do NOT call remove_return here — the downstream @parallel expansion will
-    # handle the return statement. We only need to read the body statements.
+    # NOTE: do NOT call remove_return here — the downstream @parallel expansion will handle the return statement. We only need to read the body statements.
     statements = get_statements(body)
 
-    # Classify 2B fields: @all-updated vs partial-updated.
-    # Also check that no field has more than one @all(A)=... assignment (not allowed:
-    # the user must merge multiple updates into a single @all(A)=... statement; for
-    # on-the-fly variables, use a different variable for each case).
+    # Classify 2B fields: @all-updated vs partial-updated. Also check that no field has more than one @all(A)=... assignment (not allowed: the user must merge multiple updates into a single @all(A)=... statement; for on-the-fly variables, use a different variable for each case).
     all_updated = Symbol[]
     partial_updated = Symbol[]
     for A in db_fields
@@ -1241,8 +1181,7 @@ function handle_double_buffering!(metadata_module::Module, metadata_function::Ex
         end
     end
 
-    # Build the new statements list (step 0 LHS rewrite for partial-updated fields,
-    # step 1 on-the-fly creation for @all-updated fields, steps 2-3 RHS rewriting).
+    # Build the new statements list (step 0 LHS rewrite for partial-updated fields, step 1 on-the-fly creation for @all-updated fields, steps 2-3 RHS rewriting).
     new_statements = Any[]
     # Track for each @all-updated field: its onthefly symbol, and whether we've passed its def.
     onthefly_syms = Dict{Symbol,Symbol}()
@@ -1319,8 +1258,7 @@ function handle_double_buffering!(metadata_module::Module, metadata_function::Ex
     new_kernel = deepcopy(kernel)
     set_body!(new_kernel, Expr(:block, new_statements...))
 
-    # Build the kwargs for the returned @parallel expression: inject double_buffering_opt=false,
-    # consume use_old, preserve all other kwargs.
+    # Build the kwargs for the returned @parallel expression: inject double_buffering_opt=false, consume use_old, preserve all other kwargs.
     kwargs_expr = Expr[]
     for key in keys(kwargs)
         if key == :double_buffering_opt

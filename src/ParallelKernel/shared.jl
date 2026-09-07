@@ -296,7 +296,7 @@ function insert_device_types(caller::Module, kernel::Expr)
             T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(TData.Fields.$T))) ? :(TData.Fields.Device.$T) : T_d
         end
         if !isnothing(T_d) kernel = substitute_in_kernel(kernel, T, T_d, signature_only=true) end
-        # In addition, if the unqualified alias `T` (e.g. `Field`) was brought into the caller's scope via `using .Data.Fields` (which makes `T == Data.Fields.T` at *use site* but not necessarily through `eval_try(caller, T)` depending on the macro's caller context), still substitute the unqualified form to the device-side alias whenever the matching qualified form would have been substituted. This mirrors the qualified-form rules added above and ensure "field types must be usable as kernel argument annotations" holds. This translates also normal Array types to their device-side aliases, which is not really necessary, but it is not harmful either and keeps the rules consistent (else CUDA.jl etc. would do it...).
+        # Also handle unqualified aliases brought into scope via `using .Data.Fields`.
         if isnothing(T_d) && !isnothing(eval_try(caller, :(Data.Fields.Device)))
             kernel = substitute_in_kernel(kernel, T, :(Data.Fields.Device.$T), signature_only=true)
         elseif isnothing(T_d) && !isnothing(eval_try(caller, :(TData.Fields.Device)))
@@ -558,16 +558,10 @@ function normalize_dotted_namedtuple_fields(expr)
                 is_dotted = (lhs_sym !== lhs_orig)
                 has_dotted = has_dotted || is_dotted
                 rhs = normalize_dotted_namedtuple_fields(arg.args[2])
-                # In the dotted path (NamedTuple{...}(...)), ALL keys are wrapped in
-                # Symbol(string(...)) so they evaluate to Symbols at runtime, never as
-                # variable lookups. In the non-dotted path (plain tuple Expr), keys are
-                # kept as raw Symbols (e.g. :B) so Julia's kwargs parser sees them as
-                # plain keyword names.
                 key_expr_dotted = :(Symbol($(string(lhs_sym))))
                 key_expr_plain  = lhs_sym
                 push!(kv, (key_expr_plain, key_expr_dotted, rhs))
             else
-                # Non-assignment entries are preserved as plain values (not expected in keyword named tuples).
                 push!(kv, (nothing, nothing, normalize_dotted_namedtuple_fields(arg)))
             end
         end
@@ -605,7 +599,7 @@ end
 function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
     if isa(t, Expr) && t.head == :tuple
         if (nested) return t.args
-        else        return extract_tuple_arg.(t.args)  # NOTE: originally, this was: return Base.unquoted.(t.args)
+        else        return extract_tuple_arg.(t.args)
         end
     else 
         return [extract_tuple_arg(t)]
