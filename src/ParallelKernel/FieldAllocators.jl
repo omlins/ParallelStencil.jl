@@ -60,7 +60,14 @@ Allocate different kinds of fields on a grid of size `gridsize` at once (and ini
               )
     )
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+    @allocate(gridsize = (nx,ny,nz), 
+              fields   = (Field          => (Rog, Mus),
+                          Field2B        => (Pt),
+                          BVectorField2B => V
+              )
+    )    
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc ALLOCATE_DOC
 macro allocate(args...)
@@ -91,7 +98,7 @@ Using the `allocator`, allocate a scalar `Field` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc FIELD_DOC
 macro Field(args...)
@@ -123,7 +130,7 @@ Using the `allocator`, allocate a `VectorField` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc VECTORFIELD_DOC
 macro VectorField(args...)
@@ -155,7 +162,7 @@ Using the `allocator`, allocate a `BVectorField, a vector field including bounda
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc BVECTORFIELD_DOC
 macro BVectorField(args...)
@@ -187,7 +194,7 @@ Using the `allocator`, allocate a `TensorField` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc TENSORFIELD_DOC
 macro TensorField(args...)
@@ -219,7 +226,7 @@ Using the `allocator`, allocate a `{X|Y|Z}Field`, a scalar field of the same siz
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc VECTORFIELD_COMP_DOC
@@ -272,7 +279,7 @@ Using the `allocator`, allocate a `B{X|Y|Z}Field`, a scalar field of the same si
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc BVECTORFIELD_COMP_DOC
@@ -325,7 +332,7 @@ Using the `allocator`, allocate a `{XX|YY|ZZ|XY|XZ|YZ}Field`, a scalar field of 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc TENSORFIELD_COMP_DOC
@@ -409,7 +416,7 @@ Using the `allocator`, allocate a double-buffered scalar `Field2B` on a grid of 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@VectorField2B`](@ref), [`@BVectorField2B`](@ref), [`@TensorField2B`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc FIELD2B_DOC
 macro Field2B(args...)
@@ -439,7 +446,7 @@ Using the `allocator`, allocate a double-buffered `VectorField2B` on a grid of s
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field2B`](@ref), [`@BVectorField2B`](@ref), [`@TensorField2B`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc VECTORFIELD2B_DOC
 macro VectorField2B(args...)
@@ -469,7 +476,7 @@ Using the `allocator`, allocate a double-buffered `BVectorField2B` (a vector fie
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field2B`](@ref), [`@VectorField2B`](@ref), [`@TensorField2B`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc BVECTORFIELD2B_DOC
 macro BVectorField2B(args...)
@@ -499,7 +506,7 @@ Using the `allocator`, allocate a double-buffered `TensorField2B` on a grid of s
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field2B`](@ref), [`@VectorField2B`](@ref), [`@BVectorField2B`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc TENSORFIELD2B_DOC
 macro TensorField2B(args...)

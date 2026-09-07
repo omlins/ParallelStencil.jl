@@ -117,10 +117,11 @@ A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `Te
 --------------------------------------------------------------------------------
     Double-buffered types (2B suffix)
 
-The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type. They are used with the automatic double buffering optimization of `@parallel` (see the `double_buffering_opt` keyword argument of [`@init_parallel_kernel`](@ref) and [`@parallel`](@ref)):
+The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type (they are used with ParallelStencil's automatic double buffering optimization):
 - `Data.Array2B` / `Data.SubArray2B`: double-buffered arrays/subarrays.
 - `Field2B`, `{X|Y|Z}Field2B`, `B{X|Y|Z}Field2B`, `{XX|YY|ZZ|XY|XZ|YZ}Field2B`: double-buffered scalar and component fields; allocated with `@Field2B`, `@{X|Y|Z}Field2B`, etc.
 - `VectorField2B`, `BVectorField2B`, `TensorField2B`: double-buffered aggregate fields; allocated with `@VectorField2B`, `@BVectorField2B`, `@TensorField2B`.
+- `Data.AbstractArray2B`: double-buffered abstract arrays.
 """
 
 const DATA_DOC_NUMBERTYPE_NONE = """
@@ -237,10 +238,11 @@ A tensor field, on a grid of size `gridsize`; allocated with `@TensorField`. `Te
 --------------------------------------------------------------------------------
     Double-buffered types (2B suffix)
 
-The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type. They are used with the automatic double buffering optimization of `@parallel` (see the `double_buffering_opt` keyword argument of [`@init_parallel_kernel`](@ref) and [`@parallel`](@ref)):
+The following types are double-buffered versions of the corresponding single-buffer types, each being a `NamedTuple{(:in, :out)}` of two instances of the single-buffer type (they are used with ParallelStencil's automatic double buffering optimization):
 - `Data.Array2B` / `Data.SubArray2B`: double-buffered arrays/subarrays.
 - `Field2B`, `{X|Y|Z}Field2B`, `B{X|Y|Z}Field2B`, `{XX|YY|ZZ|XY|XZ|YZ}Field2B`: double-buffered scalar and component fields; allocated with `@Field2B`, `@{X|Y|Z}Field2B`, etc.
 - `VectorField2B`, `BVectorField2B`, `TensorField2B`: double-buffered aggregate fields; allocated with `@VectorField2B`, `@BVectorField2B`, `@TensorField2B`.
+- `Data.AbstractArray2B`: double-buffered abstract arrays.
 """
 
 
