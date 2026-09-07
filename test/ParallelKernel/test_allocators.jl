@@ -1154,16 +1154,7 @@ eval(:(
     end;
 )) end == nothing || true;
 
-# Optional single-init-once / no-reset "xPU" second block at the very end of the file.
-# Only test sets that require a non-empty `Data` / `TData` at runtime (the host-side-alias-matching
-# verifications, which cannot be exercised in the dominant reset-driven loop after the initial
-# padding iteration) are placed here. The host-side `Data` / `TData` submodules (including
-# `Data.Fields`, `TData.Fields`, `Data.Fields.Device`, `TData.Fields.Device`, `Data.Number`,
-# `Data.Index`) populated once by the single `@init_parallel_kernel($package, Float16)` at the top
-# of the outer `… - xPU` `@testset` remain reachable at runtime for every test set in the block
-# (no `@reset_parallel_kernel` is ever called inside the block). The `PKG_THREADS` symbol is used
-# directly in the `[PKG_THREADS]` array literal; the bare `Threads` resolves to `Base.Threads`
-# (a Module, not the `:Threads` package identifier), which `check_package` rejects.
+# Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
 
@@ -1173,20 +1164,10 @@ eval(:(
         @init_parallel_kernel($package, Float16, padding=true)
         @require @is_initialized()
         (nx, ny, nz) = (3, 4, 5)
-        # Host-side alias matching under independent parameters: for each field kind allocated by
-        # the matching field allocation macro and for one-, two-, and three-dimensional `gridsize`,
-        # assert that each allocated field is matched by the corresponding host-side `Data.Fields.*`
-        # type alias (and, when at least one backend using `TData` is in `TEST_PACKAGES`, the
-        # corresponding `TData.Fields.*` type alias) when that alias is instantiated with the field's
-        # number of components and per-component array dimensionality independently rather than with
-        # a single coupled `N`. The second block reuses the same `TEST_PACKAGES` filtering already
-        # established at the top of the file; any `TData.*` accessor is gated with the same backend
-        # availability filter (`@require PKG_KERNELABSTRACTIONS in TEST_PACKAGES || true`, never a
-        # runtime `@test` for an initialization pre-condition).
+        # Each allocated field must match its host-side `Data.Fields.*` alias under independent parameters (component count and per-component dimensionality, not a single N).
         @testset "host-side alias" begin
             @require PKG_KERNELABSTRACTIONS in TEST_PACKAGES || true
-            # 3D (gridsize of length 3): per-component array dimensionality 3; VectorField/BVectorField
-            # have 3 components (= N_dim); TensorField has 6 components = 3*(3+1)/2, distinct from N_dim 3.
+            # 3D: VectorField/BVectorField have 3 components (=N_dim); TensorField has 6 = 3*(3+1)/2 (≠ N_dim).
             @test typeof(@Field((nx, ny, nz)))       <: Data.Fields.Field{3}
             @test typeof(@XField((nx, ny, nz)))      <: Data.Fields.XField{3}
             @test typeof(@YField((nx, ny, nz)))      <: Data.Fields.YField{3}
@@ -1203,8 +1184,7 @@ eval(:(
             @test typeof(@VectorField((nx, ny, nz))) <: Data.Fields.VectorField{3}
             @test typeof(@BVectorField((nx, ny, nz)))<: Data.Fields.BVectorField{3}
             @test typeof(@TensorField((nx, ny, nz))) <: Data.Fields.TensorField{6, 3}
-            # 2D (gridsize of length 2): per-component array dimensionality 2; VectorField/BVectorField
-            # have 2 components; TensorField has 3 components = 2*(2+1)/2, distinct from N_dim 2.
+            # 2D: TensorField has 3 = 2*(2+1)/2 components (≠ N_dim 2).
             @test typeof(@Field((nx, ny)))       <: Data.Fields.Field{2}
             @test typeof(@XField((nx, ny)))      <: Data.Fields.XField{2}
             @test typeof(@YField((nx, ny)))      <: Data.Fields.YField{2}
@@ -1221,9 +1201,7 @@ eval(:(
             @test typeof(@VectorField((nx, ny))) <: Data.Fields.VectorField{2}
             @test typeof(@BVectorField((nx, ny)))<: Data.Fields.BVectorField{2}
             @test typeof(@TensorField((nx, ny))) <: Data.Fields.TensorField{3, 2}
-            # 1D (gridsize of length 1): per-component array dimensionality 1; VectorField/BVectorField
-            # have 1 component; TensorField has 1 component = 1*(1+1)/2, distinct from N_dim 1
-            # (always distinct, never equal).
+            # 1D: TensorField has 1 = 1*(1+1)/2 components (≠ N_dim 1).
             @test typeof(@Field((nx,)))       <: Data.Fields.Field{1}
             @test typeof(@XField((nx,)))      <: Data.Fields.XField{1}
             @test typeof(@YField((nx,)))      <: Data.Fields.YField{1}
@@ -1241,23 +1219,10 @@ eval(:(
             @test typeof(@BVectorField((nx,)))<: Data.Fields.BVectorField{1}
             @test typeof(@TensorField((nx,))) <: Data.Fields.TensorField{1, 1}
         end;
-        # @allocate host-side-alias-matching coverage, mirroring the dominant-loop `@allocate`
-        # sub-testsets (`"single field"`, `"multiple fields - one per type (default allocator and eltype)"`,
-        # `"multiple fields - multiple per type (custom allocator and eltype)"`) but, instead of re-asserting
-        # the `@prettystring` macro-expansion coverage the dominant loop already has, for each field that
-        # the `@allocate` form actually allocates it adds host-side-alias-matching assertions mirroring
-        # those of the "host-side alias" sub-testset above (i.e. `typeof(field) <: Data.Fields.<Alias>{...,
-        # ndims, ...}` with the number of components and the per-component array dimensionality
-        # independent), so that `@allocate` is verified to allocate exactly one field per declared kind
-        # and each such field is matched by the corresponding host-side alias under independent parameters.
-        # Do not duplicate the dominant-loop `@prettystring` macro-expansion assertions.
+        # @allocate host-side-alias-matching coverage, mirroring the dominant-loop `@allocate` sub-testsets but adding the host-side-alias assertions (no `@prettystring`; that is covered in the dominant loop).
         @testset "@allocate" begin
             @testset "single field" begin
-                # Following the real `@allocate` calling convention (cf. src/ParallelKernel/FieldAllocators.jl ALLOCATE_DOC),
-                # `@allocate(gridsize=..., fields=Kind=>Name)` is written with NO leading LHS — the macro expansion binds the
-                # field name `Name` itself to `Name = @<Kind>(...)` — so each sub-testset just calls `@allocate(...)` (a fresh
-                # `@testset` scope makes the per-sub-testset bindings independent) and then asserts the type of the now-bound
-                # field name against the corresponding `Data.Fields.*` alias under independent parameters.
+                # @allocate(gridsize=..., fields=Kind=>Name) binds `Name` itself (no leading LHS).
                 @allocate(gridsize = (nx, ny, nz), fields = Field=>F)
                 @test typeof(F) <: Data.Fields.Field{3}
             end;
@@ -1294,16 +1259,11 @@ eval(:(
                 @test typeof(YZ) <: Data.Fields.YZField{3}
                 @test typeof(V)  <: Data.Fields.VectorField{3}
                 @test typeof(BV) <: Data.Fields.BVectorField{3}
-                # TensorField's number of components (6 = 3*(3+1)/2 for 3D `gridsize`) is distinct from the per-component
-                # array dimensionality (3), so the alias is instantiated with a SEPARATE parameter for the number of components
-                # (6) and the per-component array dimensionality (3); any `TensorField` alias that wrongly couples the two
-                # parameters (and is therefore not allowed to describe the actual allocation) is not matched and the test
-                # surfaces the discrepancy.
+                # TensorField: component count 6 ≠ per-component dimensionality 3 → two separate alias parameters.
                 @test typeof(T)  <: Data.Fields.TensorField{6, 3}
             end;
             @testset "multiple fields - multiple per type (custom allocator and eltype)" begin
-                # Ensure at least one declared field is a `TensorField` on a three-dimensional `gridsize` so that the
-                # separate-parameter-for-the-number-of-components case is exercised for `@allocate` as well.
+                # Includes a 3D TensorField to exercise the separate-parameter-for-component-count case.
                 @allocate(gridsize = (nx, ny, nz),
                           fields   = (Field        => (F1, F2),
                                       XField       => X,

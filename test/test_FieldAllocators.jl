@@ -362,14 +362,12 @@ eval(:(
         nxyz = (8, 8, 8)
 
         @testset "2B type aliases" begin
-            # All 2B field type aliases are defined in Data.Fields and Data.Fields.Device.
             for T in FIELDTYPES
                 @test isdefined(Data.Fields, T)
                 @test isdefined(Data.Fields.Device, T)
                 @test isdefined(TData.Fields, T)
                 @test isdefined(TData.Fields.Device, T)
             end
-            # Top-level array type aliases are defined in Data, TData, and their Device submodules.
             @test isdefined(Data, :Array2B)
             @test isdefined(Data, :SubArray2B)
             @test isdefined(Data.Device, :Array2B)
@@ -378,10 +376,7 @@ eval(:(
             @test isdefined(TData, :SubArray2B)
             @test isdefined(TData.Device, :Array2B)
             @test isdefined(TData.Device, :SubArray2B)
-            # NamedTuple covariance: every 2B field allocation must be
-            # isa-compatible with its Data.Fields alias (the <:` in the alias
-            # definition `const Field2B{N} = NamedTuple{(:in, :out), <:Tuple{...}}`
-            # is essential — without it, `Pt isa Field2B` returns `false`).
+            # The <: in `const Field2B{N} = NamedTuple{(:in, :out), <:Tuple{...}}` is essential for `Pt isa Field2B`.
             @test (@Field2B(nxyz)) isa Data.Fields.Field2B
             @test (@XField2B(nxyz)) isa Data.Fields.XField2B
             @test (@YField2B(nxyz)) isa Data.Fields.YField2B
@@ -398,10 +393,6 @@ eval(:(
             @test (@VectorField2B(nxyz)) isa Data.Fields.VectorField2B
             @test (@BVectorField2B(nxyz)) isa Data.Fields.BVectorField2B
             @test (@TensorField2B(nxyz)) isa Data.Fields.TensorField2B
-            # AbstractArray2B covers both Array2B and SubArray2B: in non-padding
-            # mode Field=Array so @Field2B is Array2B (AbstractArray2B via
-            # Array <: AbstractArray); in padding mode Field=SubArray so
-            # @Field2B is SubArray2B (AbstractArray2B via SubArray <: AbstractArray).
             @test (@Field2B(nxyz)) isa Data.AbstractArray2B
         end;
     end;

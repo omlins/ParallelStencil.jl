@@ -1841,30 +1841,7 @@ eval(:(
 
 end == nothing || true;
 
-# Optional single-init-once / no-reset "xPU" second block at the very end of the file.
-# Only test sets that require a non-empty `Data` / `TData` at runtime (the macro-expansion
-# and runtime-launch halves of the Field type use verification, which cannot be exercised
-# in the dominant reset-driven loop because `Data.Fields` / `TData.Fields` are unreachable
-# at runtime on GPU backends after the first iteration's `@reset_parallel_stencil`) are
-# placed here. The host-side `Data` / `TData` submodules (including `Data.Fields`,
-# `TData.Fields`, `Data.Fields.Device`, `TData.Fields.Device`, `Data.Number`, `Data.Index`)
-# populated once by the single `@init_parallel_stencil($package, Float64)` at the top of
-# the outer `… - xPU` `@testset` remain reachable at runtime for every test set in the
-# block (no `@reset_parallel_stencil` is ever called inside the block). The `PKG_THREADS`
-# symbol is used directly in the `[PKG_THREADS]` array literal; the bare `Threads` resolves
-# to `Base.Threads` (a Module, not the `:Threads` package identifier), which `check_package`
-# rejects.
-# The second block contains runtime launches for the scalar `Field` kind, analogous
-# runtime-launch sub-testsets for each remaining field kind in `FIELDTYPES`, and a
-# `@require`-gated assertion sub-testset verifying the host-side `[T]Data` submodules are
-# populated at runtime on the default CPU host code path. Each runtime launch mirrors the
-# established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)`
-# idiom, declaring a kernel whose signature annotates its arguments with the host-side
-# alias and launching it at runtime on the default CPU host code path with a field allocated
-# by the matching field allocation macro, exercising the shared single parameter between the
-# number of components and the per-component array dimensionality for `VectorField`/
-# `BVectorField` and the separate parameter for the number of components and the per-
-# component array dimensionality for `TensorField`.
+# Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules). The macro-expansion + runtime-launch halves of the Field type use verification cannot be exercised in the dominant reset-driven loop on GPU backends after the first `@reset_parallel_stencil`, so they are merged here. Each runtime launch follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom; VectorField/BVectorField use the shared single parameter (components == per-component dim) and TensorField uses separate parameters (components = N*(N+1)/2 vs per-component dim = N).
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
 
@@ -1875,36 +1852,14 @@ eval(:(
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
-        # Helper: transfer a CPU-initialized padded aggregate field (a NamedTuple
-        # of SubArrays of CPU arrays) to the active backend by moving each
-        # component's parent array through Data.Array and rebuilding the same
-        # SubArray view. This lets the following aggregate-field sub-testsets
-        # initialize their source values on the CPU and still exercise the GPU
-        # runtime-launch path when a GPU backend is selected.
+        # Helper: move a CPU-initialized padded aggregate field (NamedTuple of SubArrays of CPU arrays) to the active backend by pushing each component's parent through Data.Array and rebuilding the same SubArray view, so the source is GPU-compatible without device scalar indexing.
         function to_device_field(F)
             NamedTuple{keys(F)}(map(values(F)) do comp
                 parent_dev = Data.Array(Array(comp.parent))
                 Base.SubArray(parent_dev, comp.indices)
             end)
         end
-        # Runtime-launch sub-testsets for the scalar `Field` kind (three-dimensional
-        # `gridsize`), extending the restored macro-expansion sub-testsets with the
-        # runtime-launch half (because dispatch correctness of the converted device
-        # signature cannot be established by macro expansion alone). Each runtime
-        # launch declares a `@parallel <kernel>` whose body uses the `@all` selection
-        # macro for the copy (`@all(A) = @all(B); return`), so the same kernel body
-        # serves with padding enabled or disabled (the `@within` checks emitted by
-        # `@all` boundary each per-component write against its own bounds, exactly as
-        # the padding design intends — no code changes required from the user side).
-        # The second-block `@init_parallel_stencil($package, Float64, 3, padding=true)`
-        # enables padding and sets `ndims=3` globally, so all kernels here are 3-D
-        # (only FiniteDifferences3D is loaded in this file; mixing 1-D/2-D/3-D finite-
-        # difference macros in the same module is not supported, so 1-D and 2-D
-        # variants originally present here have been removed in favour of the 3-D
-        # variants—kept here side-by-side with the 3-D aggregate-field sub-testsets).
-        # Each kernel declares its arguments with the host-side `Field` / `Fields.Field`
-        # alias and is launched at runtime on the default CPU host code path with a
-        # field allocated by `@Field`.
+        # Runtime-launch half of the scalar `Field` macro-expansion sub-testsets above (dispatch of the converted device signature cannot be established by macro expansion alone). Each kernel uses `@all(A) = @all(B); return`, so the same body serves with padding enabled or disabled (`@within` bounds each per-component write against its own bounds). The second block sets `ndims=3` globally (only FiniteDifferences3D is loaded here; 1-D/2-D variants are therefore not present in this block), and each kernel is launched at runtime on the default CPU host code path with a field allocated by `@Field`.
         @testset "Fields.Field to Data.Fields.Device.Field" begin
             @parallel function copy_field_3D!(A::Fields.Field, B::Fields.Field)
                 @all(A) = @all(B)
@@ -1925,19 +1880,7 @@ eval(:(
             @parallel copy_field_3D!(F_A_3D, F_B_3D)
             @test all(Array(F_A_3D) .== Array(F_B_3D))
         end;
-        # Analogous runtime-launch sub-testsets for each remaining field kind in
-        # `FIELDTYPES` (here for `${X|Y|Z|BX|BY|BZ|XX|YY|ZZ|XY|XZ|YZ}Field` — the
-        # component-field kinds — keeping only the three-dimensional `gridsize`
-        # variant; see the leading comment of the `Fields.Field to
-        # Data.Fields.Device.Field` sub-testset above for why 1-D and 2-D variants
-        # are not present in this second block).  Each sub-testset mirrors the
-        # per-field-kind runtime-launch pattern established above for the scalar
-        # `Field` kind, using a `@parallel <kernel>` with `@all(A) = @all(B); return`
-        # so the same kernel body serves with padding enabled or disabled and
-        # exercising the shared single parameter between the number of components
-        # and the per-component array dimensionality for `VectorField`/`BVectorField`
-        # and the separate parameter for the number of components and the per-
-        # component array dimensionality for `TensorField`.
+        # Analogous runtime-launch sub-testsets for the remaining component-field FIELDTYPES kinds (3-D variants only, for the reason given above the scalar `Field` sub-testset). Each uses the `@all(A) = @all(B); return` body that serves with padding enabled or disabled.
         @testset "XField to Data.Fields.Device.XField" begin
             @parallel function copy_field_3D!(A::XField, B::XField)
                 @all(A) = @all(B)
@@ -2023,22 +1966,7 @@ eval(:(
             F_A_3D = @YZField((nx, ny, nz)); F_B_3D = @YZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
         end;
         @testset "VectorField to Data.Fields.Device.VectorField" begin
-            # VectorField's number of components always equals the per-component array dimensionality
-            # (`length(gridsize)`), so the host-side alias is instantiated with the single shared parameter.
-            # `@parallel copy_vectorfield!(A, B)` with `ndims=3` (the shared per-component array
-            # dimensionality here) auto-ranges `ixa, iya, iza` over the cross-component maximum, but
-            # each per-component write via `@all(V.<comp>)` is bounded by `@within("@all", V.<comp>)`
-            # against that component's own bounds, so the same kernel body serves with padding enabled
-            # or disabled (no code changes required from the user side, exactly as the padding design
-            # intends). To avoid scalar indexing on a GPU-backed source field, a CPU mirror is built
-            # from the backend template (same parent sizes and view indices) and filled with the
-            # canonical `ix + (iy-1)*size(B_comp,1) + (iz-1)*size(B_comp,1)*size(B_comp,2)` pattern
-            # via a Julia `for` loop over each component's own `CartesianIndices`. It is then
-            # transferred to the active backend with `to_device_field`. The kernel performs a pure
-            # component-wise copy with `@all`, so the @test references — recomputed with the same
-            # per-component's own `size(...)` — match `B` exactly, verifying that the runtime launch
-            # and host-to-device conversion dispatch the aliased kernel signature correctly regardless
-            # of the per-component-shape variation enabled by padding.
+            # VectorField: component count == per-component dim (single shared alias parameter). `@all(V.<comp>)` is bounded by `@within("@all", V.<comp>)` against each component's own bounds, so the same body serves with padding enabled or disabled. A CPU mirror is built from the backend template, filled with the canonical index pattern via host scalar loops, and moved to the backend with `to_device_field`; each `ref_*` is computed from the component's own `size(...)`.
             @parallel function copy_vectorfield!(A::VectorField, B::VectorField)
                 @all(A.x) = @all(B.x)
                 @all(A.y) = @all(B.y)
@@ -2066,18 +1994,7 @@ eval(:(
             @test all(Array(V_A.z) .== ref_3D_z)
         end;
         @testset "BVectorField to Data.Fields.Device.BVectorField" begin
-            # BVectorField variant: same shared-parameter scheme as VectorField above. Each per-component
-            # write via `@all(BV.<comp>)` is bounded by `@within("@all", BV.<comp>)` against that
-            # component's own bounds (e.g. `BV.x = (nx+1, ny, nz)` with padding=false, or the
-            # corresponding inner-region shape with padding=true), so the kernel body serves with
-            # padding enabled or disabled. As for VectorField, a CPU mirror is built from the
-            # backend template, filled with the same canonical index pattern via host scalar loops,
-            # and transferred to the active backend with `to_device_field` so that the source field
-            # is GPU-compatible without requiring scalar indexing on device memory. Each `ref_*` is
-            # computed from the component's own `size(...)` so the @test references match `BV_B`
-            # exactly, verifying the runtime launch and host-to-device conversion dispatch the
-            # aliased kernel signature correctly regardless of the per-component-shape variation
-            # enabled by padding.
+            # BVectorField: same as VectorField (single shared alias parameter). `@all(BV.<comp>)` is bounded by `@within("@all", BV.<comp>)` per component (e.g. `BV.x = (nx+1, ny, nz)` with padding=false). Same CPU-mirror + `to_device_field` pattern and per-component `ref_*` as VectorField above.
             @parallel function copy_bvectorfield!(A::BVectorField, B::BVectorField)
                 @all(A.x) = @all(B.x)
                 @all(A.y) = @all(B.y)
@@ -2105,32 +2022,7 @@ eval(:(
             @test all(Array(BV_A.z) .== ref_3D_z)
         end;
         @testset "TensorField to Data.Fields.Device.TensorField" begin
-            # TensorField's number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`)
-            # is always distinct from the per-component array dimensionality (`N`), so the
-            # host-side alias is instantiated with a SEPARATE parameter for the number of
-            # components and the per-component array dimensionality. With `padding=true` each
-            # component (e.g. `T.xx = (nx, ny-2, nz-2)`, `T.yy = (nx-2, ny, nz-2)`, ...) has
-            # its OWN inner-region shape. `@parallel copy_tensor_3D!(A, B)` auto-ranges
-            # `ixa, iya, iza` over the cross-component maximum, but each per-component write
-            # via `@all(T.<comp>)` is bounded by `@within("@all", T.<comp>)` against that
-            # component's own bounds, so the kernel body serves with padding enabled or
-            # disabled (no code changes required from the user side, exactly as the padding
-            # design intends — see the comment on the `VectorField to Data.Fields.Device.VectorField`
-            # sub-testset above for the rationale). To avoid scalar indexing on GPU-backed
-            # source memory, a CPU mirror is built from the backend template and pre-filled on
-            # the host with the canonical `ix + (iy-1)*size(comp,1) + (iz-1)*size(comp,1)*size(comp,2)`
-            # pattern (via a Julia `for` loop over each component's own `CartesianIndices`), then
-            # transferred to the active backend with `to_device_field`. The kernel performs a
-            # pure component-wise copy with `@all`. Named component access (`T.xx`, `T.yy`,
-            # `T.zz`, `T.xy`, `T.xz`, `T.yz`) is used for readability, and each `ref_*` is
-            # computed from the component's own `size(...)` so the @test references match `T_B`
-            # exactly, verifying that the runtime launch and host-to-device conversion dispatch
-            # the aliased kernel signature correctly regardless of the per-component-shape
-            # variation enabled by padding. The 1-D and 2-D variants originally present here
-            # have been removed in favour of this 3-D variant (only FiniteDifferences3D is
-            # loaded in this file, so 1-D/2-D `@parallel` kernels are not supported here either
-            # — see the leading comment of the `Fields.Field to Data.Fields.Device.Field`
-            # sub-testset above).
+            # TensorField's number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct from the per-component array dimensionality (`N`), so the host-side alias is instantiated with a SEPARATE parameter for the number of components and the per-component array dimensionality. With `padding=true` each component (e.g. `T.xx = (nx, ny-2, nz-2)`, `T.yy = (nx-2, ny, nz-2)`, ...) has its OWN inner-region shape. `@parallel copy_tensor_3D!(A, B)` auto-ranges `ixa, iya, iza` over the cross-component maximum, but each per-component write via `@all(T.<comp>)` is bounded by `@within("@all", T.<comp>)` against that component's own bounds, so the kernel body serves with padding enabled or disabled (no code changes required from the user side, exactly as the padding design intends — see the comment on the `VectorField to Data.Fields.Device.VectorField` sub-testset above for the rationale). To avoid scalar indexing on GPU-backed source memory, a CPU mirror is built from the backend template and pre-filled on the host with the canonical `ix + (iy-1)*size(comp,1) + (iz-1)*size(comp,1)*size(comp,2)` pattern (via a Julia `for` loop over each component's own `CartesianIndices`), then transferred to the active backend with `to_device_field`. The kernel performs a pure component-wise copy with `@all`. Named component access (`T.xx`, `T.yy`, `T.zz`, `T.xy`, `T.xz`, `T.yz`) is used for readability, and each `ref_*` is computed from the component's own `size(...)` so the @test references match `T_B` exactly, verifying that the runtime launch and host-to-device conversion dispatch the aliased kernel signature correctly regardless of the per-component-shape variation enabled by padding. The 1-D and 2-D variants originally present here have been removed in favour of this 3-D variant (only FiniteDifferences3D is loaded in this file, so 1-D/2-D `@parallel` kernels are not supported here either — see the leading comment of the `Fields.Field to Data.Fields.Device.Field` sub-testset above).
             @parallel function copy_tensor_3D!(A::TensorField, B::TensorField)
                 @all(A.xx) = @all(B.xx)
                 @all(A.yy) = @all(B.yy)
@@ -2170,16 +2062,7 @@ eval(:(
         # @static if $package != $PKG_KERNELABSTRACTIONS
             # nxyz = (8, 8, 8)
         #     @testset "memopt with named-tuple component optvars/optranges" begin
-        #         # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`.
-        #         # The explicit dotted identifiers select a single component of a `@VectorField`/
-        #         # `@BVectorField` for memory optimization. The output field is sized to match the
-        #         # respective finite-difference result (`@d_za(V.z)` -> `(nx-2,ny-2,nz-2)`;
-        #         # `@d_zi(BV.z)` -> `(nx-2,ny-2,nz)`), so `@all(A2)` writes the whole output.
-        #         # The macro-expansion shape is verified on every backend; the runtime result is
-        #         # verified against a CPU array-programming reference on the GPU backends, where
-        #         # the memory optimization preserves numerical results (the padding=true xPU code
-        #         # path is exercised here, in the same way as the default padding=false path in the
-        #         # first test set above).
+        #         # Regression test for dotted field identifiers (`V.z`, `BV.z`) in `optvars`/`optranges`. The explicit dotted identifiers select a single component of a `@VectorField`/`@BVectorField` for memory optimization. The output field is sized to match the respective finite-difference result (`@d_za(V.z)` -> `(nx-2,ny-2,nz-2)`; `@d_zi(BV.z)` -> `(nx-2,ny-2,nz)`), so `@all(A2)` writes the whole output. The macro-expansion shape is verified on every backend; the runtime result is verified against a CPU array-programming reference on the GPU backends, where the memory optimization preserves numerical results (the padding=true xPU code path is exercised here, in the same way as the default padding=false path in the first test set above).
         #         @parallel memopt=true loopsize=3 optvars=V.z optranges=(V.z=(0:1,0:1,-1:1),) function fd_memopt_vector_z!(A2, V)
         #             @all(A2) = @d_za(V.z)
         #             return
@@ -2242,12 +2125,7 @@ eval(:(
             @test metadata_plain.double_buffering_opt == true
         end;
         # end
-        # `@require`-gated assertion sub-testset verifying that the host-side
-        # `[T]Data` submodules (`Data.Fields`, `TData.Fields`, `Data.Fields.Device`,
-        # `TData.Fields.Device`, `Data.Number`, `Data.Index`) are populated at
-        # runtime on the default CPU host code path — the precondition that the
-        # runtime launches implicitly rely on. Expected pre-test conditions are
-        # validated with `@require` (never `@test`).
+        # `@require`-gated pre-testset: the runtime launches rely on the host-side [T]Data submodules being populated on the default CPU host code path, so pre-conditions use `@require` (never `@test`).
         @testset "host-side [T]Data submodules populated" begin
             @require isdefined(@__MODULE__, :Data)
             @require isdefined(@__MODULE__, :TData)

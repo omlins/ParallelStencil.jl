@@ -312,12 +312,7 @@ eval(:(
                         end
                     end;
                 )));
-                # NOTE: the following GPU tests fail, because the Fields module cannot be imported; these macro-
-                # expansion sub-testsets (and the matching TData.Fields pair restored further below) were MOVED into the
-                # optional single-init-once / no-reset "xPU" second block at the very end of this file because the
-                # dominant reset-driven loop's per-iteration `@reset_parallel_kernel` makes `Data.Fields` / `TData.Fields`
-                # unreachable at runtime on GPU backends after the first iteration. The original commented-out form is
-                # retained below purely as documentation of the pre-existing GPU limitation.
+                # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
                 # @testset "Fields.Field to Data.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
                 #             import .Data.Fields
@@ -348,10 +343,7 @@ eval(:(
                         end
                     end;
                 )));
-                # NOTE: the following GPU tests fail, because the TData.Fields module cannot be imported; the same move to
-                # the optional single-init-once / no-reset "xPU" second block at the very end of this file applies (see the
-                # comment above the Data.Fields pair). The original commented-out form is retained below purely as
-                # documentation of the pre-existing GPU limitation.
+                # NOTE: the following GPU tests fail, because the TData.Fields module cannot be imported.
                 # @testset "Fields.Field to TData.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
                 #             import .TData.Fields
@@ -591,25 +583,8 @@ eval(:(
 
 end == nothing || true;
 
-# Optional single-init-once / no-reset "xPU" second block at the very end of the file.
-# Only test sets that require a non-empty `Data` / `TData` at runtime (the macro-expansion
-# and runtime-launch halves of the Field type use verification, which cannot be exercised
-# in the dominant reset-driven loop because `Data.Fields` / `TData.Fields` are unreachable
-# at runtime on GPU backends after the first iteration's `@reset_parallel_kernel`) are
-# placed here. The host-side `Data` / `TData` submodules (including `Data.Fields`,
-# `TData.Fields`, `Data.Fields.Device`, `TData.Fields.Device`, `Data.Number`, `Data.Index`)
-# populated once by the single `@init_parallel_kernel($package, Float64)` at the top of the
-# outer `… - xPU` `@testset` remain reachable at runtime for every test set in the block
-# (no `@reset_parallel_kernel` is ever called inside the block). The `PKG_THREADS` symbol
-# is used directly in the `[PKG_THREADS]` array literal; the bare `Threads` resolves to
-# `Base.Threads` (a Module, not the `:Threads` package identifier), which `check_package`
-# rejects.
-# Each merged sub-testset first asserts the macro-expansion host-to-device substitution
-# (`@prettystring(1, @parallel_indices (ix,iy) f(A::Fields.Field, B::Fields.Field, c::T)
-# where T <: Integer = ...)` → `f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,`)
-# and then declares and launches a representative kernel annotated with the same host-side
-# alias on the default CPU host code path, following the established
-# `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
+# Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
+# Host-to-device field-type conversion cannot be exercised in the dominant loop on GPU backends after the first `@reset_parallel_kernel`, so the macro-expansion and runtime-launch halves are merged here. Each sub-testset follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
 
@@ -618,21 +593,10 @@ eval(:(
         @require !@is_initialized()
         @init_parallel_kernel($package, Float64, padding=false)
         @require @is_initialized()
-        # `using .Data.Fields` brings both the `Fields` module name (used by the headline macro-expansion assertions in
-        # the qualified `Fields.*` form, e.g. `@parallel_indices (ix,iy) f(A::Fields.Field, B::Fields.Field, c::T) where
-        # T <: Integer = ...`) AND the leaf alias names (used by the un-qualified runtime-launch signatures, e.g.
-        # `function copy_field_1D!(A::Field, B::Field); ...; end` and `function copy_field_X1D!(A::XField, ...); ...; end`
-        # for the per-kind sub-testsets), into scope inside this `eval(:(...))`-quoted testset body.
+        # `using .Data.Fields` brings in both the `Fields` module name and the leaf alias names.
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
-        # Fields.Field-qualified host-side alias: the macro-expansion half (originally a
-        # separate dominant-loop sub-testset that the dominant reset-driven loop cannot
-        # exercise because `Data.Fields` is unreachable at runtime on GPU backends after
-        # the first iteration's `@reset_parallel_kernel`) is asserted here first, then
-        # the runtime-launch half follows (because dispatch correctness of the converted
-        # device signature cannot be established by macro expansion alone). Each merge
-        # mirrors the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>;
-        # @test all(Array(...) .== ...)` idiom.
+        # Macro-expansion half first, then the runtime-launch half (dispatch of the converted device signature cannot be established by macro expansion alone).
         @testset "Fields.Field to Data.Fields.Device.Field" begin
             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Fields.Field, B::Fields.Field, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
             @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
@@ -661,12 +625,7 @@ eval(:(
             @parallel copy_field_3D!(F_A_3D, F_B_3D)
             @test all(Array(F_A_3D) .== Array(F_B_3D))
         end;
-        # Un-qualified `Field` after `using .Data.Fields`: same merge as the
-        # `Fields.Field`-qualified variant above (macro-expansion half + runtime-launch
-        # half merged here in the optional single-init-once / no-reset "xPU" second
-        # block because the dominant reset-driven loop cannot exercise the
-        # macro-expansion half on GPU backends after the first iteration's
-        # `@reset_parallel_kernel`).
+        # Un-qualified `Field` after `using .Data.Fields`: same merge (macro-expansion + runtime-launch).
         @testset "Field to Data.Fields.Device.Field" begin
             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Field, B::Field, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
             @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
@@ -695,16 +654,7 @@ eval(:(
             @parallel copy_field_3D!(F_A_3D, F_B_3D)
             @test all(Array(F_A_3D) .== Array(F_B_3D))
         end;
-        # Analogous runtime-launch sub-testsets for each remaining field kind in
-        # `FIELDTYPES` so that the ParallelKernel-level host-to-device conversion
-        # is exercised at runtime for `${X|Y|Z}Field`/`B{X|Y|Z}Field`/
-        # `{XX|YY|ZZ|XY|XZ|YZ}Field`/`VectorField`/`BVectorField`/`TensorField`.
-        # Each sub-testset mirrors the per-field-kind runtime-launch pattern
-        # established above for the scalar `Field` kind, keeping the shared single
-        # parameter between the number of components and the per-component array
-        # dimensionality for `VectorField`/`BVectorField` and using a SEPARATE
-        # parameter for the number of components (`N*(N+1)/2`) and the per-
-        # component array dimensionality (`N`) for `TensorField`.
+        # Analogous runtime-launch sub-testsets for the remaining FIELDTYPES kinds. VectorField/BVectorField use a single shared parameter (components == per-component dim); TensorField uses separate parameters (components = N*(N+1)/2 vs per-component dim = N).
         @testset "XField to Data.Fields.Device.XField" begin
             @parallel_indices (ix) function copy_field_1D!(A::XField, B::XField); A[ix] = B[ix]; return; end
             F_A_1D = @XField((nx,)); F_B_1D = @XField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
@@ -802,13 +752,7 @@ eval(:(
             F_A_3D = @YZField((nx, ny, nz)); F_B_3D = @YZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
         end;
         @testset "VectorField to Data.Fields.Device.VectorField" begin
-            # VectorField's number of components always equals the per-component array dimensionality
-            # (`length(gridsize)`), so the host-side alias is instantiated with the single shared parameter;
-            # `@parallel fill_vector_3D!(V_3D)` auto-ranges `ix, iy, iz` over the cross-component maximum, but each
-            # component is shorter than that maximum in at least one dimension (e.g. `V.x = (nx-1, ny-2, nz-2)`),
-            # so each per-component write is guarded by `if ix <= size(comp,1) && iy <= size(comp,2) && iz <= size(comp,3)`.
-            # Named component access (`V.x`, `V.y`, `V.z`) is used for readability, and each `ref_*` is computed from
-            # the per-component's own `size(...)` so the @test references match the kernel writes exactly.
+            # Each component is shorter than the @parallel auto-range cross-component maximum in at least one dimension, so per-component writes are guarded by size(comp,d) bounds. Named access (V.x, ...) is for readability; `ref_*` is computed from each component's own `size(...)` so the @test matches exactly.
             @parallel_indices (ix,iy,iz) function fill_vector_3D!(V::VectorField)
                 if ix <= size(V.x,1) && iy <= size(V.x,2) && iz <= size(V.x,3)
                     V.x[ix,iy,iz] = ix + (iy-1)*size(V.x,1) + (iz-1)*size(V.x,1)*size(V.x,2)
@@ -831,12 +775,7 @@ eval(:(
             @test all(Array(V_3D.z) .== ref_3D_z)
         end;
         @testset "BVectorField to Data.Fields.Device.BVectorField" begin
-            # BVectorField variant: same shared-parameter scheme as VectorField above. With `padding=false` the
-            # three components are `BV.x = (nx+1, ny, nz)`, `BV.y = (nx, ny+1, nz)`, `BV.z = (nx, ny, nz+1)`;
-            # `@parallel fill_bvector_3D!(BV_3D)` therefore auto-ranges `ix, iy, iz` over `1:nx+1, 1:ny+1, 1:nz+1`
-            # (the cross-component maximum), so each per-component write is guarded by a per-component bounds `if`.
-            # Named component access (`BV.x`, `BV.y`, `BV.z`) is used for readability, and each `ref_*` is computed
-            # from the per-component's own `size(...)` so the @test references match the kernel writes exactly.
+            # BVectorField: shapes `BV.x=(nx+1,ny,nz)`, `BV.y=(nx,ny+1,nz)`, `BV.z=(nx,ny,nz+1)` with `padding=false`; same per-component `size(comp,d)` bounds guard and `ref_*` from each component's own `size(...)` as above.
             @parallel_indices (ix,iy,iz) function fill_bvector_3D!(BV::BVectorField)
                 if ix <= size(BV.x,1) && iy <= size(BV.x,2) && iz <= size(BV.x,3)
                     BV.x[ix,iy,iz] = ix + (iy-1)*size(BV.x,1) + (iz-1)*size(BV.x,1)*size(BV.x,2)
@@ -859,14 +798,7 @@ eval(:(
             @test all(Array(BV_3D.z) .== ref_3D_z)
         end;
         @testset "TensorField to Data.Fields.Device.TensorField" begin
-            # TensorField's number of components (`N*(N+1)/2` for `N`-dimensional `gridsize`) is always distinct
-            # from the per-component array dimensionality (`N`), so the host-side alias is instantiated with a SEPARATE
-            # parameter for the number of components and the per-component array dimensionality. With `padding=false`
-            # each component (e.g. `T.xx = (nx, ny-2, nz-2)`, `T.yy = (nx-2, ny, nz-2)`, ...) has its OWN shape, so
-            # `@parallel fill_tensor_*D!(T_*D)` auto-ranges over the cross-component maximum and each per-component
-            # write must be guarded by an `if`. Named component access (`T.xx`, `T.yy`, `T.zz`, `T.xy`, `T.xz`, `T.yz`)
-            # is used for readability, and each `ref_*` is computed from the per-component's own `size(...)` so the
-            # @test references match the kernel writes exactly.
+            # TensorField: `N*(N+1)/2` components (≠ per-component dim `N` → separate alias parameters); with `padding=false` each component has its own shape, so same per-component `size(comp,d)` guards and per-component `ref_*` as the VectorField/BVectorField cases above.
             @parallel_indices (ix) function fill_tensor_1D!(T::TensorField)
                 if ix <= size(T.xx,1)
                     T.xx[ix] = ix
@@ -928,15 +860,7 @@ eval(:(
             @test all(Array(T_3D.xz) .== ref_3D_xz)
             @test all(Array(T_3D.yz) .== ref_3D_yz)
         end;
-        # `@require`-gated assertion sub-testset verifying that the host-side
-        # `[T]Data` submodules (`Data.Fields`, `TData.Fields`, `Data.Fields.Device`,
-        # `TData.Fields.Device`, `Data.Number`, `Data.Index`) are populated at
-        # runtime on the default CPU host code path — the precondition that the
-        # runtime launches implicitly rely on. Expected pre-test conditions are
-        # validated with `@require` (never `@test`), and the second block's
-        # `@static for package in [PKG_THREADS]` is the backend availability
-        # filter (no separate `@static if $package == $PKG_...` branch is needed).
-        # because the second block iterates only `[Threads]`).
+        # `@require`-gated pre-testset: the runtime launches rely on the host-side [T]Data submodules being populated, so pre-conditions are validated with `@require` (never `@test`).
         @testset "host-side [T]Data submodules populated" begin
             @require isdefined(@__MODULE__, :Data)
             @require isdefined(@__MODULE__, :TData)
