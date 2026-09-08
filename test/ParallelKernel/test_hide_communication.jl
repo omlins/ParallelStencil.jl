@@ -194,8 +194,8 @@ eval(:(
                 end;
                 @testset "@hide_communication ranges_outer ranges_inner block" begin
                     A  = @zeros(6, 7, 8)
-                    ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
-                    ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
+                    ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((2, 2, 3), ParallelStencil.ParallelKernel.get_ranges(A))
+                    ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((2, 2, 3), ParallelStencil.ParallelKernel.get_ranges(A))
                     @hide_communication ranges_outer ranges_inner begin
                         @parallel add_indices!(A);
                         communication!(A);
