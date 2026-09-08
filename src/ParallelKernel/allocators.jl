@@ -11,7 +11,7 @@ Call `zeros(eltype, args...)`, where `eltype` is by default the `numbertype` sel
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -47,7 +47,7 @@ Call `ones(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -83,7 +83,7 @@ Call `rand(eltype, args...)`, where `eltype` is by default the `numbertype` sele
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
@@ -115,7 +115,7 @@ Call `falses(args...)`, where the function `falses` is chosen to be compatible w
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
@@ -146,7 +146,7 @@ Call `trues(args...)`, where the function `trues` is chosen to be compatible wit
 
 # Keyword arguments
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.
 
@@ -181,7 +181,7 @@ Call `fill(convert(eltype, x), args...)`, where `eltype` is by default the `numb
 # Keyword arguments
 - `eltype::DataType`: the type of the elements, which can be numbers, indices, booleans or enums.
 - `celldims::Integer|NTuple{N,Integer}=1`: the dimensions of each array cell. Each cell can contain a single value (default) or an N-dimensional array of the specified dimensions.
-- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with the double-buffering feature of `@parallel` (see [`@parallel`](@ref) and the double-buffering documentation).
+- `double_buffered::Bool=false`: when set to `true`, allocate two arrays and return them as a `NamedTuple{(:in, :out)}` for use with ParallelStencil's double-buffering optimization.
 !!! note "Advanced"
     - `celltype::DataType`: the type of each array cell; it must be generated with the macro `@CellType`. The keyword argument `celltype` is incompatible with the other keyword arguments: if any of them is set, then the `celltype` is automatically defined. The `celltype` needs only to be specified to use named cell fields. Note that values can always be addressed with array indices, even when cell field names are defined.
     - `blocklength::Integer`: refers to the amount of values of a same `Cell` field that are stored contigously (`blocklength=1` means array of struct like storage; `blocklength=prod(dims)` means array struct of array like storage; `blocklength=0` is an alias for `blocklength=prod(dims)`, enabling better peformance thanks to more specialized dispatch). By default, `blocklength` is automatically set to `0` if a GPU package was chosen with [`@init_parallel_kernel`](@ref) and to `1` if a CPU package was chosen. Furthermore, the argument `blocklength` is only of effect if either `celldims` or `celltype` is set, else it is ignored.

@@ -24,6 +24,9 @@ Provides macros for the allocation of different kind of fields on a grid of size
 ###### Tensor fields
 - [`@TensorField`](@ref)
 
+###### Double-buffered fields (2B suffix)
+For every field allocator macro there is a corresponding double-buffered version with a `2B` suffix (e.g. [`@Field2B`](@ref), [`@VectorField2B`](@ref), [`@TensorField2B`](@ref)). A `2B` macro allocates a `NamedTuple{(:in, :out)}` of two single-buffer fields and is intended to enable ParallelStencil's automatic double-buffering optimization.
+
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FieldAllocators
@@ -403,7 +406,7 @@ const FIELD2B_DOC = """
     @Field2B(gridsize, allocator)
     @Field2B(gridsize, allocator, <keyword arguments>)
 
-Using the `allocator`, allocate a double-buffered scalar `Field2B` on a grid of size `gridsize`. A `Field2B` is a `NamedTuple{(:in, :out)}` of two `Field`s; see the double-buffering documentation for when to use it.
+Using the `allocator`, allocate a double-buffered scalar `Field2B` on a grid of size `gridsize`. A `Field2B` is a `NamedTuple{(:in, :out)}` of two `Field`s.
 
 !!! note "Advanced"
     The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.

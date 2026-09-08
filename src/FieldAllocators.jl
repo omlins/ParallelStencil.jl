@@ -24,6 +24,9 @@ Provides macros for the allocation of different kind of fields on a grid of size
 ###### Tensor fields
 - [`@TensorField`](@ref)
 
+###### Double-buffered fields (2B suffix)
+For every field allocator macro there is a corresponding double-buffered version with a `2B` suffix (e.g. [`@Field2B`](@ref), [`@VectorField2B`](@ref), [`@TensorField2B`](@ref)). A `2B` macro allocates a `NamedTuple{(:in, :out)}` of two single-buffer fields and is intended to enable ParallelStencil's automatic double-buffering optimization.
+
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FieldAllocators
