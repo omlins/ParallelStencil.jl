@@ -180,6 +180,32 @@ eval(:(
                         @test @prettystring(1, @vote_all_sync(mask, predicate))   == "AMDGPU.Device.all_sync(UInt64(mask), predicate)"
                         @test @prettystring(1, @vote_ballot_sync(mask, predicate)) == "AMDGPU.Device.ballot_sync(UInt64(mask), predicate)"
 
+                    elseif $package == $PKG_KERNELABSTRACTIONS
+                        @test @prettystring(1, @warpsize())    == "ParallelStencil.ParallelKernel.warpsize_kernelabstractions()"
+                        @test @prettystring(1, @laneid())      == "ParallelStencil.ParallelKernel.laneid_kernelabstractions()"
+                        @test @prettystring(1, @active_mask()) == "ParallelStencil.ParallelKernel.active_mask_kernelabstractions()"
+
+                        @test @prettystring(1, @shfl_sync(mask, val, lane)) == "ParallelStencil.ParallelKernel.shfl_sync_kernelabstractions(mask, val, lane)"
+                        @test @prettystring(1, @shfl_sync(mask, val, lane, width)) == "ParallelStencil.ParallelKernel.shfl_sync_kernelabstractions(mask, val, lane, width)"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta)) == "ParallelStencil.ParallelKernel.shfl_up_sync_kernelabstractions(mask, val, delta)"
+                        @test @prettystring(1, @shfl_up_sync(mask, val, delta, width)) == "ParallelStencil.ParallelKernel.shfl_up_sync_kernelabstractions(mask, val, delta, width)"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta)) == "ParallelStencil.ParallelKernel.shfl_down_sync_kernelabstractions(mask, val, delta)"
+                        @test @prettystring(1, @shfl_down_sync(mask, val, delta, width)) == "ParallelStencil.ParallelKernel.shfl_down_sync_kernelabstractions(mask, val, delta, width)"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask)) == "ParallelStencil.ParallelKernel.shfl_xor_sync_kernelabstractions(mask, val, lane_mask)"
+                        @test @prettystring(1, @shfl_xor_sync(mask, val, lane_mask, width)) == "ParallelStencil.ParallelKernel.shfl_xor_sync_kernelabstractions(mask, val, lane_mask, width)"
+
+                        @test @prettystring(1, @vote_any_sync(mask, predicate))    == "ParallelStencil.ParallelKernel.vote_any_sync_kernelabstractions(mask, predicate)"
+                        @test @prettystring(1, @vote_all_sync(mask, predicate))    == "ParallelStencil.ParallelKernel.vote_all_sync_kernelabstractions(mask, predicate)"
+                        @test @prettystring(1, @vote_ballot_sync(mask, predicate)) == "ParallelStencil.ParallelKernel.vote_ballot_sync_kernelabstractions(mask, predicate)"
+
+                        # Literal masks must be full (KernelInterface has no lane masks).
+                        @test @prettystring(1, @shfl_sync(0xffffffff, val, lane)) == "ParallelStencil.ParallelKernel.shfl_sync_kernelabstractions(0xffffffff, val, lane)"
+                        @test @prettystring(1, @vote_any_sync(0xffffffffffffffff, predicate)) == "ParallelStencil.ParallelKernel.vote_any_sync_kernelabstractions(0xffffffffffffffff, predicate)"
+                        @test_throws ArgumentError ParallelStencil.ParallelKernel.check_mask_kernelabstractions(0x0000ffff)
+                        @test_throws ArgumentError ParallelStencil.ParallelKernel.check_mask_kernelabstractions(1)
+                        @test ParallelStencil.ParallelKernel.check_mask_kernelabstractions(-1) === nothing
+                        @test ParallelStencil.ParallelKernel.check_mask_kernelabstractions(:m) === nothing
+
                     elseif $package == $PKG_METAL
                         @test @prettystring(1, @warpsize()) == "Metal.threads_per_simdgroup()"
                         @test @prettystring(1, @laneid())   == "unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1)"
@@ -278,6 +304,93 @@ eval(:(
                         @test Bout_any == P
                         @test Bout_all == P
                         @test Bout_ballot == map(p -> p ? UInt64(0x1) : UInt64(0x0), P)
+                    end
+                end;
+                @testset "Semantic tests (KernelAbstractions sub-groups)" begin
+                    @static if $package == $PKG_KERNELABSTRACTIONS
+                        KI      = KernelAbstractions.KernelInterface
+                        backend = KernelAbstractions.get_backend(@zeros(1))
+                        if !KI.supports_subgroups(backend)
+                            @test_skip "the KernelAbstractions backend $backend does not support sub-groups"
+                        else
+                            W  = KI.sub_group_size(backend)        # warp size; one warp per block (1-D blocks of W threads)
+                            NW = 3                                 # number of warps
+                            N  = NW*W
+                            A  = @rand(N)
+                            P  = KernelAbstractions.zeros(backend, Bool, N); copyto!(P, Vector{Bool}(Array(A) .> 0.5))
+                            Bwarpsize = KernelAbstractions.zeros(backend, Int, N)
+                            Blaneid   = KernelAbstractions.zeros(backend, Int, N)
+                            Bmask     = KernelAbstractions.zeros(backend, UInt64, N)
+                            Bshfl     = @zeros(N)
+                            Bshfl_w   = @zeros(N)
+                            Bshfl_up  = @zeros(N)
+                            Bshfl_upw = @zeros(N)
+                            Bshfl_dn  = @zeros(N)
+                            Bshfl_dnw = @zeros(N)
+                            Bshfl_xor = @zeros(N)
+                            Bshfl_xw  = @zeros(N)
+                            Bany      = KernelAbstractions.zeros(backend, Bool, N)
+                            Ball      = KernelAbstractions.zeros(backend, Bool, N)
+                            Bballot   = KernelAbstractions.zeros(backend, UInt64, N)
+                            Bsum      = @zeros(N)
+                            Btuple    = KernelAbstractions.zeros(backend, Int, N)
+                            @parallel_indices (ix) function kernel_subgroups!(Bwarpsize, Blaneid, Bmask, Bshfl, Bshfl_w, Bshfl_up, Bshfl_upw, Bshfl_dn, Bshfl_dnw, Bshfl_xor, Bshfl_xw, Bany, Ball, Bballot, Bsum, Btuple, A, P)
+                                m = @active_mask()
+                                l = @laneid()
+                                Bwarpsize[ix] = @warpsize()
+                                Blaneid[ix]   = l
+                                Bmask[ix]     = m
+                                a = A[ix]
+                                Bshfl[ix]     = @shfl_sync(m, a, 2)                       # broadcast lane 2
+                                Bshfl_w[ix]   = @shfl_sync(0xffffffff, a, 9, 8)           # lane 9 is lane 1 of each segment of 8
+                                Bshfl_up[ix]  = @shfl_up_sync(m, a, 1)
+                                Bshfl_upw[ix] = @shfl_up_sync(m, a, 3, 4)
+                                Bshfl_dn[ix]  = @shfl_down_sync(m, a, 1)
+                                Bshfl_dnw[ix] = @shfl_down_sync(m, a, 3, 4)
+                                Bshfl_xor[ix] = @shfl_xor_sync(m, a, 1)
+                                Bshfl_xw[ix]  = @shfl_xor_sync(m, a, 6, 4)                # partner outside of the segment of 4 for bit 2
+                                p = P[ix]
+                                Bany[ix]      = @vote_any_sync(m, p)
+                                Ball[ix]      = @vote_all_sync(m, p)
+                                Bballot[ix]   = @vote_ballot_sync(m, p)
+                                # warp reduction (butterfly)
+                                s = a
+                                o = @warpsize() ÷ 2
+                                while o > 0
+                                    s += @shfl_xor_sync(m, s, o)
+                                    o ÷= 2
+                                end
+                                Bsum[ix] = s
+                                # shuffle of a non-primitive isbits value (field-wise)
+                                t = @shfl_down_sync(m, (l, Int32(2l)), 1)
+                                Btuple[ix] = t[1] + t[2]
+                                return
+                            end
+                            @parallel (1:N) (NW,1,1) (W,1,1) kernel_subgroups!(Bwarpsize, Blaneid, Bmask, Bshfl, Bshfl_w, Bshfl_up, Bshfl_upw, Bshfl_dn, Bshfl_dnw, Bshfl_xor, Bshfl_xw, Bany, Ball, Bballot, Bsum, Btuple, A, P)
+
+                            Ah, Ph  = Array(A), Array(P)
+                            lane(i) = mod1(i, W)
+                            base(i) = i - lane(i)                  # index before the first lane of the warp of i
+                            seg(i, w) = (lane(i)-1) ÷ w            # 0-based segment of width w of i in its warp
+                            full    = W == 64 ? typemax(UInt64) : (UInt64(1) << W) - UInt64(1)
+                            @test all(Array(Bwarpsize) .== W)
+                            @test Array(Blaneid) == lane.(1:N)
+                            @test all(Array(Bmask) .== full)
+                            @test Array(Bshfl)     == [Ah[base(i) + 2] for i in 1:N]
+                            @test Array(Bshfl_w)   == [Ah[base(i) + seg(i,8)*8 + 1] for i in 1:N]
+                            @test Array(Bshfl_up)  == [lane(i) > 1 ? Ah[i-1] : Ah[i] for i in 1:N]
+                            @test Array(Bshfl_upw) == [mod1(lane(i),4) > 3 ? Ah[i-3] : Ah[i] for i in 1:N]
+                            @test Array(Bshfl_dn)  == [lane(i) < W ? Ah[i+1] : Ah[i] for i in 1:N]
+                            @test Array(Bshfl_dnw) == [mod1(lane(i),4) + 3 <= 4 ? Ah[i+3] : Ah[i] for i in 1:N]
+                            @test Array(Bshfl_xor) == [Ah[base(i) + ((lane(i)-1) ⊻ 1) + 1] for i in 1:N]
+                            @test Array(Bshfl_xw)  == [Ah[i] for i in 1:N]   # (l0 ⊻ 6) leaves every segment of 4
+                            warp(i) = base(i)+1:base(i)+W
+                            @test Array(Bany)    == [any(Ph[warp(i)]) for i in 1:N]
+                            @test Array(Ball)    == [all(Ph[warp(i)]) for i in 1:N]
+                            @test Array(Bballot) == [sum(UInt64(Ph[j]) << (lane(j)-1) for j in warp(i)) for i in 1:N]
+                            @test Array(Bsum)    ≈ [sum(Ah[warp(i)]) for i in 1:N]
+                            @test Array(Btuple)  == [lane(i) < W ? 3*(lane(i)+1) : 3*lane(i) for i in 1:N]
+                        end
                     end
                 end;
             end;
