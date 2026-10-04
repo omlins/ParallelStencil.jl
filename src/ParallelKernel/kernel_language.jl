@@ -377,6 +377,12 @@ macro sharedMem_metal(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sha
 macro sharedMem_kernelabstractions(args...)
     if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
     if length(args) == 2
+        # NOTE: KernelAbstractions >= 0.10 expands `@localmem` to a call through the KernelInterface module object, which
+        # makes KernelAbstractions' `@kernel` fail (it deepcopies the kernel definition, which ParallelStencil passes with
+        # the macros already expanded, and modules can't be deepcopied). Call `KernelInterface.localmemory` by name instead.
+        if isdefined(__module__, :KernelAbstractions) && isdefined(getfield(__module__, :KernelAbstractions), :KernelInterface)
+            return esc(:(KernelAbstractions.KernelInterface.localmemory($(args[1]), Val($(args[2])))))
+        end
         return esc(:(KernelAbstractions.@localmem($(args[1]), $(args[2]))))
     end
     return esc(:(ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions($(args[1]), $(args[2]))))

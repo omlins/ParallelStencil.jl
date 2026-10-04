@@ -112,7 +112,7 @@ eval(:(
                     @test occursin("ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions", call)
 
                     call = @prettystring(2, @sharedMem($FloatDefault, (2,3)))
-                    @test occursin("KernelAbstractions.@localmem", call)
+                    @test occursin("KernelAbstractions.@localmem", call) || occursin("KernelAbstractions.KernelInterface.localmemory", call)
                     @test occursin("$(nameof($FloatDefault))", call)
                 elseif @iscpu($package)
                     @test @prettystring(1, @gridDim()) == "ParallelStencil.ParallelKernel.@gridDim_cpu"
@@ -457,7 +457,7 @@ eval(:(
                 end;
             end;
             @testset "@sharedMem (1D)" begin
-                @static if @iscpu($package)
+                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
                     A  = @rand(4)
                     B  = @zeros(4)
                     @parallel_indices (ix) function memcopy!(B, A)
@@ -473,7 +473,7 @@ eval(:(
                 end
             end;
             @testset "@sharedMem (2D)" begin
-                @static if @iscpu($package)
+                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
                     A  = @rand(4,5)
                     B  = @zeros(4,5)
                     @parallel_indices (ix,iy) function memcopy!(B, A)
@@ -490,7 +490,7 @@ eval(:(
                 end
             end;
             @testset "@sharedMem (3D)" begin
-                @static if @iscpu($package)
+                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
                     A  = @rand(4,5,6)
                     B  = @zeros(4,5,6)
                     @parallel_indices (ix,iy,iz) function memcopy!(B, A)
