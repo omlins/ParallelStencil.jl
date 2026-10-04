@@ -308,9 +308,11 @@ eval(:(
                 end;
                 @testset "Semantic tests (KernelAbstractions sub-groups)" begin
                     @static if $package == $PKG_KERNELABSTRACTIONS
-                        KI      = KernelAbstractions.KernelInterface
                         backend = KernelAbstractions.get_backend(@zeros(1))
-                        if !KI.supports_subgroups(backend)
+                        KI      = isdefined(KernelAbstractions, :KernelInterface) ? KernelAbstractions.KernelInterface : nothing
+                        if isnothing(KI)
+                            @test_skip "warp-level primitives require KernelAbstractions 0.10 or newer"
+                        elseif !KI.supports_subgroups(backend)
                             @test_skip "the KernelAbstractions backend $backend does not support sub-groups"
                         else
                             W  = KI.sub_group_size(backend)        # warp size; one warp per block (1-D blocks of W threads)
@@ -457,7 +459,7 @@ eval(:(
                 end;
             end;
             @testset "@sharedMem (1D)" begin
-                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
+                @static if @iscpu($package) || ($package == $PKG_KERNELABSTRACTIONS && isdefined(KernelAbstractions, :KernelInterface)) # NOTE: with KernelAbstractions < 0.10, @sync_threads (@synchronize) is not supported by the CPU backend.
                     A  = @rand(4)
                     B  = @zeros(4)
                     @parallel_indices (ix) function memcopy!(B, A)
@@ -473,7 +475,7 @@ eval(:(
                 end
             end;
             @testset "@sharedMem (2D)" begin
-                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
+                @static if @iscpu($package) || ($package == $PKG_KERNELABSTRACTIONS && isdefined(KernelAbstractions, :KernelInterface)) # NOTE: with KernelAbstractions < 0.10, @sync_threads (@synchronize) is not supported by the CPU backend.
                     A  = @rand(4,5)
                     B  = @zeros(4,5)
                     @parallel_indices (ix,iy) function memcopy!(B, A)
@@ -490,7 +492,7 @@ eval(:(
                 end
             end;
             @testset "@sharedMem (3D)" begin
-                @static if @iscpu($package) || $package == $PKG_KERNELABSTRACTIONS
+                @static if @iscpu($package) || ($package == $PKG_KERNELABSTRACTIONS && isdefined(KernelAbstractions, :KernelInterface)) # NOTE: with KernelAbstractions < 0.10, @sync_threads (@synchronize) is not supported by the CPU backend.
                     A  = @rand(4,5,6)
                     B  = @zeros(4,5,6)
                     @parallel_indices (ix,iy,iz) function memcopy!(B, A)
