@@ -266,7 +266,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                 quote
                     local $metadata_var = $metadata_call
                     if $metadata_var.memopt
-                        @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                        ParallelStencil.ParallelKernel.Exceptions.@ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
                     else
                         $ordinary_call
                     end
