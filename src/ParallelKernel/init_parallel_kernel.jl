@@ -6,7 +6,7 @@ Initialize the package ParallelKernel, giving access to its main functionality. 
 When the abstraction-layer backend KernelAbstractions is selected, the concrete runtime hardware is chosen later via [`select_hardware`](@ref) and inspected with [`current_hardware`](@ref); consult the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection) for an end-to-end workflow.
 
 !!! note "Convenience modules"
-    `Data` and `TData` modules with hardware-specific array aliases are generated only for single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester). The KernelAbstractions backend users trade off the additional convenience modules (and warp level macros) for runtime hardware selection instead.
+    `Data` and `TData` modules with hardware-specific array aliases are generated only for single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester). The KernelAbstractions backend users trade off the additional convenience modules for runtime hardware selection instead (warp level macros are supported with KernelAbstractions 0.10 or newer, see [`@warpsize`](@ref)).
 
 # Arguments
 - `package::Module`: the package used for parallelization (CUDA, AMDGPU, Metal, Threads, Polyester, or KernelAbstractions when deferring the hardware decision to runtime).
