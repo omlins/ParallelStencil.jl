@@ -20,3 +20,19 @@ falses_kernelabstractions(arg...) = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT
 trues_kernelabstractions(arg...)  = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
 fill_kernelabstractions(arg...)   = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
 fill!_kernelabstractions(arg...)  = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+
+
+# warp.jl
+
+const ERRMSG_KERNELABSTRACTIONS_WARP = "warp-level primitives require KernelAbstractions 0.10 or newer (KernelInterface sub-group support)."
+
+warpsize_kernelabstractions(arg...)         = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+laneid_kernelabstractions(arg...)           = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+active_mask_kernelabstractions(arg...)      = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+shfl_sync_kernelabstractions(arg...)        = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+shfl_up_sync_kernelabstractions(arg...)     = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+shfl_down_sync_kernelabstractions(arg...)   = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+shfl_xor_sync_kernelabstractions(arg...)    = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+vote_any_sync_kernelabstractions(arg...)    = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+vote_all_sync_kernelabstractions(arg...)    = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)
+vote_ballot_sync_kernelabstractions(arg...) = @NotLoadedError(ERRMSG_KERNELABSTRACTIONSEXT_NOT_LOADED)

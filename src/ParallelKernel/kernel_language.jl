@@ -93,7 +93,10 @@ macro pk_println(args...) check_initialized(__module__); esc(pk_println(__module
 const WARPSIZE_DOC = """
     @warpsize() -> Int
 
-Return the logical warp / wavefront / SIMD-group width in threads for the active backend.  CUDA returns 32. AMD GPUs return the hardware wavefront size (typically 64 or 32). Metal returns the device `threadExecutionWidth`. CPU backend returns 1.  Guaranteed constant for the lifetime of the kernel invocation. Use this value (not a hard‑coded constant) for portable intra-warp algorithms.
+Return the logical warp / wavefront / SIMD-group width in threads for the active backend.  CUDA returns 32. AMD GPUs return the hardware wavefront size (typically 64 or 32). Metal returns the device `threadExecutionWidth`. KernelAbstractions returns the sub-group width `KernelInterface.get_max_sub_group_size()` (see the note on the KernelAbstractions backend below). CPU backend returns 1.  Guaranteed constant for the lifetime of the kernel invocation. Use this value (not a hard‑coded constant) for portable intra-warp algorithms.
+
+!!! note "KernelAbstractions backend"
+    With KernelAbstractions (0.10 or newer), the warp-level primitives map to the sub-group functions of KernelInterface: a warp is a sub-group (`KernelInterface.sub_group_size(backend)` on the host) and lanes are numbered from 1.  KernelInterface has no lane masks: all lanes of the sub-group must execute a shuffle or vote together (not in a divergent branch, and not after some lanes left the kernel, e.g. because they are out of the `@parallel` ranges); the `mask` argument is therefore ignored, and a literal partial mask is rejected.  Shuffles have the semantics documented here also without `width` (the full sub-group width is used).  How the threads of a multi-dimensional block form sub-groups is not specified by KernelInterface; a 1-D block of at most `@warpsize()` threads forms a single sub-group.
 """
 @doc WARPSIZE_DOC
 macro warpsize(args...) check_initialized(__module__); checknoargs(args...); esc(warpsize(__module__, args...)); end
@@ -103,7 +106,7 @@ macro warpsize(args...) check_initialized(__module__); checknoargs(args...); esc
 const LANEID_DOC = """
     @laneid() -> Int
 
-Return the 1-based logical lane index in the current warp (range: 1:warpsize()).  For CUDA this is `CUDA.laneid()+1` internally; for backends with 0-based hardware lane numbering the abstraction adds 1.  CPU backend always returns 1.
+Return the 1-based logical lane index in the current warp (range: 1:warpsize()).  For CUDA this is `CUDA.laneid()+1` internally; for backends with 0-based hardware lane numbering the abstraction adds 1.  KernelAbstractions returns `KernelInterface.get_sub_group_local_id()`.  CPU backend always returns 1.
 """
 @doc LANEID_DOC
 macro laneid(args...) check_initialized(__module__); checknoargs(args...); esc(laneid(__module__, args...)); end
@@ -113,7 +116,7 @@ macro laneid(args...) check_initialized(__module__); checknoargs(args...); esc(l
 const ACTIVE_MASK_DOC = """
     @active_mask() -> Unsigned
 
-Return a bit mask of currently active (non-exited, converged) lanes in the caller's warp.  Bit (laneid()-1) corresponds to that logical lane.  CUDA returns a 32-bit value; AMD returns a 64-bit value.  Absent (throws) on Metal if not supported; CPU returns UInt64(0x1).
+Return a bit mask of currently active (non-exited, converged) lanes in the caller's warp.  Bit (laneid()-1) corresponds to that logical lane.  CUDA returns a 32-bit value; AMD returns a 64-bit value.  Absent (throws) on Metal if not supported; CPU returns UInt64(0x1).  KernelAbstractions returns a `UInt64` with the bits of all lanes of the sub-group set (KernelInterface does not track which lanes are active in a divergent branch).
 """
 @doc ACTIVE_MASK_DOC
 macro active_mask(args...) check_initialized(__module__); checknoargs(args...); esc(active_mask(__module__, args...)); end
@@ -187,7 +190,7 @@ macro vote_all_sync(args...) check_initialized(__module__); checkargs_vote(args.
 const VOTE_BALLOT_SYNC_DOC = """
     @vote_ballot_sync(mask::Unsigned, predicate::Bool) -> Unsigned
 
-Return a bit mask aggregating `predicate` values for lanes named in `mask`: bit (laneid()-1) set iff that lane's predicate is true.  Width of result equals hardware warp mask width (32 for CUDA, 64 for AMD, CPU uses 64 with only bit 0 meaningful).  Caller may safely promote to `UInt64` for uniform handling; upper bits beyond hardware width are zero.  No memory ordering implied.
+Return a bit mask aggregating `predicate` values for lanes named in `mask`: bit (laneid()-1) set iff that lane's predicate is true.  Width of result equals hardware warp mask width (32 for CUDA, 64 for AMD, CPU uses 64 with only bit 0 meaningful, KernelAbstractions uses 64).  Caller may safely promote to `UInt64` for uniform handling; upper bits beyond hardware width are zero.  No memory ordering implied.
 """
 @doc VOTE_BALLOT_SYNC_DOC
 macro vote_ballot_sync(args...) check_initialized(__module__); checkargs_vote(args...); esc(vote_ballot_sync(__module__, args...)); end
@@ -374,6 +377,12 @@ macro sharedMem_metal(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sha
 macro sharedMem_kernelabstractions(args...)
     if !(2 <= length(args) <= 3) @ArgumentError("wrong number of arguments.") end
     if length(args) == 2
+        # NOTE: KernelAbstractions >= 0.10 expands `@localmem` to a call through the KernelInterface module object, which
+        # makes KernelAbstractions' `@kernel` fail (it deepcopies the kernel definition, which ParallelStencil passes with
+        # the macros already expanded, and modules can't be deepcopied). Call `KernelInterface.localmemory` by name instead.
+        if isdefined(__module__, :KernelAbstractions) && isdefined(getfield(__module__, :KernelAbstractions), :KernelInterface)
+            return esc(:(KernelAbstractions.KernelInterface.localmemory($(args[1]), Val($(args[2])))))
+        end
         return esc(:(KernelAbstractions.@localmem($(args[1]), $(args[2]))))
     end
     return esc(:(ParallelStencil.ParallelKernel.@sharedMem_kernelabstractions($(args[1]), $(args[2]))))
@@ -405,7 +414,7 @@ end
 function warpsize(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.warpsize())
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.wavefrontsize())
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.warpsize_kernelabstractions())
     elseif (package == PKG_METAL)   return :(Metal.threads_per_simdgroup())
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.warpsize_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -415,7 +424,7 @@ end
 function laneid(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.laneid() + 1)
     elseif (package == PKG_AMDGPU)  return :(unsafe_trunc(Cint, AMDGPU.Device.activelane()) + Cint(1))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.laneid_kernelabstractions())
     elseif (package == PKG_METAL)   return :(unsafe_trunc(Cint, Metal.thread_index_in_simdgroup()) + Cint(1))
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.laneid_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -425,7 +434,7 @@ end
 function active_mask(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.active_mask())
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.activemask())
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) return :(ParallelStencil.ParallelKernel.active_mask_kernelabstractions())
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.active_mask_cpu())
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -446,7 +455,7 @@ function shfl_sync(caller::Module, args...; package::Symbol=get_package(caller))
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+        check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.shfl_sync_kernelabstractions($(args...)))
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
@@ -470,7 +479,7 @@ function shfl_up_sync(caller::Module, args...; package::Symbol=get_package(calle
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+        check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.shfl_up_sync_kernelabstractions($(args...)))
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_up_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
@@ -494,7 +503,7 @@ function shfl_down_sync(caller::Module, args...; package::Symbol=get_package(cal
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+        check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.shfl_down_sync_kernelabstractions($(args...)))
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_down_sync_cpu($(args[1]), $(args[2]), Int64($(args[3]))))
@@ -518,7 +527,7 @@ function shfl_xor_sync(caller::Module, args...; package::Symbol=get_package(call
     elseif (package == PKG_METAL)
         @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif (package == PKG_KERNELABSTRACTIONS)
-        @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+        check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.shfl_xor_sync_kernelabstractions($(args...)))
     elseif iscpu(package)
         if length(args) == 3
             return :(ParallelStencil.ParallelKernel.shfl_xor_sync_cpu($(args[1]), $(args[2]), Int64($(args[3])) - Int64(1)))
@@ -533,7 +542,7 @@ end
 function vote_any_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_any_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.any_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.vote_any_sync_kernelabstractions($(args...)))
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_any_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -543,7 +552,7 @@ end
 function vote_all_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_all_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.all_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.vote_all_sync_kernelabstractions($(args...)))
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_all_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -553,7 +562,7 @@ end
 function vote_ballot_sync(caller::Module, args...; package::Symbol=get_package(caller))
     if     (package == PKG_CUDA)    return :(CUDA.vote_ballot_sync($(args...)))
     elseif (package == PKG_AMDGPU)  return :(AMDGPU.Device.ballot_sync(UInt64($(args[1])), $(args[2])))
-    elseif (package == PKG_KERNELABSTRACTIONS) @KeywordArgumentError("this functionality is not supported in KernelAbstractions.jl.")
+    elseif (package == PKG_KERNELABSTRACTIONS) check_mask_kernelabstractions(args[1]); return :(ParallelStencil.ParallelKernel.vote_ballot_sync_kernelabstractions($(args...)))
     elseif (package == PKG_METAL)   @KeywordArgumentError("this functionality is not yet supported in Metal.jl.")
     elseif iscpu(package)           return :(ParallelStencil.ParallelKernel.vote_ballot_sync_cpu($(args...)))
     else                            @KeywordArgumentError("$ERRMSG_UNSUPPORTED_PACKAGE (obtained: $package).")
@@ -698,3 +707,37 @@ macro sharedMem_cpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@share
 
 # Ballot returns a mask with bit 0 set iff predicate is true; CPU uses 64-bit mask.
 @inline vote_ballot_sync_cpu(mask::Unsigned, predicate::Bool)::UInt64 = predicate ? UInt64(0x1) : UInt64(0x0)
+
+
+## KERNELABSTRACTIONS BACKEND: WARP-LEVEL PRIMITIVES
+
+# The KernelAbstractions backend maps the warp-level primitives to the sub-group functions of
+# KernelInterface (KernelAbstractions >= 0.10), implemented in the KernelAbstractions extension
+# (see KernelAbstractionsExt/warp.jl):
+#
+# - a warp is a sub-group: `@warpsize()` is the sub-group width `KernelInterface.get_max_sub_group_size()`,
+#   `@laneid()` the 1-based `KernelInterface.get_sub_group_local_id()`.
+# - KernelInterface's sub-group operations have no `mask` argument: all work-items of the sub-group have to
+#   execute them together (not in a divergent branch). `mask` is therefore ignored and must name all lanes of
+#   the sub-group (e.g. `@active_mask()`, `0xffffffff` or `typemax(UInt64)`); a literal partial mask is rejected
+#   when the macro is expanded.
+# - `width` maps to the `width` variants of KernelInterface's shuffles, which have the CUDA semantics documented
+#   for the macros (a lane outside of the segment reads its own value). Without `width`, the full sub-group
+#   width is used, which gives the same semantics as CUDA's default `width=32`.
+# - `@active_mask()` is the mask of the lanes that exist in the sub-group (bits 0:get_sub_group_size()-1):
+#   KernelInterface has no notion of the active lanes of a divergent branch.
+# - `@vote_ballot_sync` returns a `UInt64` (bit `laneid()-1` for lane `laneid()`), like the AMDGPU and CPU
+#   backends.
+#
+# KernelAbstractions' `@kernel` only runs the kernel body on the work-items within the `ndrange` (unless
+# `unsafe_indices=true`), which would leave the padding work-items of a partial workgroup out of the sub-group
+# operations. ParallelStencil always launches KernelAbstractions kernels with `ndrange = nblocks .* nthreads`, i.e.
+# with full workgroups, and does the bounds check against the ranges itself (like on CUDA), so this does not apply:
+# as on CUDA, the warp-level primitives must only be used where all threads of the warp are within the ranges.
+
+function check_mask_kernelabstractions(mask)
+    if isa(mask, Integer) && !(mask == -1 || (isa(mask, Unsigned) && mask == typemax(typeof(mask))))
+        @ArgumentError("the KernelAbstractions backend does not support partial warp masks: all lanes of the sub-group must participate in warp-level operations (obtained mask: $mask). Pass a full mask, e.g. `@active_mask()`.")
+    end
+    return
+end

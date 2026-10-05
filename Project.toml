@@ -31,7 +31,7 @@ AMDGPU = "1, 2"
 CUDA = "3.12, 4, 5, 6"
 CellArrays = "0.3.2"
 Enzyme = "0.12, 0.13"
-KernelAbstractions = "0.9"
+KernelAbstractions = "0.9, 0.10"
 MacroTools = "0.5"
 Metal = "1.2"
 Polyester = "0.7"
@@ -39,8 +39,18 @@ StaticArrays = "1"
 julia = "1.10" # Minimum version supporting Data module creation
 
 [extras]
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+KernelInterface = "4ee993da-d684-4d17-a7dd-4e58e78d92bf"
+SPIRVIntrinsics = "71d1d633-e7e8-4a92-83a1-de8814b09ba8"
 TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[sources]
+# TODO: remove once JuliaGPU/KernelAbstractions.jl#830 and #831 are released (KernelAbstractions 0.10)
+KernelAbstractions = {url = "https://github.com/JuliaGPU/KernelAbstractions.jl", rev = "vc/groupreduce"}
+KernelInterface = {url = "https://github.com/JuliaGPU/KernelAbstractions.jl", rev = "vc/groupreduce", subdir = "lib/KernelInterface"}
+# TODO: remove once JuliaGPU/OpenCL.jl#526 is released (needed by KernelAbstractions' POCL-based CPU backend)
+SPIRVIntrinsics = {url = "https://github.com/JuliaGPU/OpenCL.jl", rev = "vc/subgroup-votes", subdir = "lib/intrinsics"}
+
 [targets]
-test = ["Test", "TOML", "AMDGPU", "CUDA", "Metal", "Enzyme", "Polyester", "KernelAbstractions"]
+test = ["Test", "TOML", "KernelInterface", "SPIRVIntrinsics", "AMDGPU", "CUDA", "Metal", "Enzyme", "Polyester", "KernelAbstractions"]
