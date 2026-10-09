@@ -314,14 +314,14 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             if memopt
                 quote
                     $metadata_function
-                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                 end
             else
                 kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
                 kernel = ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
                 quote
                     $metadata_function
-                    $kernel
+                    Core.@__doc__ $kernel
                 end
             end
         end
@@ -432,7 +432,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         expanded_kernel = macroexpand(caller, kernel)
         quote
             $metadata_function
-            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+            Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
         end
     else
         if package == PKG_KERNELABSTRACTIONS
@@ -440,7 +440,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         end
         return quote
             $metadata_function
-            $kernel
+            Core.@__doc__ $kernel
         end # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
@@ -747,7 +747,12 @@ end
 function create_metadata_call(configcall::Expr)
     metadata_call = deepcopy(configcall)
     kernelname = metadata_call.args[1]
-    metadata_call.args[1] = get_meta_function(kernelname)
+    if kernelname isa Expr && kernelname.head == :.
+        kernelname = kernelname.args[2] isa QuoteNode ? kernelname.args[2].value : kernelname.args[2]
+        metadata_call.args[1] = Expr(:., metadata_call.args[1].args[1], QuoteNode(get_meta_function(kernelname)))
+    else
+        metadata_call.args[1] = get_meta_function(kernelname)
+    end
     return metadata_call
 end
 
