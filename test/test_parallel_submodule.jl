@@ -15,7 +15,7 @@ module KernelModule
 end
 
 @testset "parallel kernel defined in a submodule" begin
-    @test Base.Docs.hasdoc(KernelModule, :copy_kernel!)
+    @test only((@doc KernelModule.copy_kernel!).text) == "Copy each source element to the corresponding destination element."
     A = zeros(4, 4)
     B = ones(4, 4)
     @parallel (1:4, 1:4) KernelModule.copy_kernel!(A, B)
