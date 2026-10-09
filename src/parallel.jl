@@ -751,12 +751,7 @@ end
 function create_metadata_call(configcall::Expr)
     metadata_call = deepcopy(configcall)
     kernelname = metadata_call.args[1]
-    if kernelname isa Expr && kernelname.head == :.
-        kernelname = kernelname.args[2] isa QuoteNode ? kernelname.args[2].value : kernelname.args[2]
-        metadata_call.args[1] = Expr(:., metadata_call.args[1].args[1], QuoteNode(get_meta_function(kernelname)))
-    else
-        metadata_call.args[1] = get_meta_function(kernelname)
-    end
+    metadata_call.args[1] = get_meta_function(kernelname)
     return metadata_call
 end
 
