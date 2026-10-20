@@ -1,0 +1,13 @@
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+comment:
+  layout: "condensed_header, condensed_files, condensed_footer"
+flag_management:
+  default_rules:
+    carryforward: true # Keep the coverage of a flag (e.g. a GPU platform) when its upload is missing for a commit.

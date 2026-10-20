@@ -1,0 +1,34 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+# Pkg.test runs on the allocated node in the uenv: the GPU backends (CUDA, KernelAbstractions) run on the GH200 GPUs and the CPU backends
+# (Threads, Polyester, KernelAbstractions) on the Grace CPU.
+# JULIA_DEPOT_PATH (dedicated CI depot) is set after `uenv run`, as the juliaup view overrides it. No core dumps are written on crashes (GBs).
+.gh200:
+  extends: .baremetal-runner-daint-gh200
+  variables:
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_TIMELIMIT: '00:45:00'
+    JULIA_UENV: 'julia/26.3:v1'
+    JULIA_CUDA_USE_COMPAT: 'false'
+    JULIA_NUM_THREADS: 2
+    PS_TEST_BACKEND: 'CUDA'            # Fail instead of skipping the GPU tests if CUDA is not functional.
+    PS_TEST_FILES: ''                  # Test files to run (default: all).
+  script:
+    - ulimit -c 0
+    - |
+      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci julia --project --startup-file=no -e '
+        using Pkg
+        Pkg.instantiate()
+        Pkg.test(; coverage=true, test_args=String.(split(get(ENV, "PS_TEST_FILES", ""))))'
+    - |
+      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci julia --startup-file=no -e '
+        using Pkg
+        Pkg.activate(; temp=true)
+        Pkg.add("CoverageTools")
+        using CoverageTools
+        LCOV.writefile("lcov.info", vcat(process_folder("src"), process_folder("ext")))'
+    - bash ci/codecov_upload.sh gh200
+
+gh200:
+  extends: .gh200
