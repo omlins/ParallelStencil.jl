@@ -757,7 +757,7 @@ end
 
 function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing)
     nonconst_metadata = get_nonconst_metadata(caller)
-    if nonconst_metadata || isdefined(metadata_module, :nb_parallel_indices)
+    if nonconst_metadata
         if isnothing(memopt)
             storeexpr = quote
                 nb_parallel_indices = $nb_parallel_indices
