@@ -62,8 +62,8 @@ macro parallel_indices(args...) check_initialized(__module__); checkargs_paralle
 
 ##
 const PARALLEL_ASYNC_DOC = """
-@parallel_async kernelcall
-@parallel_async ∇=... kernelcall
+    @parallel_async kernelcall
+    @parallel_async ∇=... kernelcall
 
 !!! note "Advanced"
         @parallel_async ranges kernelcall
@@ -78,7 +78,7 @@ Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`]
     When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 !!! note "Performance note"
-    @parallel_async falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
+    `@parallel_async` falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
 
 See also: [`@synchronize`](@ref), [`@parallel`](@ref)
 """

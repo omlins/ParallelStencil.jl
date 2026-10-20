@@ -1,0 +1,23 @@
+/* Override default DocumenterVitepress styles here.
+   This file is loaded after style.css, so rules here take precedence. */
+
+/* Home page hero: show the logo smaller than the background halo, so that the halo remains visible; make the halo slightly larger than by default and use the Julia colors also in dark mode. */
+:root.dark {
+  --vp-home-hero-image-background-image: linear-gradient(-145deg, #9558b266 30%, #38982666 30%, #cb3c3366);
+}
+
+.VPHero .image-container .image-src { max-width: 104px; max-height: 104px; }
+.VPHero .image-container .image-bg  { width: 224px; height: 224px; }
+
+@media (min-width: 640px) {
+  .VPHero .image-container .image-src { max-width: 140px; max-height: 140px; }
+  .VPHero .image-container .image-bg  { width: 296px; height: 296px; }
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-container .image-src { max-width: 176px; max-height: 176px; }
+  .VPHero .image-container .image-bg  { width: 368px; height: 368px; }
+}
+
+/* Round the corners of the images in the page content (figures have an opaque white background). */
+.vp-doc img { border-radius: 12px; }

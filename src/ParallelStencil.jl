@@ -5,7 +5,7 @@ Enables domain scientists to write high-level code for parallel high-performance
 Single-architecture backends (CUDA, AMDGPU, Metal, Threads, Polyester) remain fixed to their hardware, while abstraction-layer backends such as KernelAbstractions let you switch the runtime target through [`select_hardware`](@ref) and inspect it with [`current_hardware`](@ref) without reparsing code. Detailed workflow guidance is available in the [interactive prototyping runtime selection section](@ref interactive-prototyping-runtime-hardware-selection).
 
 # General overview and examples
-https://github.com/omlins/ParallelStencil.jl
+https://omlins.github.io/ParallelStencil.jl/stable
 
 # Primary macros
 - [`@init_parallel_stencil`](@ref)
@@ -64,9 +64,9 @@ https://github.com/omlins/ParallelStencil.jl
 - [`ParallelStencil.FiniteDifferences3D`](@ref)
 
 # Modules generated in caller
-- [`Data`](@ref)
+- [`Data`](@ref data-module)
 
-!! note "Activation of GPU support"
+!!! note "Activation of GPU support"
     The support for GPU (CUDA, AMDGPU or Metal) is provided with extensions and requires therefore an explicit installation of the corresponding packages (CUDA.jl, AMDGPU.jl or Metal.jl). Note that it is not required to import explicitly the corresponding module (CUDA, AMDGPU or Metal); this is automatically done by [`@init_parallel_stencil`](@ref).
 
 To see a description of a macro or module type `?<macroname>` (including the `@`) or `?<modulename>`, respectively.
