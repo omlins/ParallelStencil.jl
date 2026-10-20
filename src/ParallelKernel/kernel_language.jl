@@ -653,7 +653,9 @@ macro threadIdx_kernelabstractions()
 end
 
 
-macro sharedMem_cpu(T, dims) :(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))}(undef)); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code.
+macro sharedMem_cpu(T, dims) :(alloc_undef(MArray{Tuple{$(esc(dims))...}, $(esc(T)), length($(esc(dims))), prod($(esc(dims)))})); end # Note: A macro is used instead of a function as a creating a type stable function is not really possible (dims can take any values and they become part of the MArray type...). MArray is not escaped in order not to have to import StaticArrays in the user code. The MArray type is passed as argument to alloc_undef as Polyester's @batch does not lift variables used in the callee of a call (e.g. A in eltype(A)) into the arguments of its closure; the closure would capture them, which is not supported on aarch64 ("cfunction: closures are not supported on this platform").
+
+@inline alloc_undef(::Type{M}) where {M} = M(undef)
 
 macro sharedMem_cpu(T, dims, offset) esc(:(ParallelStencil.ParallelKernel.@sharedMem_cpu($T, $dims))) end
 
