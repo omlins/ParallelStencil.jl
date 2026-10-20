@@ -13,6 +13,7 @@ ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 ix_s, iy_s, iz_s = "var\"$ix\"", "var\"$iy\"", "var\"$iz\""
+end_s = string(:(A[end]))[3:end-1] # NOTE: `end` as printed in an indexing expression (Julia >= 1.13 prints var"end").
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -44,7 +45,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=ParallelStencil.ParallelKernel.get_package(@__MODULE__)) = (ParallelStencil.checkargs_parallel_indices(args...); ParallelStencil.parallel_indices(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, args...; package=package))
 
 
-@static for package in TEST_PACKAGES
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
@@ -1074,9 +1076,9 @@ eval(:(
             end;
             @testset "apply masks | handling padding (padding=true)" begin
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
                 @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
             end;
             @reset_parallel_stencil()
@@ -1265,9 +1267,9 @@ eval(:(
                     @require @is_initialized
                     @testset "apply masks | handling padding (padding=true (globally))" begin
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
                         @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
                     end;
                     @testset "apply masks | handling padding (padding=false)" begin
@@ -1625,4 +1627,5 @@ eval(:(
     end;
 ))
 
-end == nothing || true;
+end
+end;

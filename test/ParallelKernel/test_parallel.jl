@@ -33,7 +33,8 @@ macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1)
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
 
 
-@static for package in TEST_PACKAGES
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
@@ -254,6 +255,8 @@ eval(:(
                 @testset "ad numerical" begin
                     @static if $package == $PKG_KERNELABSTRACTIONS
                         @test_skip "KernelAbstractions AD numerical runtime execution is currently unstable in Enzyme integration; only expansion-level AD mapping is validated here."
+                    elseif $package == $PKG_THREADS && VERSION >= v"1.13"
+                        @test_skip "Enzyme segfaults on Julia 1.13 when differentiating code containing Threads.@threads (JIT session error: Failed to materialize symbols)."
                     else
                         N = 16
                         a = 6.5
@@ -598,4 +601,5 @@ eval(:(
     end;
 ))
 
-end == nothing || true;
+end
+end;
