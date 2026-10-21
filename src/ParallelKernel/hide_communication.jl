@@ -191,6 +191,7 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
     if comm_is_splitted(bc_and_commcalls)
         bc_and_commcalls_z, bc_and_commcalls_xy = split_bc_and_commcalls(bc_and_commcalls)
         quote
+            ParallelStencil.ParallelKernel.@synchronize() # NOTE: wait for pending work on the default stream (e.g. array initializations or broadcasts issued before the block), as the computations are launched on other streams and the backends do not order work across the streams of a task: Metal batches the work on the default queue and submits it lazily (without this synchronization, e.g. a preceding zero-initialization would be executed after the computations); on CUDA and AMDGPU, this closes the same latent race.
             for i in 1:length($ranges_outer)
                 $(compcalls_outer...)
             end
@@ -206,6 +207,7 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
         end
     else
         quote
+            ParallelStencil.ParallelKernel.@synchronize() # NOTE: see above.
             for i in 1:length($ranges_outer)
                 $(compcalls_outer...)
             end
