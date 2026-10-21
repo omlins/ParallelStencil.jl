@@ -174,6 +174,7 @@ eval(:(
                     for symbol in valid_symbols
                         @select_hardware(symbol)
                         backend_handle = handle(symbol, PKG_KERNELABSTRACTIONS)
+                        FloatHardware  = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
                         @test typeof(@zeros(2,3))                      == typeof(KernelAbstractions.zeros(backend_handle, Float16, 2, 3))
                         @test typeof(@zeros(2,3, eltype=Float32))      == typeof(KernelAbstractions.zeros(backend_handle, Float32, 2, 3))
                         @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(KernelAbstractions.zeros(backend_handle, DATA_INDEX, 2, 3))
@@ -181,10 +182,10 @@ eval(:(
                         @test typeof(@ones(2,3, eltype=Float32))       == typeof(KernelAbstractions.ones(backend_handle, Float32, 2, 3))
                         @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(KernelAbstractions.ones(backend_handle, DATA_INDEX, 2, 3))
                         @test typeof(@rand(2,3))                       == typeof(KernelAbstractions.allocate(backend_handle, Float16, 2, 3))
-                        @test typeof(@rand(2,3, eltype=Float64))       == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@rand(2,3, eltype=FloatHardware))       == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(KernelAbstractions.allocate(backend_handle, DATA_INDEX, 2, 3))
                         @test typeof(@fill(9, 2,3))                    == typeof(KernelAbstractions.allocate(backend_handle, Float16, 2, 3))
-                        @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@fill(9, 2,3, eltype=FloatHardware))    == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(KernelAbstractions.allocate(backend_handle, DATA_INDEX, 2, 3))
                         call = @prettystring(1, @zeros(2,3))
                         @test contains_current_hardware_call(call)
@@ -508,10 +509,11 @@ eval(:(
                     for symbol in valid_symbols
                         @select_hardware(symbol)
                         backend_handle = handle(symbol, PKG_KERNELABSTRACTIONS)
+                        FloatHardware  = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
                         @test typeof(@zeros(2,3, eltype=Float32))    == typeof(KernelAbstractions.zeros(backend_handle, Float32, 2, 3))
                         @test typeof(@ones(2,3, eltype=Float32))     == typeof(KernelAbstractions.ones(backend_handle, Float32, 2, 3))
-                        @test typeof(@rand(2,3, eltype=Float64))     == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
-                        @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@rand(2,3, eltype=FloatHardware))     == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
+                        @test typeof(@fill(9, 2,3, eltype=FloatHardware))  == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(KernelAbstractions.zeros(backend_handle, DATA_INDEX, 2, 3))
                         call = @prettystring(1, @zeros(2,3, eltype=Float32))
                         @test contains_current_hardware_call(call)
