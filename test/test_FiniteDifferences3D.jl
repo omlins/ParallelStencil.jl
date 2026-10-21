@@ -116,7 +116,7 @@ eval(:(
                         @parallel av_xyi!(R, Axyzz) = (@all(R) = @av_xyi(Axyzz); return)
                         @parallel av_xzi!(R, Axyyz) = (@all(R) = @av_xzi(Axyyz); return)
                         @parallel av_yzi!(R, Axxyz) = (@all(R) = @av_yzi(Axxyz); return)
-                        R.=0; @parallel av!(R, Axyz);       @test all(Array(R .== (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[1:end-1,2:end,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[2:end,2:end,2:end])*0.125))
+                        R.=0; @parallel av!(R, Axyz);       @test all(Array(R .== (Axyz[1:end-1,1:end-1,1:end-1].+Axyz[2:end,1:end-1,1:end-1].+Axyz[1:end-1,2:end,1:end-1].+Axyz[2:end,2:end,1:end-1].+Axyz[1:end-1,1:end-1,2:end].+Axyz[2:end,1:end-1,2:end].+Axyz[1:end-1,2:end,2:end].+Axyz[2:end,2:end,2:end]).*$FloatDefault(0.125)))
                         R.=0; @parallel av_xa!(R, Ax);      @test all(Array(R .== (Ax[2:end,    :,    :].+Ax[1:end-1,      :,    :]).*$FloatDefault(0.5)))
                         R.=0; @parallel av_ya!(R, Ay);      @test all(Array(R .== (Ay[    :,2:end,    :].+Ay[      :,1:end-1,    :]).*$FloatDefault(0.5)))
                         R.=0; @parallel av_za!(R, Az);      @test all(Array(R .== (Az[    :,    :,2:end].+Az[      :,    :,1:end-1]).*$FloatDefault(0.5)))

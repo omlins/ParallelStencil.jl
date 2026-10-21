@@ -227,29 +227,33 @@ eval(:(
                     end
                     valid_symbols = (:cpu, KA_GPU_SYMBOLS...)
                     last_symbol = :hw_none
-                    for symbol in (:cpu, KA_GPU_SYMBOLS...)
-                        if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
-                            continue
-                        elseif symbol == :gpu_amd && !(PKG_AMDGPU in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_amd unavailable"
-                            continue
-                        elseif symbol == :gpu_metal && !(PKG_METAL in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_metal unavailable"
-                            continue
-                        elseif symbol == :gpu_oneapi && !(isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
-                            continue
+                    try
+                        for symbol in (:cpu, KA_GPU_SYMBOLS...)
+                            if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
+                                continue
+                            elseif symbol == :gpu_amd && !(PKG_AMDGPU in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_amd unavailable"
+                                continue
+                            elseif symbol == :gpu_metal && !(PKG_METAL in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_metal unavailable"
+                                continue
+                            elseif symbol == :gpu_oneapi && !(isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
+                                continue
+                            end
+                            @select_hardware(symbol)
+                            FloatHardware = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
+                            A = @zeros(N, eltype=FloatHardware)
+                            @parallel (1:N) ka_double!(A)
+                            @test all(Array(A) .== one(eltype(A)))
+                            last_symbol = symbol
                         end
-                        @select_hardware(symbol)
-                        A = @zeros(N)
-                        @parallel (1:N) ka_double!(A)
-                        @test all(Array(A) .== one(eltype(A)))
-                        last_symbol = symbol
+                        @test @current_hardware() in valid_symbols
+                        @test @current_hardware() == last_symbol
+                    finally
+                        @select_hardware(:cpu) # NOTE: restore the default hardware also if a test errors, as the hardware selection persists for all remaining tests of this file.
                     end
-                    @test @current_hardware() in valid_symbols
-                    @test @current_hardware() == last_symbol
-                    @select_hardware(:cpu)
                     @test @current_hardware() == :cpu
                 end
             end
@@ -1572,8 +1576,8 @@ eval(:(
                 @test_throws ArgumentError @parallel write_x_line!(A2)
                 @parallel (1:size(A3,1), 1:size(A3,2)) write_xy_plane!(A3)
                 @parallel (1:size(A2,1)) write_x_line!(A2)
-                @test A3 == 2.0 .* @ones(4, 5, 2)
-                @test A2 == 2.0 .* @ones(4, 2)
+                @test A3 == $FloatDefault(2) .* @ones(4, 5, 2)
+                @test A2 == $FloatDefault(2) .* @ones(4, 2)
             end;
             @testset "automatic ranges (memopt): error if not all parallel indices are used" begin
                 @test_throws ArgumentError parallel_indices(:((ix, iy, iz)), :(memopt=true), 

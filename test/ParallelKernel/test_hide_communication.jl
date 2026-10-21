@@ -107,17 +107,21 @@ eval(:(
                         @static if isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES
                             push!(valid_symbols, :gpu_oneapi)
                         end
-                        for symbol in valid_symbols
-                            @select_hardware(symbol)
-                            @require @current_hardware() == symbol
-                            A  = @zeros(6, 7, 8)
-                            @hide_communication (2,2,3) begin
-                                @parallel add_indices!(A);
-                                communication!(A);
+                        try
+                            for symbol in valid_symbols
+                                @select_hardware(symbol)
+                                @require @current_hardware() == symbol
+                                FloatHardware = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
+                                A  = @zeros(6, 7, 8, eltype=FloatHardware)
+                                @hide_communication (2,2,3) begin
+                                    @parallel add_indices!(A);
+                                    communication!(A);
+                                end
+                                @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                             end
-                            @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
+                        finally
+                            @select_hardware(:cpu) # NOTE: restore the default hardware also if a test errors, as the hardware selection persists for all remaining tests of this file.
                         end
-                        @select_hardware(:cpu)
                     end
                 end
                 @testset "@hide_communication boundary_width block" begin

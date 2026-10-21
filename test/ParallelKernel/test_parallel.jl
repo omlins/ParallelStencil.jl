@@ -187,17 +187,21 @@ eval(:(
                             (PKG_METAL in TEST_PACKAGES ? :gpu_metal : nothing),
                             (isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES ? :gpu_oneapi : nothing)
                         )))
-                        for symbol in (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi)
-                            if symbol != :cpu && !(symbol in valid_symbols)
-                                @test_skip true
-                                continue
+                        try
+                            for symbol in (:cpu, :gpu_cuda, :gpu_amd, :gpu_metal, :gpu_oneapi)
+                                if symbol != :cpu && !(symbol in valid_symbols)
+                                    @test_skip true
+                                    continue
+                                end
+                                @select_hardware(symbol)
+                                FloatHardware = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
+                                A = @zeros(4, eltype=FloatHardware)
+                                @parallel kernel_switch!(A)
+                                @test all(Array(A) .== one(eltype(A)))
                             end
-                            @select_hardware(symbol)
-                            A = @zeros(4)
-                            @parallel kernel_switch!(A)
-                            @test all(Array(A) .== one(eltype(A)))
+                        finally
+                            @select_hardware(:cpu) # NOTE: restore the default hardware also if a test errors, as the hardware selection persists for all remaining tests of this file.
                         end
-                        @select_hardware(:cpu)
                     end
                 end
                 call = @prettystring(1, @parallel configcall=g(B) f(A))
@@ -259,7 +263,7 @@ eval(:(
                         @test_skip "Enzyme segfaults on Julia 1.13 when differentiating code containing Threads.@threads (https://github.com/EnzymeAD/Enzyme.jl/issues/3877)."
                     else
                         N = 16
-                        a = 6.5
+                        a = $FloatDefault(6.5)
                         A = @rand(N)
                         B = @rand(N)
                         Ā = @ones(N)
@@ -269,12 +273,12 @@ eval(:(
                         Ā_ref = ones($FloatDefault, N)
                         B̄_ref = ones($FloatDefault, N)
                         @parallel_indices (ix) function f!(A, B, a)
-                            A[ix] += a * B[ix] * 100.65
+                            A[ix] += a * B[ix] * $FloatDefault(100.65)
                             return
                         end
                         function g!(A, B, a)
                             for ix in 1:length(A)
-                                A[ix] += a * B[ix] * 100.65
+                                A[ix] += a * B[ix] * $FloatDefault(100.65)
                             end
                             return
                         end

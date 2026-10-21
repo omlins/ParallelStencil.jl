@@ -324,10 +324,10 @@ eval(:(
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:Metal.MtlArray}
+                            @test @rand(2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
@@ -445,8 +445,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                             Metal.allowscalar(false)
                         end
@@ -603,8 +603,8 @@ eval(:(
                             Metal.allowscalar(true)
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             Metal.allowscalar(false)
@@ -703,8 +703,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float32}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
                             Metal.allowscalar(false)
                         end
                     end
