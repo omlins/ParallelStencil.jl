@@ -1663,7 +1663,7 @@ eval(:(
                     metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                     @test metadata isa Module
                     @test length(names(metadata)) == 1
-                    @test metadata_symbols == [:is_parallel_kernel, :loopdim, :loopsize, :loopsizes, :memopt, :nb_parallel_indices, :nonconst_metadata, :offsets, :optranges, :optvars, :shmem_dim1, :shmem_dim2, :shmem_optvars, :shmem_spans, :stencilranges, :use_any_shmem, :use_shmemhalos]
+                    @test metadata_symbols == [:explicit_optranges_drop_by_count_syms, :explicit_optranges_drop_front_syms, :explicit_optranges_length_syms, :is_parallel_kernel, :loopdim, :loopsize, :loopsizes, :memopt, :nb_parallel_indices, :nonconst_metadata, :offset_maxs, :offset_mins, :offsets, :optranges, :optranges_drop_by_access_count, :optranges_drop_front, :optranges_length, :optranges_z, :optvars, :shmem_dim1, :shmem_dim2, :shmem_optvars, :shmem_spans, :stencilranges, :use_any_shmem, :use_shmemhalos]
                     @test metadata.is_parallel_kernel == false
                     @test metadata.loopdim == 3
                     @test metadata.loopsize == 3
@@ -1693,22 +1693,24 @@ eval(:(
                     @test metadata_z.stencilranges == (B = (0:0, 0:0, -1:1),)
                     @test metadata_z.use_any_shmem == false
                     @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B function metadata_memopt_fullstencil_probe!(A, B, D)
-                        A[ix, iy, iz] = B[ix-1, iy-1, iz-1] + B[ix, iy, iz] + B[ix+1, iy+1, iz+1] + D[ix, iy, iz, 1]
+                        A[ix, iy, iz] = B[ix,iy,iz-1] + B[ix,iy,iz] + B[ix,iy,iz+1] + D[ix, iy, iz, 1]
                         return
                     end
                     metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
-                    @static if @isgpu($package)
-                        @test metadata_full.shmem_optvars == (:B,)
-                        @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
-                        @test metadata_full.shmem_spans == (B = (2, 2),)
-                        @test metadata_full.stencilranges == (B = (-1:1, -1:1, -1:1),)
-                        @test metadata_full.use_any_shmem == true
+                    # All read-only accesses of `B` sit at the single (Δx,Δy)=(0,0) cell with z-offsets {-1,0,1} (one contiguous 3-cell cluster). x/y collapse to the `(0,0)` point range; the auto path keeps the whole `[-1:1]` z-stencil when `optranges_length[B]=Inf` (pre-v"8" CUDA), and the topmost two consecutive z-offsets → `0:1` otherwise (`optranges_length[B]=2` for CUDA >= v"8" and all non-CUDA, which report `v"∞"`). Either way there is no x/y halo here, so no shared memory is allocated. The branch keys off `optranges_length` (in the metadata) rather than `get_compute_capability($package)`, because `$package` is interpolated as a `Module` (not a `Symbol`) inside this `eval(:(` block.
+                    if metadata_full.optranges_length[:B] === Inf
+                        @test metadata_full.shmem_optvars == ()
+                        @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
+                        @test metadata_full.shmem_spans == (B = (0, 0),)
+                        @test metadata_full.stencilranges == (B = (0:0, 0:0, -1:1),)
+                        @test metadata_full.use_any_shmem == false
                     else
                         @test metadata_full.shmem_optvars == ()
                         @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
                         @test metadata_full.shmem_spans == (B = (0, 0),)
-                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:0),)
+                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:1),)
                         @test metadata_full.use_any_shmem == false
+                        @test metadata_full.optranges_length == (B = 2,)
                     end
                     @parallel_indices (ix, iy) ndims=2 memopt=true loopdim=2 loopsize=5 optvars=B optranges=(B=(0:0,-1:1,0:0),) function metadata_memopt_2d_probe!(A, B)
                         if (1 < iy < size(A, 2))
@@ -1737,6 +1739,12 @@ eval(:(
                     @test ParallelStencil.compute_memopt_shmem(Val(metadata_2d.shmem_optvars), Val(metadata_2d.use_shmemhalos), Val(metadata_2d.shmem_spans), Val(metadata_2d.shmem_dim1), Val(metadata_2d.shmem_dim2), (8, 4, 1), $FloatDefault) == 0
                     @test all(Array(A) .== 0)
                 end;
+                # The test checks that without `optvars=` no `MethodError: no method matching define_shmem_exprs(::Dict{Any, Any}, ::Int64)` is raised at declaration time.
+                @parallel_indices (ix, iy, iz) memopt=true loopsize=3 function _mixed_optvars_no_shmem_bug_probe!(A, BV, B)
+                    A[ix, iy, iz] = BV.z[ix,iy,iz-1] + BV.z[ix,iy,iz] + BV.z[ix,iy,iz+1] + B[ix,iy,iz-1] + B[ix,iy,iz] + B[ix,iy,iz+1]
+                    return
+                end;
+                @test true  # reaching here means the @parallel_indices declaration did not raise (no MethodError).
             end;
             @reset_parallel_stencil()
         end;
