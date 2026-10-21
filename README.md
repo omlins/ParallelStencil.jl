@@ -3,6 +3,7 @@
 [![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://omlins.github.io/ParallelStencil.jl/stable)
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://omlins.github.io/ParallelStencil.jl/dev)
 [![CI](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml)
+[![Daint GH200](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/badges/main/pipeline.svg?ignore_skipped=true&key_text=Daint%20GH200&key_width=82)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)
 [![Coverage](https://codecov.io/gh/omlins/ParallelStencil.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/omlins/ParallelStencil.jl)
 [![DOI](https://proceedings.juliacon.org/papers/10.21105/jcon.00138/status.svg)](https://doi.org/10.21105/jcon.00138)
 
