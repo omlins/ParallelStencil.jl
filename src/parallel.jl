@@ -202,7 +202,7 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :use_old, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :use_old, :optvars, :loopdim, :loopsize, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module))
         memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
         check_memopt_supported(memopt, package, "@parallel <kernel>")
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
@@ -379,7 +379,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     is_parallel_kernel = false
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :optvars, :loopdim, :loopsize, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module))
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     check_memopt_supported(memopt, package, "@parallel_indices")
     indices_expr = posargs[1]
@@ -466,15 +466,25 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     return :(@parallel_indices $indices_expr $(kwargs_expr...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(package), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(package), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     context = is_parallel_kernel ? "@parallel <kernel>" : "@parallel_indices <kernel>"
     check_memopt_declaration_args(indices, loopdim, useshmemhalos, context)
+    # Coherence error (parse time): `optranges_drop_by_access_count=true` together with an explicit `optranges_drop_front` (any value) for the same optvar. The former takes precedence over the latter, so setting both is incoherent. Both keywords arrive already evaluated (NamedTuple with dotted-expr symbol keys, or `nothing`). An optvar not present in a keyword NamedTuple uses the corresponding default (resolved later in `memopt`).
+    optvars_syms = ParallelStencil.ParallelKernel.extract_tuple(optvars)
+    optvars_syms = Tuple((isa(s, Symbol) && s === Symbol("")) ? () : dotted_expr_to_symbol(s) for s in optvars_syms)
+    for s in optvars_syms
+        by_count_explicit = !isnothing(optranges_drop_by_access_count) && isa(optranges_drop_by_access_count, NamedTuple) && haskey(optranges_drop_by_access_count, s) && getproperty(optranges_drop_by_access_count, s) === true
+        drop_front_explicit = !isnothing(optranges_drop_front) && isa(optranges_drop_front, NamedTuple) && haskey(optranges_drop_front, s)
+        if by_count_explicit && drop_front_explicit
+            @IncoherentArgumentError("incoherent arguments memopt in $context: `optranges_drop_by_access_count=true` takes precedence over `optranges_drop_front`; do not set both for the same optvar (offending optvar: $s).")
+        end
+    end
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
+    body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, optranges_length, optranges_drop_front, optranges_drop_by_access_count, useshmemhalos, optimize_halo_read)
     body = add_return(body, package)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
@@ -629,8 +639,8 @@ end
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool)
-    memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read, body; package=package)
+function add_memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool)
+    memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, optranges_length, optranges_drop_front, optranges_drop_by_access_count, useshmemhalos, optimize_halo_read, body; package=package)
 end
 
 
