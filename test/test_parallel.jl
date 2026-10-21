@@ -1287,12 +1287,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 1, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale) # NOTE: the argument must not be named like a global constant (e.g. `one`): Polyester's @batch would capture it instead of passing it as argument, which is not supported on aarch64.
+                    A[I...] = sum((I .- (1,)) .* (scale));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) for ix=1:size(A,1)])
                 @reset_parallel_stencil()
             end;
@@ -1301,12 +1301,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one, size(A,1)));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale)
+                    A[I...] = sum((I .- (1,)) .* (scale, size(A,1)));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 @reset_parallel_stencil()
             end;
@@ -1315,12 +1315,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one, size(A,1), size(A,1)*size(A,2)));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale)
+                    A[I...] = sum((I .- (1,)) .* (scale, size(A,1), size(A,1)*size(A,2)));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 @reset_parallel_stencil()
             end;
@@ -1485,7 +1485,7 @@ eval(:(
                         return
                     end
                     metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
-                    @static if @isgpu($package)
+                    @static if @isgpu($package) && ParallelStencil.ParallelKernel.get_compute_capability(nameof($package)) < v"8" # NOTE: the default optranges are only full ranges for compute capability < 8 (see define_optranges); else they are point ranges in x and y as on the CPU.
                         @test metadata_full.shmem_optvars == (:B,)
                         @test metadata_full.shmem_optvars isa NTuple{1,Symbol}
                         @test metadata_full.shmem_spans == (B = (2, 2),)
