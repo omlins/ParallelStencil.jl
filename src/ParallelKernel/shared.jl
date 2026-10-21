@@ -620,8 +620,11 @@ check_padding(padding)          = ( if !isa(padding, Bool) @ArgumentError("$ERRM
 
 ## FUNCTIONS AND MACROS FOR UNIT TESTS
 
-prettystring(expr::Expr)   = string(remove_linenumbernodes!(expr))
-gorgeousstring(expr::Expr) = string(simplify_varnames!(remove_linenumbernodes!(expr)))
+# Reserved words (e.g. `end`) are printed escaped (e.g. as `var"end"`) from Julia 1.13 on, but not before; unescape them to render identically on all Julia versions.
+unescapereserved(s::AbstractString) = replace(s, r"var\"(end|begin)\"" => s"\1")
+
+prettystring(expr::Expr)   = unescapereserved(string(remove_linenumbernodes!(expr)))
+gorgeousstring(expr::Expr) = unescapereserved(string(simplify_varnames!(remove_linenumbernodes!(expr))))
 longnameof(f)              = "$(parentmodule(f)).$(nameof(f))"
 symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Expr,Module}; imported=false, all=true) = @eval(eval_mod, names($mod, all=$all, imported=$imported))
 macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; all=all, imported=imported) end
@@ -636,8 +639,8 @@ macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
 macro prettyexpand(expr)               return QuoteNode(remove_linenumbernodes!(macroexpand(__module__, expr; recursive=true))) end
 macro gorgeousexpand(expr)             return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpand(__module__, expr; recursive=true)))) end
-macro prettystring(args...)            return esc(:(string(ParallelStencil.ParallelKernel.@prettyexpand($(args...))))) end
-macro gorgeousstring(args...)          return esc(:(string(ParallelStencil.ParallelKernel.@gorgeousexpand($(args...))))) end
+macro prettystring(args...)            return esc(:(ParallelStencil.ParallelKernel.unescapereserved(string(ParallelStencil.ParallelKernel.@prettyexpand($(args...)))))) end
+macro gorgeousstring(args...)          return esc(:(ParallelStencil.ParallelKernel.unescapereserved(string(ParallelStencil.ParallelKernel.@gorgeousexpand($(args...)))))) end
 macro interpolate(args...)             esc(interpolate(args...)) end
 
 function macroexpandn(m::Module, expr, n::Integer)
