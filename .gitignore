@@ -1,3 +1,8 @@
 .DS_Store
 Manifest.toml
 miniapps/Manifest.toml
+*.cov
+lcov.info
+docs/build/
+docs/node_modules/
+docs/package-lock.json

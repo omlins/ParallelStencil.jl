@@ -15,7 +15,7 @@ When the abstraction-layer backend KernelAbstractions is selected, the concrete 
 - `ndims::Integer`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (overwritable in each kernel definition).
 - `inbounds::Bool=false`: whether to apply `@inbounds` to the kernels by default (overwritable in each kernel definition).
 
-See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
+See also: [`Data`](@ref data-module), [`select_hardware`](@ref), [`current_hardware`](@ref)
 """
 macro init_parallel_stencil(args...)
     posargs, kwargs_expr = split_args(args)

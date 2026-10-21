@@ -1,0 +1,14 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterCitations = "daee34ce-89f3-4625-b898-19384cb65244"
+DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
+Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+ParallelStencil = "94395366-693c-11ea-3b26-d9b7aac5d958"
+
+[sources]
+ParallelStencil = {path = ".."}
+
+[compat]
+Documenter = "1"
+DocumenterCitations = "1.5"
+DocumenterVitepress = "0.3"
