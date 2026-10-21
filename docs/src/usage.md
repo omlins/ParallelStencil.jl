@@ -1,6 +1,6 @@
 # Usage
 
-## Parallelization and optimization with one macro call
+## [Parallelization and optimization with one macro call](@id usage-parallel)
 A simple call to [`@parallel`](@ref) is enough to parallelize and optimize a function and to launch it. The package used underneath for parallelization is defined in a call to [`@init_parallel_stencil`](@ref) beforehand. The following example outlines how to run parallel computations on a GPU using the native kernel programming capabilities of [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) underneath (omitted lines are represented with `#(...)`, omitted arguments with `...`):
 ```julia
 #(...)
@@ -23,7 +23,7 @@ end
 Note that arrays are automatically allocated on the hardware chosen for the computations (GPU or CPU) when using the provided allocation macros: [`@zeros`](@ref), [`@ones`](@ref), [`@rand`](@ref), [`@falses`](@ref), [`@trues`](@ref), [`@fill`](@ref). The array types matching the chosen package and number type are available in the module [`Data`](@ref data-module) that [`@init_parallel_stencil`](@ref) creates in the calling module (e.g. `Data.Array`).
 
 
-## Backends
+## [Backends](@id usage-backends)
 The following packages are supported for parallelization:
 
 :::code-group
@@ -64,7 +64,7 @@ using ParallelStencil
 The support for GPUs ([CUDA.jl](https://github.com/JuliaGPU/CUDA.jl), [AMDGPU.jl](https://github.com/JuliaGPU/AMDGPU.jl) or [Metal.jl](https://github.com/JuliaGPU/Metal.jl)), for [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl) and for [Polyester.jl](https://github.com/JuliaSIMD/Polyester.jl) is provided with package extensions and requires therefore an explicit installation of the corresponding package. Note that it is not required to import the single-architecture backend package explicitly; this is automatically done by [`@init_parallel_stencil`](@ref). With [Base.Threads](https://docs.julialang.org/en/v1/base/multi-threading/) and [Polyester.jl](https://github.com/JuliaSIMD/Polyester.jl), the number of threads used is defined when starting Julia (e.g. `julia -t 8` or with the environment variable [`JULIA_NUM_THREADS`](https://docs.julialang.org/en/v1/manual/environment-variables/#JULIA_NUM_THREADS)). When using KernelAbstractions, the session starts on the CPU and the hardware target can be switched at runtime (see [Interactive prototyping with runtime hardware selection](@ref interactive-prototyping-runtime-hardware-selection)).
 
 
-## Stencil computations with math-close notation
+## [Stencil computations with math-close notation](@id usage-math-close)
 ParallelStencil provides submodules for computing finite differences in 1-D, 2-D and 3-D with a math-close notation ([`FiniteDifferences1D`](@ref ParallelStencil.FiniteDifferences1D), [`FiniteDifferences2D`](@ref ParallelStencil.FiniteDifferences2D) and [`FiniteDifferences3D`](@ref ParallelStencil.FiniteDifferences3D)). Custom macros to extend the finite differences submodules or for other stencil-based numerical methods can be readily plugged in. The following example shows a complete function for computing a time step of a 3-D heat diffusion solver using `FiniteDifferences3D`:
 ```julia
 #(...)
@@ -90,7 +90,7 @@ Note that `@d2_yi` and `@d2_zi` perform the analogue operations as `@d2_xi` alon
 A complete application is shown in the [50-lines example](@ref example-single-xpu).
 
 
-## Architecture-agnostic low level kernel programming
+## [Architecture-agnostic low level kernel programming](@id usage-low-level)
 High-level stencil computations with math-close notation can be completed with index-based programming using the macro [`@parallel_indices`](@ref). For example, the following kernel enables setting Neumann boundary conditions in dimension y (`∂A/∂y = 0`) when using finite differences in 3-D:
 ```julia
 @parallel_indices (ix,iz) function bc_y!(A)
@@ -143,7 +143,7 @@ The supported runtime hardware targets and the symbols to select them are listed
     The convenience modules `Data` and `TData` with fixed data types are only available for single-architecture backends. Warp-level primitives are only partially supported in [`@parallel_indices`](@ref) kernels. [`@hide_communication`](@ref) has no effect with KernelAbstractions (but the code nevertheless executes correctly).
 
 
-## Seamless interoperability with communication packages and hiding communication
+## [Seamless interoperability with communication packages and hiding communication](@id usage-communication)
 ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl), as shown in the [50-lines multi-xPU example](@ref example-multixpu). The same is a priori true for any communication package that allows to explicitly decide when the required communication occurs; an example is [MPI.jl](https://github.com/JuliaParallel/MPI.jl) (besides, [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is also seamlessly interoperable with [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) and can extend its functionality).
 
 Moreover, ParallelStencil enables hiding communication behind computation with a simple call to [`@hide_communication`](@ref). In the following example, the communication performed by `update_halo!` (from the package [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl)) is hidden behind the computations done by `@parallel diffusion3D_step!`:
@@ -153,16 +153,16 @@ Moreover, ParallelStencil enables hiding communication behind computation with a
     update_halo!(T2);
 end
 ```
-This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs \[[1](https://www.youtube.com/watch?v=vPsfZUqI4_0), [2](https://www.youtube.com/watch?v=1t1AKnnGRqA)\]. Profiling a 3-D viscous Stokes flow application using the Nvidia visual profiler (nvvp) graphically exemplifies how the update velocities kernel is split up in boundary and inner domain computations and how the latter overlap with point-to-point MPI communication for halo exchange:
+This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs [Omlin2020JuliaCon, Raess2020JuliaCon](@cite). Profiling a 3-D viscous Stokes flow application using the Nvidia visual profiler (nvvp) graphically exemplifies how the update velocities kernel is split up in boundary and inner domain computations and how the latter overlap with point-to-point MPI communication for halo exchange:
 
 ```@raw html
-<img src="./assets/images/mpi_overlap2.png" alt="Communication computation overlap ParallelStencil" style="display: block; margin: auto; width: 100%;">
+<img src="./assets/images/mpi_overlap2.png" alt="Communication computation overlap ParallelStencil" style="display: block; margin: auto; width: 100%; max-width: 600px;">
 ```
 
 Independent kernels can furthermore be overlapped with each other with [`@overlap`](@ref).
 
 
-## Logical arrays of small arrays / structs
+## [Logical arrays of small arrays / structs](@id usage-cellarrays)
 Logical arrays of small arrays / structs enabling optimized data access can be conveniently created with the architecture-agnostic allocation macros introduced above. To this purpose, ParallelStencil leverages `CellArray`s (from [CellArrays.jl](https://github.com/omlins/CellArrays.jl), which relies in turn on [StaticArrays.jl](https://github.com/JuliaArrays/StaticArrays.jl)). To create a logical array of small arrays, it is sufficient to pass to any of these allocation macros the keyword `celldims` with the dimensions of the inner arrays, e.g.:
 ```julia
 nx, ny, nz = 128, 128, 128

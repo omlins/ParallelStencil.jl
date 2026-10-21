@@ -3,7 +3,7 @@
 The miniapps regroup a collection of various 2-D and 3-D codes that leverage ParallelStencil to implement architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs. The miniapps target various challenging domain science case studies where multi-physics coupling and important nonlinearities challenge existing solving strategies. In most cases, second order pseudo-transient relaxation delivers implicit solutions of the differential equations. Some miniapps feature a multi-xPU version, which combines the capabilities of ParallelStencil and [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl) in order to enable multi-GPU and multi-CPU executions, unleashing _Julia-at-scale_.
 
 ## [Performance metric](@id performance-metric)
-Many-core processors as GPUs are throughput-oriented systems that use their massive parallelism to hide latency. On the scientific application side, most algorithms require only a few operations or flops compared to the amount of numbers or bytes accessed from main memory, and thus are significantly memory bound. The Flop/s metric is no longer the most adequate for reporting the application performance of many modern applications. This status motivated us to develop a memory throughput-based performance evaluation metric, `T_eff`, to evaluate the performance of iterative stencil-based solvers \[[1](https://www.youtube.com/watch?v=vPsfZUqI4_0)\].
+Many-core processors as GPUs are throughput-oriented systems that use their massive parallelism to hide latency. On the scientific application side, most algorithms require only a few operations or flops compared to the amount of numbers or bytes accessed from main memory, and thus are significantly memory bound. The Flop/s metric is no longer the most adequate for reporting the application performance of many modern applications. This status motivated us to develop a memory throughput-based performance evaluation metric, `T_eff`, to evaluate the performance of iterative stencil-based solvers [Omlin2020JuliaCon](@cite).
 
 The effective memory access, `A_eff` [GB], is the sum of twice the memory footprint of the unknown fields, `D_u`, (fields that depend on their own history and that need to be updated every iteration) and the known fields, `D_k`, that do not change every iteration. The effective memory access divided by the execution time per iteration, `t_it` [sec], defines the effective memory throughput, `T_eff` [GB/s]:
 
@@ -11,7 +11,7 @@ The effective memory access, `A_eff` [GB], is the sum of twice the memory footpr
 <img src="./assets/images/T_eff.png" alt="Effective memory throughput metric" style="display: block; margin: auto; width: 100%; max-width: 360px;">
 ```
 
-The upper bound of `T_eff` is `T_peak` as measured e.g. by the STREAM benchmark \[[7](https://www.researchgate.net/publication/51992086_Memory_bandwidth_and_machine_balance_in_high_performance_computers)\] for CPUs or a GPU analogue. Defining the `T_eff` metric, we assume that 1) we evaluate an iterative stencil-based solver, 2) the problem size is much larger than the cache sizes and 3) the usage of time blocking is not feasible or advantageous (which is a reasonable assumption for real-world applications). An important concept is not to include fields within the effective memory access that do not depend on their own history (e.g. fluxes); such fields can be re-computed on the fly or stored on-chip. Defining a theoretical upper bound for `T_eff` that is closer to the real upper bound is work in progress.
+The upper bound of `T_eff` is `T_peak` as measured e.g. by the STREAM benchmark [McCalpin1995](@cite) for CPUs or a GPU analogue. Defining the `T_eff` metric, we assume that 1) we evaluate an iterative stencil-based solver, 2) the problem size is much larger than the cache sizes and 3) the usage of time blocking is not feasible or advantageous (which is a reasonable assumption for real-world applications). An important concept is not to include fields within the effective memory access that do not depend on their own history (e.g. fluxes); such fields can be re-computed on the fly or stored on-chip. Defining a theoretical upper bound for `T_eff` that is closer to the real upper bound is work in progress.
 
 Using simple array broadcasting capabilities both with GPU and CPU arrays within Julia does not enable close to optimal performance; ParallelStencil.jl permits to overcome this limitation (see the [Overview](overview.md)) at similar ease of programming.
 
@@ -31,7 +31,7 @@ Refer to the documentation of your supercomputing centre for instructions to run
 This thermal convection example in 2-D combines a viscous Stokes flow to advection-diffusion of heat including a temperature-dependent shear viscosity. The miniapp resolves thermal convection cells (e.g. Earth's mantle convection and plumes):
 
 ```@raw html
-<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/ThermalConvect2D.gif" alt="Thermal convection 2-D" style="display: block; margin: auto; width: 100%;">
+<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/ThermalConvect2D.gif" alt="Thermal convection 2-D" style="display: block; margin: auto; width: 100%; max-width: 560px;">
 ```
 
 *The gif depicts non-dimensional temperature field as evolving into convection cells and plumes.*
@@ -90,8 +90,8 @@ The [acoustic3D.jl](https://github.com/omlins/ParallelStencil.jl/blob/main/minia
 The scalar porosity waves example solves the scalar solitary wave equations in 2-D assuming total pressure to be lithostatic, thus eliminating the need to solve for the total pressure explicitly:
 
 ```@raw html
-<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/porowaves2D_blob.gif" alt="Scalar porosity waves 2-D - blobs" style="display: block; margin: auto; width: 100%;">
-<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/porowaves2D_chan.gif" alt="Scalar porosity waves 2-D - channels" style="display: block; margin: auto; width: 100%;">
+<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/porowaves2D_blob.gif" alt="Scalar porosity waves 2-D - blobs" style="display: block; margin: auto; width: 100%; max-width: 480px;">
+<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/porowaves2D_chan.gif" alt="Scalar porosity waves 2-D - channels" style="display: block; margin: auto; width: 100%; max-width: 480px;">
 ```
 
 *The animation depicts the normalised porosity and effective pressure fields evolution as function of explicit time steps. Top row: compaction and decompaction rheology are identical, resulting in circular solitary waves rearranging into solitons of characteristic size. Bottom row: decompaction occurs at much faster rate compared to compaction, resulting in chimney-shaped features.*
@@ -99,10 +99,10 @@ The scalar porosity waves example solves the scalar solitary wave equations in 2
 ## Hydro-mechanical porosity waves 2-D app
 > app: [HydroMech2D.jl](https://github.com/omlins/ParallelStencil.jl/blob/main/miniapps/HydroMech2D.jl)
 
-The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing to hydro-mechanical coupling, removing the lithostatic pressure assumption. The total and fluid pressure are explicitly computed from nonlinear Stokes and Darcy flow solvers, respectively \[[8](https://doi.org/10.1093/gji/ggz239)\]:
+The hydro-mechanical porosity wave example resolves solitary waves in 2-D owing to hydro-mechanical coupling, removing the lithostatic pressure assumption. The total and fluid pressure are explicitly computed from nonlinear Stokes and Darcy flow solvers, respectively [Raess2019GJI](@cite):
 
 ```@raw html
-<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/HydroMech2D.gif" alt="Hydro-mechanical porosity waves 2-D" style="display: block; margin: auto; width: 100%;">
+<img src="https://raw.githubusercontent.com/omlins/ParallelStencil.jl/main/miniapps/HydroMech2D.gif" alt="Hydro-mechanical porosity waves 2-D" style="display: block; margin: auto; width: 100%; max-width: 400px;">
 ```
 
 *The animation depicts the formation of fluid escape pipes in two-phase media, owing to decompaction weakening. Top row: evolution of the porosity distribution and effective pressure. Bottom row: Darcy flux (relative fluid to solid motion) and solid (porous matrix) deformation.*

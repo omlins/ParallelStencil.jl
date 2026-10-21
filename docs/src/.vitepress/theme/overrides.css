@@ -1,7 +1,11 @@
 /* Override default DocumenterVitepress styles here.
    This file is loaded after style.css, so rules here take precedence. */
 
-/* Home page hero: show the logo smaller than the background halo, so that the halo remains visible; make the halo slightly larger than by default and use the Julia colors also in dark mode. */
+/* Home page hero: show the logo smaller than the background halo, so that the halo remains visible; make the halo slightly larger than by default, more transparent in light mode, and use the Julia colors also in dark mode. */
+:root {
+  --vp-home-hero-image-background-image: linear-gradient(-145deg, #9558b255 30%, #37982655 30%, #cb3d3355);
+}
+
 :root.dark {
   --vp-home-hero-image-background-image: linear-gradient(-145deg, #9558b266 30%, #38982666 30%, #cb3c3366);
 }
