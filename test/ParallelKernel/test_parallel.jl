@@ -256,7 +256,7 @@ eval(:(
                     @static if $package == $PKG_KERNELABSTRACTIONS
                         @test_skip "KernelAbstractions AD numerical runtime execution is currently unstable in Enzyme integration; only expansion-level AD mapping is validated here."
                     elseif $package == $PKG_THREADS && VERSION >= v"1.13"
-                        @test_skip "Enzyme segfaults on Julia 1.13 when differentiating code containing Threads.@threads (JIT session error: Failed to materialize symbols)."
+                        @test_skip "Enzyme segfaults on Julia 1.13 when differentiating code containing Threads.@threads (https://github.com/EnzymeAD/Enzyme.jl/issues/3877)."
                     else
                         N = 16
                         a = 6.5
