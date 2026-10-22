@@ -1155,7 +1155,9 @@ eval(:(
             @reset_parallel_kernel()
         end;
     end;
-)) end == nothing || true;
+)) end;
+    
+end
 
 # Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
