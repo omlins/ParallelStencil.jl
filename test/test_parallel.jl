@@ -14,33 +14,7 @@ ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 ix_s, iy_s, iz_s = "var\"$ix\"", "var\"$iy\"", "var\"$iz\""
 end_s = string(:(A[end]))[3:end-1] # NOTE: `end` as printed in an indexing expression (Julia >= 1.13 prints var"end").
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-    const KA_GPU_SYMBOLS = filter(!isnothing, (
-        PKG_CUDA in TEST_PACKAGES ? :gpu_cuda : nothing,
-        PKG_AMDGPU in TEST_PACKAGES ? :gpu_amd : nothing,
-        PKG_METAL in TEST_PACKAGES ? :gpu_metal : nothing,
-        (isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES) ? :gpu_oneapi : nothing
-    ))
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 
 parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=ParallelStencil.ParallelKernel.get_package(@__MODULE__)) = (ParallelStencil.checkargs_parallel_indices(args...); ParallelStencil.parallel_indices(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, args...; package=package))
 

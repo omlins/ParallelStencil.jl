@@ -20,6 +20,8 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
+    env:
+      PS_TEST_BACKEND: ${{ startsWith(matrix.os, 'macOS') && 'Metal' || '' }} # The macOS runners (Apple silicon) have a functional Metal GPU: the test runner installs Metal into the test environment and the Metal tests must run.
     strategy:
       fail-fast: false
       matrix:
