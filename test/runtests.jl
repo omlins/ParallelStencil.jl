@@ -65,7 +65,10 @@ if (!isempty(backend) && !is_installed(Symbol(backend)))
     import Pkg
     packages = (backend == string(PKG_CUDA)) ? ["CUDA", "CUDA_Runtime_jll"] : [backend] # NOTE: CUDA_Runtime_jll must be a direct dependency of the test environment for a local CUDA runtime preference (e.g. of an HPC system) to apply.
     printstyled("Installing $(join(packages, ", ")) into the test environment (PS_TEST_BACKEND=$backend)\n"; bold=true, color=:white)
-    Pkg.add(packages)
+    withenv("JULIA_PKG_PRECOMPILE_AUTO" => "0") do # NOTE: the automatic precompilation after Pkg.add fails with "Unknown package" for indirect dependencies whose version changed (e.g. GPUCompiler when adding AMDGPU), as it identifies them by name in the test environment; the environment is precompiled explicitly instead.
+        Pkg.add(packages)
+    end
+    Pkg.precompile()
 end
 
 # NOTE: the GPU packages are only imported if they are installed in the test environment.
