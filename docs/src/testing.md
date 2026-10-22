@@ -39,6 +39,10 @@ julia --project -e 'import Pkg; Pkg.test()'
 ## Continuous integration
 
 - **GitHub Actions** (CPUs, and Apple GPUs on the macOS runners): Julia `min` and `1` on Linux and macOS (Apple silicon), and Julia `pre` on Linux (allowed to fail) (`.github/workflows/ci.yml`).
-- **CSCS CI on Alps** (Nvidia GH200): the full test suite on one GH200 node, with the CPU backends running on the Grace CPU and the CUDA and KernelAbstractions backends on the GPU (`ci/cscs-gh200.yml`; [pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)). For pull requests by other contributors, a maintainer starts it by commenting `cscs-ci run`.
+- **CSCS CI** on [Alps](https://docs.cscs.ch/alps/), with one pipeline per vCluster:
+  - [Daint](https://docs.cscs.ch/clusters/daint/) (Nvidia GH200 GPUs): the full test suite on one GH200 node, with the CPU backends running on the Grace CPU and the CUDA and KernelAbstractions backends on the GPU (`ci/cscs-gh200.yml`; [pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)).
+  - [Beverin](https://docs.cscs.ch/clusters/beverin/) (AMD MI250X and MI300A GPUs): the full test suite on one node per GPU type, with the CPU backends running on the EPYC CPU and the AMDGPU and KernelAbstractions backends on the GPU (`ci/cscs-mi250.yml`, `ci/cscs-mi300.yml`; [MI250X pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767613/-/pipelines), [MI300A pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767614/-/pipelines)).
 
-Coverage of all jobs is uploaded to [Codecov](https://app.codecov.io/gh/omlins/ParallelStencil.jl) (flags `cpu` and `gh200`).
+  For pull requests by other contributors, a maintainer starts the pipelines by commenting `cscs-ci run`.
+
+Coverage of all jobs is uploaded to [Codecov](https://app.codecov.io/gh/omlins/ParallelStencil.jl) (flags `cpu`, `gh200`, `mi250` and `mi300`).
