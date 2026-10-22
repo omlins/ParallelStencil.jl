@@ -13,6 +13,7 @@ ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 ix_s, iy_s, iz_s = "var\"$ix\"", "var\"$iy\"", "var\"$iz\""
+end_s = string(:(A[end]))[3:end-1] # NOTE: `end` as printed in an indexing expression (Julia >= 1.13 prints var"end").
 TEST_PACKAGES = SUPPORTED_PACKAGES
 @static if PKG_CUDA in TEST_PACKAGES
     import CUDA
@@ -44,7 +45,8 @@ Base.retry_load_extensions() # Potentially needed to load the extensions after t
 parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=ParallelStencil.ParallelKernel.get_package(@__MODULE__)) = (ParallelStencil.checkargs_parallel_indices(args...); ParallelStencil.parallel_indices(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, args...; package=package))
 
 
-@static for package in TEST_PACKAGES
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES
     FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
@@ -274,29 +276,33 @@ eval(:(
                     end
                     valid_symbols = (:cpu, KA_GPU_SYMBOLS...)
                     last_symbol = :hw_none
-                    for symbol in (:cpu, KA_GPU_SYMBOLS...)
-                        if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
-                            continue
-                        elseif symbol == :gpu_amd && !(PKG_AMDGPU in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_amd unavailable"
-                            continue
-                        elseif symbol == :gpu_metal && !(PKG_METAL in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_metal unavailable"
-                            continue
-                        elseif symbol == :gpu_oneapi && !(isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES)
-                            @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
-                            continue
+                    try
+                        for symbol in (:cpu, KA_GPU_SYMBOLS...)
+                            if symbol == :gpu_cuda && !(PKG_CUDA in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_cuda unavailable"
+                                continue
+                            elseif symbol == :gpu_amd && !(PKG_AMDGPU in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_amd unavailable"
+                                continue
+                            elseif symbol == :gpu_metal && !(PKG_METAL in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_metal unavailable"
+                                continue
+                            elseif symbol == :gpu_oneapi && !(isdefined(ParallelStencil.ParallelKernel, :PKG_ONEAPI) && ParallelStencil.ParallelKernel.PKG_ONEAPI in TEST_PACKAGES)
+                                @test_skip "KernelAbstractions GPU symbol :gpu_oneapi unavailable"
+                                continue
+                            end
+                            @select_hardware(symbol)
+                            FloatHardware = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
+                            A = @zeros(N, eltype=FloatHardware)
+                            @parallel (1:N) ka_double!(A)
+                            @test all(Array(A) .== one(eltype(A)))
+                            last_symbol = symbol
                         end
-                        @select_hardware(symbol)
-                        A = @zeros(N)
-                        @parallel (1:N) ka_double!(A)
-                        @test all(Array(A) .== one(eltype(A)))
-                        last_symbol = symbol
+                        @test @current_hardware() in valid_symbols
+                        @test @current_hardware() == last_symbol
+                    finally
+                        @select_hardware(:cpu) # NOTE: restore the default hardware also if a test errors, as the hardware selection persists for all remaining tests of this file.
                     end
-                    @test @current_hardware() in valid_symbols
-                    @test @current_hardware() == last_symbol
-                    @select_hardware(:cpu)
                     @test @current_hardware() == :cpu
                 end
             end
@@ -1240,9 +1246,9 @@ eval(:(
             end;
             @testset "apply masks | handling padding (padding=true)" begin
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
                 @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
             end;
             @reset_parallel_stencil()
@@ -1431,9 +1437,9 @@ eval(:(
                     @require @is_initialized
                     @testset "apply masks | handling padding (padding=true (globally))" begin
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[end])", expansion)
+                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[end] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[end] && (A.indices[3])[1] < $iz_s < (A.indices[3])[end])", expansion)
+                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
                         @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
                     end;
                     @testset "apply masks | handling padding (padding=false)" begin
@@ -1451,12 +1457,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 1, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4*5*6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale) # NOTE: the argument must not be named like a global constant (e.g. `one`): Polyester's @batch would capture it instead of passing it as argument, which is not supported on aarch64.
+                    A[I...] = sum((I .- (1,)) .* (scale));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) for ix=1:size(A,1)])
                 @reset_parallel_stencil()
             end;
@@ -1465,12 +1471,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 2, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5*6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one, size(A,1)));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale)
+                    A[I...] = sum((I .- (1,)) .* (scale, size(A,1)));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) for ix=1:size(A,1), iy=1:size(A,2)])
                 @reset_parallel_stencil()
             end;
@@ -1479,12 +1485,12 @@ eval(:(
                 @init_parallel_stencil($package, $FloatDefault, 3, nonconst_metadata=true)
                 @require @is_initialized
                 A  = @zeros(4, 5, 6)
-                one = $FloatDefault(1)
-                @parallel_indices (I...) function write_indices!(A, one)
-                    A[I...] = sum((I .- (1,)) .* (one, size(A,1), size(A,1)*size(A,2)));
+                scale = $FloatDefault(1)
+                @parallel_indices (I...) function write_indices!(A, scale)
+                    A[I...] = sum((I .- (1,)) .* (scale, size(A,1), size(A,1)*size(A,2)));
                     return
                 end
-                @parallel write_indices!(A, one);
+                @parallel write_indices!(A, scale);
                 @test all(Array(A) .== [(ix-1) + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)])
                 @reset_parallel_stencil()
             end;
@@ -1792,8 +1798,8 @@ eval(:(
                 @test_throws ArgumentError @parallel write_x_line!(A2)
                 @parallel (1:size(A3,1), 1:size(A3,2)) write_xy_plane!(A3)
                 @parallel (1:size(A2,1)) write_x_line!(A2)
-                @test A3 == 2.0 .* @ones(4, 5, 2)
-                @test A2 == 2.0 .* @ones(4, 2)
+                @test A3 == $FloatDefault(2) .* @ones(4, 5, 2)
+                @test A2 == $FloatDefault(2) .* @ones(4, 2)
             end;
             @testset "automatic ranges (memopt): error if not all parallel indices are used" begin
                 @test_throws ArgumentError parallel_indices(:((ix, iy, iz)), :(memopt=true), 

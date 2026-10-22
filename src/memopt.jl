@@ -701,7 +701,7 @@ function define_optranges(optranges_arg, optvars, offsets, int_type, package, op
         sym_A = dotted_expr_to_symbol(A)
         loopspan_max = 0
         offsets_with_max_span = ()
-        for nonloop_offsets in keys(offsets[A])
+        for nonloop_offsets in sort(collect(keys(offsets[A])); by=o -> (sum(abs, o), o)) # NOTE: the offsets are sorted by distance to the stencil center to obtain a deterministic choice when several have the maximal loop span (the iteration order of a Dict depends on the Julia version).
             loopspan = length(keys(offsets[A][nonloop_offsets]))
             if loopspan > loopspan_max
                 loopspan_max = loopspan

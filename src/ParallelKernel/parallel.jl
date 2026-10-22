@@ -62,8 +62,8 @@ macro parallel_indices(args...) check_initialized(__module__); checkargs_paralle
 
 ##
 const PARALLEL_ASYNC_DOC = """
-@parallel_async kernelcall
-@parallel_async ∇=... kernelcall
+    @parallel_async kernelcall
+    @parallel_async ∇=... kernelcall
 
 !!! note "Advanced"
         @parallel_async ranges kernelcall
@@ -78,7 +78,7 @@ Declare the `kernelcall` parallel as with [`@parallel`](@ref) (see [`@parallel`]
     When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 !!! note "Performance note"
-    @parallel_async falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
+    `@parallel_async` falls currently back to running synchronously if the package Threads or Polyester was selected with [`@init_parallel_kernel`](@ref).
 
 See also: [`@synchronize`](@ref), [`@parallel`](@ref)
 """
@@ -485,7 +485,7 @@ function handle_inverses(body::Expr)
 end
 
 function handle_padding(caller::Module, body::Expr, padding::Bool, indices; handle_view_accesses::Bool=true, handle_indexing::Bool=true, dir_handling::Bool=true, delay_dir_handling::Bool=false)
-    if (handle_indexing) 
+    if (handle_indexing)
         body = substitute_indices_inn(body, padding)
         if (dir_handling) body = substitute_indices_dir(caller, body, padding; delay_handling=delay_dir_handling) end
         body = substitute_firstlastindex(caller, body, padding)
@@ -519,7 +519,7 @@ function substitute_indices_dir(caller::Module, expr::Expr, padding::Bool; delay
                         if @capture(ex, A_[indices_expr__]) && any(map(inexpr_walk, indices_expr, INDICES_DIR))
                             A_parent = promote_to_parent(A)
                             ex = substitute(ex, NamedTuple{INDICES_DIR}(
-                                ((A_parent==B_parent) ? ix : :($ix - (size($B_parent, 1) > size($A_parent, 1))), 
+                                ((A_parent==B_parent) ? ix : :($ix - (size($B_parent, 1) > size($A_parent, 1))),
                                  (A_parent==B_parent) ? iy : :($iy - (size($B_parent, 2) > size($A_parent, 2))),
                                  (A_parent==B_parent) ? iz : :($iz - (size($B_parent, 3) > size($A_parent, 3))))
                                 ); inQuoteNode=true)
@@ -558,7 +558,7 @@ end
 
 function substitute_firstlastindex(caller::Module, body::Expr, padding::Bool)
     return postwalk(body) do ex
-        if @capture(ex, f_(args__)) 
+        if @capture(ex, f_(args__))
             if     (f == :firstindex) return _firstindex(caller, args..., padding)
             elseif (f == :lastindex)  return _lastindex(caller, args..., padding)
             else return ex
@@ -804,9 +804,9 @@ end
 
 function compute_nthreads(maxsize; nthreads_x_max=NTHREADS_X_MAX, nthreads_max=NTHREADS_MAX, flatdim=0) # This is a heuristic, which results in (32,8,1) threads, except if maxsize[1] < 32 or maxsize[2] < 8.
     maxsize = promote_maxsize(maxsize)
-    nthreads_x = min(nthreads_x_max,                                 (flatdim==1) ? 1 : maxsize[1])
-    nthreads_y = min(ceil(Int,nthreads_max/nthreads_x),              (flatdim==2) ? 1 : maxsize[2])
-    nthreads_z = min(ceil(Int,nthreads_max/(nthreads_x*nthreads_y)), (flatdim==3) ? 1 : maxsize[3])
+    nthreads_x = min(nthreads_x_max,                                                (flatdim==1) ? 1 : maxsize[1])
+    nthreads_y = min(max(floor(Int,nthreads_max/nthreads_x), 1),                    (flatdim==2) ? 1 : maxsize[2])
+    nthreads_z = min(max(floor(Int,nthreads_max/(nthreads_x*nthreads_y)), 1),       (flatdim==3) ? 1 : maxsize[3]) # NOTE: the thread budget of each dimension is rounded down, because rounding it up can make the total number of threads exceed nthreads_max whenever a previous dimension was clamped to a smaller maxsize.
     return (nthreads_x, nthreads_y , nthreads_z)
 end
 
@@ -892,7 +892,7 @@ function create_gpu_or_xpu_call(package::Symbol, nblocks::Union{Symbol,Expr}, nt
             else                           @ModuleInternalError("unsupported GPU package (obtained: $package).")
             end
             if !isnothing(shmem_expr)
-                backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr) 
+                backend_kwargs_expr = (backend_kwargs_expr..., shmem_expr)
             end
         end
         if     (package == PKG_CUDA)   return :( CUDA.@cuda blocks=$nblocks threads=$nthreads stream=$stream $(backend_kwargs_expr...) $kernelcall; $synccall )

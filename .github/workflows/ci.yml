@@ -1,43 +1,48 @@
 name: CI
 on:
-  - push
-  - pull_request
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+permissions:
+  actions: write  # Needed for julia-actions/cache to delete old caches.
+  contents: read
 env:
   JULIA_NUM_THREADS: 2
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.version == 'pre' }}
     strategy:
       fail-fast: false
       matrix:
         version:
-          - '1.10' # Minimum version supporting Data module creation
-          - '1.11'
-          - '1'    # Latest stable 1.x release of Julia
-          #- 'nightly'
+          - 'min' # Minimum supported version (from the Project.toml compat entry; minimum version supporting Data module creation)
+          - '1'   # Latest stable 1.x release of Julia
         os:
           - ubuntu-latest
-          - macOS-latest
-          #- windows-latest
-        arch:
-          - x64
+          - macOS-latest # NOTE: the architecture of the runner is used (aarch64), not x64 (Rosetta).
+        include:
+          - {version: 'pre', os: ubuntu-latest} # Upcoming Julia release (allowed to fail)
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
-      - uses: actions/cache@v4
-        env:
-          cache-name: cache-artifacts
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v7
         with:
-          path: ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('**/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-            ${{ runner.os }}-test-
-            ${{ runner.os }}-
-      - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
-
+          files: lcov.info
+          flags: cpu
+          token: ${{ secrets.CODECOV_TOKEN }} # NOTE: for pull requests from forks, the upload is done tokenless.
+          fail_ci_if_error: false

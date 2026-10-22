@@ -52,6 +52,7 @@ function overlap_gpu(block::Expr)
     end
     sync_calls = [:(ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream($i))) for i in 1:length(async_calls)]
     quote
+        ParallelStencil.ParallelKernel.@synchronize() # NOTE: wait for pending work on the default stream (e.g. array initializations issued before the block), as the kernels are launched on other streams (see hide_communication_gpu for details).
         $(async_calls...)
         $(sync_calls...)
     end

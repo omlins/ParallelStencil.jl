@@ -17,7 +17,7 @@ When the abstraction-layer backend KernelAbstractions is selected, the concrete 
 - `memopt::Bool=false`: whether to enable stencil memory optimization by default (overwritable in each kernel definition).
 - `double_buffering_opt::Bool=true`: whether to attempt the automatic double buffering optimization by default for kernels containing double-buffered (`2B`) fields (overwritable in each kernel definition). See [`@parallel`](@ref) for details.
 
-See also: [`Data`](@ref), [`select_hardware`](@ref), [`current_hardware`](@ref)
+See also: [`Data`](@ref data-module), [`select_hardware`](@ref), [`current_hardware`](@ref)
 """
 macro init_parallel_stencil(args...)
     posargs, kwargs_expr = split_args(args)

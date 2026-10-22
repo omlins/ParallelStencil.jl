@@ -1,8 +1,13 @@
 # NOTE: This file contains many parts that are copied from the file runtests.jl from the Package MPI.jl.
-push!(LOAD_PATH, "../src")
+#
+# Each test file is run in its own Julia process; all test files are run unless some are selected in ARGS (test_args), by file name
+# (e.g. "test_parallel.jl", matching all files of this name) or by path relative to the test folder (e.g. "ParallelKernel/test_parallel.jl").
+# The option "--stop-on-fail" stops the test run at the first test file with failed or errored tests. The following environment variable
+# controls the test run:
+#   PS_TEST_BACKEND: GPU backend that must be functional ("CUDA", "AMDGPU" or "Metal"); if it is not, the test run fails instead of skipping the tests of this backend.
 
 const PREIMPORT_STDERR_SUPPRESSION_RULES = (
-    (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on macOS$", stop=r"^└ @ Metal .*$"),
+    (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on (macOS|Apple Silicon)$", stop=r"^└ @ Metal .*$"),
 )
 
 const ANSI_ESCAPE_REGEX = r"\e\[[0-9;]*m"
@@ -57,14 +62,21 @@ excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_r
 const STDERR_SUPPRESSION_RULES = (
     (name="metadata method overwrite warnings", start=r"^WARNING: Method definition .*###META.* overwritten.*$", stop=nothing),
     (name="[T]Data module replacement warnings", start=r"^WARNING: replacing module [T]?Data\.$", stop=nothing),
-    (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on macOS$", stop=r"^└ @ Metal .*$"),
+    (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on (macOS|Apple Silicon)$", stop=r"^└ @ Metal .*$"),
 )
 
 function runtests(testfiles=String[]; stop_on_fail=false)
-    exename   = joinpath(Sys.BINDIR, Base.julia_exename())
-    testdir   = pwd()
+    juliacmd  = Base.julia_cmd() # NOTE: julia_cmd() forwards the options of this process (e.g. --code-coverage and --check-bounds set by Pkg.test) to the test processes.
+    testdir   = @__DIR__
     istest(f) = endswith(f, ".jl") && startswith(basename(f), "test_")
-    testfiles = isempty(testfiles) ? sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...))) : testfiles
+    selected  = testfiles
+    testfiles = sort(filter(istest, vcat([joinpath.(root, files) for (root, dirs, files) in walkdir(testdir)]...)))
+    if !isempty(selected)
+        unknown = filter(s -> !any(f -> s ∈ (basename(f), relpath(f, testdir)), testfiles), selected)
+        if (!isempty(unknown)) error("Test files not found: $(join(unknown, ", ")).") end
+        testfiles = filter(f -> basename(f) ∈ selected || relpath(f, testdir) ∈ selected, testfiles)
+    end
+    backend   = get(ENV, "PS_TEST_BACKEND", "")
 
     nabort = 0
     nfail  = 0
@@ -73,15 +85,22 @@ function runtests(testfiles=String[]; stop_on_fail=false)
     first_fail_file = ""
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
+    if !(backend in ["", string(PKG_CUDA), string(PKG_AMDGPU), string(PKG_METAL)])
+        error("PS_TEST_BACKEND: invalid value ($backend). Valid values are: $PKG_CUDA, $PKG_AMDGPU, $PKG_METAL or empty.")
+    end
+
     if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
+        if (backend == string(PKG_CUDA)) error("PS_TEST_BACKEND=$backend, but CUDA is not functional (type `import CUDA; CUDA.functional(true)` to debug your CUDA installation).") end
         @warn "Test Skip: All CUDA tests will be skipped because CUDA is not functional (if this is unexpected type `import CUDA; CUDA.functional(true)` to debug your CUDA installation)."
     end
 
     if (PKG_AMDGPU in SUPPORTED_PACKAGES && !AMDGPU.functional())
+        if (backend == string(PKG_AMDGPU)) error("PS_TEST_BACKEND=$backend, but AMDGPU is not functional (type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation).") end
         @warn "Test Skip: All AMDGPU tests will be skipped because AMDGPU is not functional (if this is unexpected type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation)."
     end
 
     if (PKG_METAL in SUPPORTED_PACKAGES && (!Sys.isapple() || !Metal.functional()))
+        if (backend == string(PKG_METAL)) error("PS_TEST_BACKEND=$backend, but Metal is not functional (type `import Metal; Metal.functional()` to debug your Metal installation).") end
         @warn "Test Skip: All Metal tests will be skipped because Metal is not functional (if this is unexpected type `import Metal; Metal.functional()` to debug your Metal installation)."
     end
 
@@ -96,7 +115,7 @@ function runtests(testfiles=String[]; stop_on_fail=false)
             println("$f")
             continue
         end
-        cmd = `$exename --color=yes -O3 --startup-file=no $(joinpath(testdir, f))`
+        cmd = `$juliacmd --color=yes -O3 --startup-file=no $f`
         cmd = addenv(cmd, "PS_CUDA_COMPUTE_CAPABILITY" => get(ENV, "PS_CUDA_COMPUTE_CAPABILITY", "7"))
         stdout_path = tempname()
         stderr_path = tempname()

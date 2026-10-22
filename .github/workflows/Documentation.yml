@@ -1,0 +1,31 @@
+name: Documentation
+on:
+  push:
+    branches:
+      - main
+    tags: '*'
+  pull_request:
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+jobs:
+  docs:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write       # Needed for julia-actions/cache to delete old caches.
+      contents: write      # Needed to push the built documentation to the gh-pages branch.
+      pull-requests: read  # Needed to deploy previews of pull requests.
+      statuses: write      # Needed to report the deployment status.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v3
+      - uses: julia-actions/julia-docdeploy@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }}

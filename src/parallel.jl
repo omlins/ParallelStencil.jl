@@ -43,7 +43,7 @@ See also: [`@init_parallel_stencil`](@ref)
         @parallel (...) configcall=... backendkwargs... kernelcall
         @parallel ∇=... ad_mode=... ad_annotations=... (...) backendkwargs... kernelcall
 
-Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_kernel`](@ref) (however, see below the note on automatic computation of `ranges`). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). If the called kernel was declared with `memopt=true`, this wrapper automatically uses the stored declaration metadata to select the memory-optimized launch-preparation path. The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below); Enzyme needs to be imported before ParallelStencil in order to have it load the corresponding extension.
+Declare the `kernelcall` parallel. The kernel will automatically be called as required by the package for parallelization selected with [`@init_parallel_stencil`](@ref) (however, see below the note on automatic computation of `ranges`). Synchronizes at the end of the call (if a stream is given via keyword arguments, then it synchronizes only this stream). If the called kernel was declared with `memopt=true`, this wrapper automatically uses the stored declaration metadata to select the memory-optimized launch-preparation path. The keyword argument `∇` triggers a parallel call to the gradient kernel instead of the kernel itself. The automatic differentiation is performed with the package Enzyme.jl (refer to the corresponding documentation for Enzyme-specific terms used below); Enzyme needs to be imported before ParallelStencil in order to have it load the corresponding extension.
 
 !!! note "Automatic computation of `ranges`"
     Automatic computation of `ranges` for `@parallel <kernelcall>` is only possible if the number of parallel indices used by the kernel is equal to the number of dimensions of the highest-dimensional input arrays. Otherwise, specify the `ranges` manually with `@parallel ranges=... <kernelcall>`.
@@ -58,8 +58,8 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 - `kernelcall`: a call to a kernel that is declared parallel.
 !!! note "Advanced optional arguments"
     - `ranges::Tuple{UnitRange{},UnitRange{},UnitRange{}} | Tuple{UnitRange{},UnitRange{}} | Tuple{UnitRange{}} | UnitRange{}`: the ranges of indices in each dimension for which computations must be performed.
-    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_kernel`](@ref).
-    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_kernel`](@ref).
+    - `nblocks::Tuple{Integer,Integer,Integer}`: the number of blocks to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_stencil`](@ref).
+    - `nthreads::Tuple{Integer,Integer,Integer}`: the number of threads to be used if the package CUDA, AMDGPU, Metal or KernelAbstractions was selected with [`@init_parallel_stencil`](@ref).
 
 # Keyword arguments
 !!! note "Advanced"
@@ -76,7 +76,7 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
 !!! note "Field and data type annotations"
     The host-side `Data.*` / `TData.*` and `Data.Fields.*` / `TData.Fields.*` types (cf. the generated `Data`/`TData` module docstrings) are intended to be usable as argument type annotations in `@parallel` kernel definitions: the parallel kernel declaration and launch system automatically converts these host-side types to the corresponding `Device` types of the active backend so that the resulting device-side kernel signature dispatches correctly when the kernel is launched with a field allocated by the matching field allocation macro (cf. [`ParallelStencil.FieldAllocators`](@ref)).
 
-See also: [`@init_parallel_kernel`](@ref)
+See also: [`@init_parallel_stencil`](@ref)
 """
 @doc PARALLEL_DOC
 macro parallel(args...) check_initialized(__module__); checkargs_parallel(args...); esc(parallel(__source__, __module__, args...)); end
@@ -94,17 +94,17 @@ Declare the `kernel` parallel and generate the given parallel `indices` inside t
     When KernelAbstractions is initialized, this wrapper consults [`current_hardware`](@ref) to determine the runtime hardware target. The symbol defaults to `:cpu` and can be switched to select other targets via [`select_hardware`](@ref).
 
 # Optional keyword arguments
-    - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
-    - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. Eligible memory-optimized declarations support two or three generated parallel indices.
-    !!! note "Advanced optional keyword arguments"
-        - `ndims::Integer|Tuple`: the number of indexing dimensions desired when using splat syntax for the `indices`: 1, 2, 3 (a default `ndims` value can be set with the corresponding keyword argument of [`@init_parallel_stencil`](@ref)) or a tuple containing any of the previous in order to generate a method for each of the given `ndims` values. Concretely, the splat syntax (e.g., `@parallel_indices (I...) ndims=(2,3) ...`) generates a tuple of parallel indices (`I` in this example) where the length is given by the `ndims` value (here `2` for the first method and `3` for the second). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`). The keyword argument `N` becomes mandatory when `ndims` is a tuple in order to dispatch on the number of dimensions (see below).
-        - `N::Integer|Tuple`: the value(s) a type parameter `N` in the kernel method signatures must take. The values are typically computed based on `ndims` (set with the corresponding keyword argument of the `@parallel_indices` macro or `@init_parallel_stencil`), which will be substituted in the expression before evaluating it. This enables dispatching on the number of dimensions in the kernel methods (e.g., `@parallel_indices (I...) ndims=(1,3) N=ndims function f(A::Data.Array{N}) ... end`). The keyword argument `N` is mandatory if `ndims` is a tuple and must then furthermore be a tuple of the same length as `ndims`.
-        - `optvars::Symbol | Tuple{Vararg{Symbol}}`: the read-only stencil input or inputs to optimize explicitly. By default, all eligible read-only multi-point stencil inputs are optimized.
-        - `loopdim::Integer`: the optimization dimension used by memory-optimized declarations. Use `2` for 2-D declarations and `3` for 3-D declarations.
-        - `loopsize::Integer`: the loop size used by the memory-optimized execution path.
-        - `optranges`: per-optimized-array optimization ranges selecting the optimized x-y region and optimization-dimension region.
-        - `optimize_halo_read::Bool`: whether halo reads are optimized together with the selected memory-optimization ranges.
-        - `useshmemhalos`: per-optimized-array shared-memory halo usage for 3-D memory-optimized declarations.
+- `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
+- `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. Eligible memory-optimized declarations support two or three generated parallel indices.
+!!! note "Advanced optional keyword arguments"
+    - `ndims::Integer|Tuple`: the number of indexing dimensions desired when using splat syntax for the `indices`: 1, 2, 3 (a default `ndims` value can be set with the corresponding keyword argument of [`@init_parallel_stencil`](@ref)) or a tuple containing any of the previous in order to generate a method for each of the given `ndims` values. Concretely, the splat syntax (e.g., `@parallel_indices (I...) ndims=(2,3) ...`) generates a tuple of parallel indices (`I` in this example) where the length is given by the `ndims` value (here `2` for the first method and `3` for the second). This makes it possible to write kernels that are agnostic to the number of dimensions (writing, e.g., `A[I...]` to access elements of the array `A`). The keyword argument `N` becomes mandatory when `ndims` is a tuple in order to dispatch on the number of dimensions (see below).
+    - `N::Integer|Tuple`: the value(s) a type parameter `N` in the kernel method signatures must take. The values are typically computed based on `ndims` (set with the corresponding keyword argument of the `@parallel_indices` macro or `@init_parallel_stencil`), which will be substituted in the expression before evaluating it. This enables dispatching on the number of dimensions in the kernel methods (e.g., `@parallel_indices (I...) ndims=(1,3) N=ndims function f(A::Data.Array{N}) ... end`). The keyword argument `N` is mandatory if `ndims` is a tuple and must then furthermore be a tuple of the same length as `ndims`.
+    - `optvars::Symbol | Tuple{Vararg{Symbol}}`: the read-only stencil input or inputs to optimize explicitly. By default, all eligible read-only multi-point stencil inputs are optimized.
+    - `loopdim::Integer`: the optimization dimension used by memory-optimized declarations. Use `2` for 2-D declarations and `3` for 3-D declarations.
+    - `loopsize::Integer`: the loop size used by the memory-optimized execution path.
+    - `optranges`: per-optimized-array optimization ranges selecting the optimized x-y region and optimization-dimension region.
+    - `optimize_halo_read::Bool`: whether halo reads are optimized together with the selected memory-optimization ranges.
+    - `useshmemhalos`: per-optimized-array shared-memory halo usage for 3-D memory-optimized declarations.
 
 !!! note "Memory optimization"
     Two-index memory-optimized declarations use register-only caching in the second dimension. Shared-memory caching belongs only to the 3-D memory-optimized declaration surface, where `loopdim=3` and `useshmemhalos` may be used.
@@ -362,7 +362,7 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
                     quote
                         local $metadata_var = $metadata_call
                         if $metadata_var.memopt
-                            @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                            ParallelStencil.@ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
                         else
                             $ordinary_call
                         end
@@ -412,14 +412,14 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             if memopt
                 quote
                     $metadata_function
-                    $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
                 end
             else
                 kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
                 kernel = ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
                 quote
                     $metadata_function
-                    $kernel
+                    Core.@__doc__ $kernel
                 end
             end
         end
@@ -552,7 +552,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         expanded_kernel = macroexpand(caller, kernel)
         quote
             $metadata_function
-            $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+            Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
         end
     else
         if package == PKG_KERNELABSTRACTIONS
@@ -560,7 +560,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         end
         return quote
             $metadata_function
-            $kernel
+            Core.@__doc__ $kernel
         end # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
@@ -867,13 +867,17 @@ end
 function create_metadata_call(configcall::Expr)
     metadata_call = deepcopy(configcall)
     kernelname = metadata_call.args[1]
-    metadata_call.args[1] = get_meta_function(kernelname)
+    if kernelname isa Expr && kernelname.head === :.
+        metadata_call.args[1] = Expr(:., kernelname.args[1], QuoteNode(get_meta_function(kernelname.args[2].value)))
+    else
+        metadata_call.args[1] = get_meta_function(kernelname)
+    end
     return metadata_call
 end
 
 function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing, double_buffer_args::Union{Nothing,Tuple{Vararg{Int}}}=nothing, double_buffering_opt::Union{Nothing,Bool}=nothing)
     nonconst_metadata = get_nonconst_metadata(caller)
-    if nonconst_metadata || isdefined(metadata_module, :nb_parallel_indices)
+    if nonconst_metadata
         if isnothing(memopt)
             storeexpr = quote
                 nb_parallel_indices = $nb_parallel_indices
