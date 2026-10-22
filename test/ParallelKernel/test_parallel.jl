@@ -604,9 +604,9 @@ eval(:(
             @reset_parallel_kernel()
         end;
     end;
-))
-
-end == nothing || true;
+)) end;
+    
+end
 
 # Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
 # Host-to-device field-type conversion cannot be exercised in the dominant loop on GPU backends after the first `@reset_parallel_kernel`, so the macro-expansion and runtime-launch halves are merged here. Each sub-testset follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
