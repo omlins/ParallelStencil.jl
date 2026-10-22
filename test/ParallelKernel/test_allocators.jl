@@ -309,10 +309,10 @@ eval(:(
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(ROCCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:AMDGPU.ROCArray}
+                            @test @rand(2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(ROCCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
@@ -432,8 +432,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                             AMDGPU.allowscalar(false)
                         elseif symbol == :gpu_metal
@@ -593,8 +593,8 @@ eval(:(
                             AMDGPU.allowscalar(true)
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             AMDGPU.allowscalar(false)
@@ -691,8 +691,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
                             AMDGPU.allowscalar(false)
                         elseif symbol == :gpu_metal
                             @require PKG_METAL in TEST_PACKAGES
