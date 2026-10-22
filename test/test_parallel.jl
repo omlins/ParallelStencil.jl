@@ -1851,9 +1851,9 @@ eval(:(
             @reset_parallel_stencil()
         end;
     end;
-))
-
-end == nothing || true;
+)) end;
+    
+end
 
 # Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules). The macro-expansion + runtime-launch halves of the Field type use verification cannot be exercised in the dominant reset-driven loop on GPU backends after the first `@reset_parallel_stencil`, so they are merged here. Each runtime launch follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom; VectorField/BVectorField use the shared single parameter (components == per-component dim) and TensorField uses separate parameters (components = N*(N+1)/2 vs per-component dim = N).
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
