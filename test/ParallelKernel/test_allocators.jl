@@ -8,30 +8,10 @@ import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.FieldAllocators
 import ParallelStencil.ParallelKernel.FieldAllocators: checksargs_field_macros, checkargs_allocate
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-    @define_CuCellArray
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-    @define_ROCCellArray
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-    @define_MtlCellArray
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
+@static if (PKG_CUDA   in TEST_PACKAGES) @define_CuCellArray  end # NOTE: @static, as the macros import the GPU package at expansion time.
+@static if (PKG_AMDGPU in TEST_PACKAGES) @define_ROCCellArray end
+@static if (PKG_METAL  in TEST_PACKAGES) @define_MtlCellArray end
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
 kernelabstractions_valid_symbols() = Tuple(filter(!isnothing, (
     :cpu,

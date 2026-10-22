@@ -9,13 +9,13 @@ Each test file runs in its own Julia process. Test files can be selected by file
 import Pkg; Pkg.test("ParallelStencil"; test_args=["ParallelKernel/test_parallel.jl", "--stop-on-fail"])
 ```
 
-The tests of the CUDA, AMDGPU and Metal backends run if the corresponding package is functional, and are skipped otherwise. The following environment variable controls the test run:
+The GPU packages (CUDA, AMDGPU and Metal) are not dependencies of the test environment (`test/Project.toml`), as resolving them all together holds each of them back to an old version. The GPU backend to test is selected with the following environment variable; the test runner installs its package into the (temporary) test environment of `Pkg.test`, and its tests must run:
 
 | Variable          | Description                                                                                                                               |
 |:----------------- |:----------------------------------------------------------------------------------------------------------------------------------------- |
-| `PS_TEST_BACKEND` | GPU backend that must be functional (`CUDA`, `AMDGPU` or `Metal`); if it is not, the test run fails instead of skipping the tests of this backend. |
+| `PS_TEST_BACKEND` | GPU backend to test (`CUDA`, `AMDGPU` or `Metal`): its package is installed into the test environment if it is not already, and the test run fails instead of skipping the tests of this backend if it is not functional. |
 
-For example, to make sure that the GPU tests are run:
+Without it, the CPU backends (Threads, Polyester and KernelAbstractions on the CPU) are tested, and the tests of a GPU backend run only if its package is already installed in the test environment and functional. For example, to test a GPU backend:
 
 :::code-group
 
@@ -36,6 +36,8 @@ julia --project -e 'import Pkg; Pkg.test()'
 
 :::
 
+The test environment of `Pkg.test` is temporary, so the installation is repeated at each test run (it is fast once the package is in the depot). To avoid it, the package can be added permanently to the test environment with `julia --project=test -e 'import Pkg; Pkg.add("CUDA")'`; this modifies `test/Project.toml` (do not commit this change) and `test/Manifest.toml` (not tracked by git).
+
 ## Continuous integration
 
 - **GitHub Actions** (CPUs, and Apple GPUs on the macOS runners): Julia `min` and `1` on Linux and macOS (Apple silicon), and Julia `pre` on Linux (allowed to fail) (`.github/workflows/ci.yml`).
@@ -44,5 +46,7 @@ julia --project -e 'import Pkg; Pkg.test()'
   - [Beverin](https://docs.cscs.ch/clusters/beverin/) (AMD MI250X and MI300A GPUs): the full test suite on one node per GPU type, with the CPU backends running on the EPYC CPU and the AMDGPU and KernelAbstractions backends on the GPU (`ci/cscs-mi250.yml`, `ci/cscs-mi300.yml`; [MI250X pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767613/-/pipelines), [MI300A pipelines](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767614/-/pipelines)).
 
   For pull requests by other contributors, a maintainer starts the pipelines by commenting `cscs-ci run`.
+
+  Each job sets `PS_TEST_BACKEND` to the GPU backend it tests (`CUDA` on Daint, `AMDGPU` on Beverin and `Metal` on the macOS runners of GitHub Actions); the Linux jobs of GitHub Actions test the CPU backends only.
 
 Coverage of all jobs is uploaded to [Codecov](https://app.codecov.io/gh/omlins/ParallelStencil.jl) (flags `cpu`, `gh200`, `mi250` and `mi300`).

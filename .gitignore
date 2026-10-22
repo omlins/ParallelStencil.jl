@@ -1,5 +1,6 @@
 .DS_Store
 Manifest.toml
+test/Manifest.toml
 miniapps/Manifest.toml
 *.cov
 lcov.info

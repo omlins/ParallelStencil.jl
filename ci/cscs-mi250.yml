@@ -15,7 +15,7 @@ include:
     JULIA_AMDGPU_CORE_MUST_LOAD: '1'
     JULIA_AMDGPU_HIP_MUST_LOAD: '1'
     JULIA_NUM_THREADS: 2
-    PS_TEST_BACKEND: 'AMDGPU'          # Fail instead of skipping the GPU tests if AMDGPU is not functional.
+    PS_TEST_BACKEND: 'AMDGPU'          # The test runner installs AMDGPU into the test environment; fail instead of skipping the GPU tests if it is not functional.
     PS_TEST_FILES: ''                  # Test files to run (default: all).
   script:
     - ulimit -c 0

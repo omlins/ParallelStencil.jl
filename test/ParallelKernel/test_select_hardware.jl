@@ -2,32 +2,10 @@ using Test
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @init_parallel_kernel, @is_initialized, @select_hardware, @current_hardware, @get_hardware, handle, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
 import ParallelStencil.ParallelKernel: @require, @prettystring
-@static if PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES
-    import KernelAbstractions: CPU, CUDABackend, ROCBackend, MetalBackend, oneAPIBackend
-end
+import KernelAbstractions: CPU # NOTE: the GPU backend types (e.g. CUDABackend) are defined by the extensions of KernelAbstractions, i.e. only if the corresponding GPU package is loaded; they are referred to qualified below.
 
-TEST_PACKAGES = SUPPORTED_PACKAGES
+include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x -> x ≠ PKG_CUDA, TEST_PACKAGES) end
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x -> x ≠ PKG_AMDGPU, TEST_PACKAGES) end
-end
-@static if PKG_METAL in TEST_PACKAGES
-	import Metal
-	if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x -> x ≠ PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-Base.retry_load_extensions()
 
 
 @testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
@@ -83,13 +61,13 @@ for package in TEST_PACKAGES  eval(:(
 							if symbol == :cpu
 								@test handle(symbol, package_symbol) == CPU()
 							elseif symbol == :gpu_cuda
-								@test handle(symbol, package_symbol) == CUDABackend()
+								@test handle(symbol, package_symbol) == KernelAbstractions.CUDABackend()
 							elseif symbol == :gpu_amd
-								@test handle(symbol, package_symbol) == ROCBackend()
+								@test handle(symbol, package_symbol) == KernelAbstractions.ROCBackend()
 							elseif symbol == :gpu_metal
-								@test handle(symbol, package_symbol) == MetalBackend()
+								@test handle(symbol, package_symbol) == KernelAbstractions.MetalBackend()
 							elseif symbol == :gpu_oneapi
-								@test handle(symbol, package_symbol) == oneAPIBackend()
+								@test handle(symbol, package_symbol) == KernelAbstractions.oneAPIBackend()
 							end
 						end
 					end
