@@ -26,7 +26,8 @@ exename = joinpath(Sys.BINDIR, Base.julia_exename())
 const TEST_PROJECTS = ["Diffusion3D_minimal"] # ["Diffusion3D_minimal", "Diffusion3D", "Diffusion"]
 
 
-@static for package in TEST_PACKAGES  eval(:(
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES  eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
         @testset "extensions ($project)" for project in TEST_PROJECTS
             test_script = joinpath(@__DIR__, "test_projects", project, "test", "localtest_diffusion_$(nameof($package)).jl")
@@ -39,4 +40,5 @@ const TEST_PROJECTS = ["Diffusion3D_minimal"] # ["Diffusion3D_minimal", "Diffusi
             @test was_success
         end;
     end;
-)) end == nothing || true;
+)) end
+end;

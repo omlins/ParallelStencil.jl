@@ -31,7 +31,8 @@ end
 Base.retry_load_extensions()
 
 
-@static for package in TEST_PACKAGES  eval(:(
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES  eval(:(
 	@testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
 			@reset_parallel_stencil()
 			@require !@is_initialized()
@@ -116,4 +117,5 @@ Base.retry_load_extensions()
 			end
 			@reset_parallel_stencil()
 	end;
-)) end == nothing || true;
+)) end
+end;

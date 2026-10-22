@@ -44,7 +44,8 @@ kernelabstractions_invalid_symbols(valid_symbols) = setdiff((:cpu, :gpu_cuda, :g
 contains_current_hardware_call(call) = occursin("current_hardware(@__MODULE__)", call) || occursin("current_hardware(@__MODULE__())", call)
 
 
-@static for package in TEST_PACKAGES
+@testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
+for package in TEST_PACKAGES
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)))" begin
@@ -173,6 +174,7 @@ eval(:(
                     for symbol in valid_symbols
                         @select_hardware(symbol)
                         backend_handle = handle(symbol, PKG_KERNELABSTRACTIONS)
+                        FloatHardware  = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
                         @test typeof(@zeros(2,3))                      == typeof(KernelAbstractions.zeros(backend_handle, Float16, 2, 3))
                         @test typeof(@zeros(2,3, eltype=Float32))      == typeof(KernelAbstractions.zeros(backend_handle, Float32, 2, 3))
                         @test typeof(@zeros(2,3, eltype=DATA_INDEX))   == typeof(KernelAbstractions.zeros(backend_handle, DATA_INDEX, 2, 3))
@@ -180,10 +182,10 @@ eval(:(
                         @test typeof(@ones(2,3, eltype=Float32))       == typeof(KernelAbstractions.ones(backend_handle, Float32, 2, 3))
                         @test typeof(@ones(2,3, eltype=DATA_INDEX))    == typeof(KernelAbstractions.ones(backend_handle, DATA_INDEX, 2, 3))
                         @test typeof(@rand(2,3))                       == typeof(KernelAbstractions.allocate(backend_handle, Float16, 2, 3))
-                        @test typeof(@rand(2,3, eltype=Float64))       == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@rand(2,3, eltype=FloatHardware))       == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@rand(2,3, eltype=DATA_INDEX))    == typeof(KernelAbstractions.allocate(backend_handle, DATA_INDEX, 2, 3))
                         @test typeof(@fill(9, 2,3))                    == typeof(KernelAbstractions.allocate(backend_handle, Float16, 2, 3))
-                        @test typeof(@fill(9, 2,3, eltype=Float64))    == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@fill(9, 2,3, eltype=FloatHardware))    == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@fill(9, 2,3, eltype=DATA_INDEX)) == typeof(KernelAbstractions.allocate(backend_handle, DATA_INDEX, 2, 3))
                         call = @prettystring(1, @zeros(2,3))
                         @test contains_current_hardware_call(call)
@@ -322,10 +324,10 @@ eval(:(
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(MtlCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(MtlCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:Metal.MtlArray}
+                            @test @rand(2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(MtlCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
@@ -443,8 +445,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                             Metal.allowscalar(false)
                         end
@@ -507,10 +509,11 @@ eval(:(
                     for symbol in valid_symbols
                         @select_hardware(symbol)
                         backend_handle = handle(symbol, PKG_KERNELABSTRACTIONS)
+                        FloatHardware  = (symbol == :gpu_metal) ? Float32 : Float64 # Metal does not support Float64
                         @test typeof(@zeros(2,3, eltype=Float32))    == typeof(KernelAbstractions.zeros(backend_handle, Float32, 2, 3))
                         @test typeof(@ones(2,3, eltype=Float32))     == typeof(KernelAbstractions.ones(backend_handle, Float32, 2, 3))
-                        @test typeof(@rand(2,3, eltype=Float64))     == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
-                        @test typeof(@fill(9, 2,3, eltype=Float64))  == typeof(KernelAbstractions.allocate(backend_handle, Float64, 2, 3))
+                        @test typeof(@rand(2,3, eltype=FloatHardware))     == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
+                        @test typeof(@fill(9, 2,3, eltype=FloatHardware))  == typeof(KernelAbstractions.allocate(backend_handle, FloatHardware, 2, 3))
                         @test typeof(@zeros(2,3, eltype=DATA_INDEX)) == typeof(KernelAbstractions.zeros(backend_handle, DATA_INDEX, 2, 3))
                         call = @prettystring(1, @zeros(2,3, eltype=Float32))
                         @test contains_current_hardware_call(call)
@@ -600,8 +603,8 @@ eval(:(
                             Metal.allowscalar(true)
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(MtlCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float32))    == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float32)) == typeof(MtlCellArray{T_Float32,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float32) isa CellArray{T_Float32,2,1,<:Metal.MtlArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(MtlCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             Metal.allowscalar(false)
@@ -700,8 +703,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float32})    == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_T{Float32}}(undef,2,3), SymmetricTensor2D_T{Float32}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(MtlCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(MtlCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(MtlCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:Metal.MtlArray}
                             Metal.allowscalar(false)
                         end
                     end
@@ -1152,4 +1155,5 @@ eval(:(
             @reset_parallel_kernel()
         end;
     end;
-)) end == nothing || true;
+)) end
+end;

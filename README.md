@@ -2,7 +2,9 @@
 
 [![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://omlins.github.io/ParallelStencil.jl/stable)
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://omlins.github.io/ParallelStencil.jl/dev)
-[![Build Status](https://github.com/omlins/ParallelStencil.jl/workflows/CI/badge.svg)](https://github.com/omlins/ParallelStencil.jl/actions)
+[![CI](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml)
+[![Daint GH200](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/badges/main/pipeline.svg?ignore_skipped=true&key_text=Daint%20GH200&key_width=82)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)
+[![Coverage](https://codecov.io/gh/omlins/ParallelStencil.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/omlins/ParallelStencil.jl)
 [![DOI](https://proceedings.juliacon.org/papers/10.21105/jcon.00138/status.svg)](https://doi.org/10.21105/jcon.00138)
 
 ParallelStencil empowers domain scientists to write architecture-agnostic high-level code for parallel high-performance stencil computations on GPUs and CPUs, with performance similar to CUDA C / HIP. A single code runs on Nvidia, AMD and Apple GPUs and on multi-threaded CPUs; in conjunction with [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl), it scales from a single CPU thread to thousands of GPUs. ParallelStencil furthermore supports hiding communication behind computation, architecture-agnostic low-level kernel programming, logical arrays of small arrays / structs, and automatic differentiation of parallel kernels with [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl). Background, examples, miniapps and references are in the [documentation](https://omlins.github.io/ParallelStencil.jl/stable).
