@@ -16,6 +16,7 @@ include:
     JULIA_AMDGPU_HIP_MUST_LOAD: '1'
     JULIA_NUM_THREADS: 2
     PS_TEST_BACKEND: 'AMDGPU'          # The test runner installs AMDGPU into the test environment; fail instead of skipping the GPU tests if it is not functional.
+    PS_TEST_AD: '0'                    # No Enzyme: the newest AMDGPU (2.9) and KernelAbstractions (0.10) require LLVM.jl 10, which Enzyme does not support yet; the tests of automatic differentiation on AMD GPUs run in the MI250 job (AMDGPU 2.8, KernelAbstractions 0.9).
     PS_TEST_FILES: ''                  # Test files to run (default: all).
   script:
     - ulimit -c 0
