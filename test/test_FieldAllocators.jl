@@ -213,16 +213,16 @@ eval(:(
             @testset "allocator=@ones" begin
                 @allocate(gridsize=nxyz, fields=(Field2B => (A,), Field => (C,)), allocator=@ones)
                 @test keys(A) == (:in, :out)
-                @test all(A.in .== 1.0)
-                @test all(A.out .== 1.0)
-                @test all(C .== 1.0)
+                @test all(Array(A.in) .== 1.0) # Compare on the host: comparing device array elements against a Float64 literal would promote to Float64 on the device (unsupported by Metal).
+                @test all(Array(A.out) .== 1.0)
+                @test all(Array(C) .== 1.0)
             end;
 
             @testset "allocator=@rand" begin
                 @allocate(gridsize=nxyz, fields=(Field2B => (A,), Field => (C,)), allocator=@rand)
                 @test keys(A) == (:in, :out)
-                @test !all(A.in .== 0.0)
-                @test !all(A.out .== 0.0)
+                @test !all(Array(A.in) .== 0.0)
+                @test !all(Array(A.out) .== 0.0)
             end;
 
             @reset_parallel_stencil()
