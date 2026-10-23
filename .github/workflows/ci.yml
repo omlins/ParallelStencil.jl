@@ -4,7 +4,11 @@ on:
     branches:
       - main
     tags: '*'
+    paths-ignore: &docs_only # Changes to the documentation only do not run the tests (the Documentation workflow builds and deploys the documentation).
+      - 'docs/**'
+      - 'README.md'
   pull_request:
+    paths-ignore: *docs_only
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
