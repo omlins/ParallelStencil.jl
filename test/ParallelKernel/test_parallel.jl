@@ -6,6 +6,7 @@ import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, 
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize, compute_nthreads, NTHREADS_X_MAX_AMDGPU, NTHREADS_MAX
 using ParallelStencil.ParallelKernel.Exceptions
+using ParallelStencil.ParallelKernel.FieldAllocators
 include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 @static if TEST_AD using Enzyme end # Enzyme is installed by the test runner unless PS_TEST_AD=0 (see test/packages.jl).
 
