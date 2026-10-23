@@ -6,6 +6,7 @@ import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, 
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize, compute_nthreads, NTHREADS_X_MAX_AMDGPU, NTHREADS_MAX
 using ParallelStencil.ParallelKernel.Exceptions
+using ParallelStencil.ParallelKernel.FieldAllocators
 include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 @static if TEST_AD using Enzyme end # Enzyme is installed by the test runner unless PS_TEST_AD=0 (see test/packages.jl).
 
@@ -349,7 +350,7 @@ eval(:(
                         end
                     end;
                 )));
-                # NOTE: the following GPU tests fail, because the Fields module cannot be imported.
+                # NOTE: the following GPU tests fail, because the TData.Fields module cannot be imported.
                 # @testset "Fields.Field to TData.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
                 #             import .TData.Fields
@@ -359,7 +360,7 @@ eval(:(
                 # end
                 # @testset "Field to TData.Fields.Device.Field" begin
                 #     @static if @isgpu($package)
-                    #             using .TData.Fields
+                #             using .TData.Fields
                 #             expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Field, B::Field, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
                 #             @test occursin("f(A::TData.Fields.Device.Field, B::TData.Fields.Device.Field,", expansion)
                 #     end
@@ -585,7 +586,301 @@ eval(:(
             @reset_parallel_kernel()
         end;
     end;
+)) end;
+    
+end
+
+# Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
+# Host-to-device field-type conversion cannot be exercised in the dominant loop on GPU backends after the first `@reset_parallel_kernel`, so the macro-expansion and runtime-launch halves are merged here. Each sub-testset follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
+        @require !@is_initialized()
+        @init_parallel_kernel($package, $FloatDefault, padding=false)
+        @require @is_initialized()
+        # `using .Data.Fields` brings in both the `Fields` module name and the leaf alias names.
+        using .Data.Fields
+        (nx, ny, nz) = (3, 4, 5)
+        # Macro-expansion half first, then the runtime-launch half (dispatch of the converted device signature cannot be established by macro expansion alone).
+        @testset "Fields.Field to Data.Fields.Device.Field" begin
+            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Fields.Field, B::Fields.Field, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+            @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
+            @parallel_indices (ix) function copy_field_1D!(A::Fields.Field, B::Fields.Field)
+                A[ix] = B[ix]
+                return
+            end
+            F_A_1D = @Field((nx,))
+            F_B_1D = @Field((nx,)); fill!(F_B_1D, 3.0)
+            @parallel copy_field_1D!(F_A_1D, F_B_1D)
+            @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::Fields.Field, B::Fields.Field)
+                A[ix,iy] = B[ix,iy]
+                return
+            end
+            F_A_2D = @Field((nx, ny))
+            F_B_2D = @Field((nx, ny)); fill!(F_B_2D, 3.0)
+            @parallel copy_field_2D!(F_A_2D, F_B_2D)
+            @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::Fields.Field, B::Fields.Field)
+                A[ix,iy,iz] = B[ix,iy,iz]
+                return
+            end
+            F_A_3D = @Field((nx, ny, nz))
+            F_B_3D = @Field((nx, ny, nz)); fill!(F_B_3D, 3.0)
+            @parallel copy_field_3D!(F_A_3D, F_B_3D)
+            @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        # Un-qualified `Field` after `using .Data.Fields`: same merge (macro-expansion + runtime-launch).
+        @testset "Field to Data.Fields.Device.Field" begin
+            expansion = @prettystring(1, @parallel_indices (ix,iy) f(A::Field, B::Field, c::T) where T <: Integer = (A[ix,iy] = B[ix,iy]^c; return))
+            @test occursin("f(A::Data.Fields.Device.Field, B::Data.Fields.Device.Field,", expansion)
+            @parallel_indices (ix) function copy_field_1D!(A::Field, B::Field)
+                A[ix] = B[ix]
+                return
+            end
+            F_A_1D = @Field((nx,))
+            F_B_1D = @Field((nx,)); fill!(F_B_1D, 3.0)
+            @parallel copy_field_1D!(F_A_1D, F_B_1D)
+            @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::Field, B::Field)
+                A[ix,iy] = B[ix,iy]
+                return
+            end
+            F_A_2D = @Field((nx, ny))
+            F_B_2D = @Field((nx, ny)); fill!(F_B_2D, 3.0)
+            @parallel copy_field_2D!(F_A_2D, F_B_2D)
+            @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::Field, B::Field)
+                A[ix,iy,iz] = B[ix,iy,iz]
+                return
+            end
+            F_A_3D = @Field((nx, ny, nz))
+            F_B_3D = @Field((nx, ny, nz)); fill!(F_B_3D, 3.0)
+            @parallel copy_field_3D!(F_A_3D, F_B_3D)
+            @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        # Analogous runtime-launch sub-testsets for the remaining FIELDTYPES kinds. VectorField/BVectorField use a single shared parameter (components == per-component dim); TensorField uses separate parameters (components = N*(N+1)/2 vs per-component dim = N).
+        @testset "XField to Data.Fields.Device.XField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::XField, B::XField); A[ix] = B[ix]; return; end
+            F_A_1D = @XField((nx,)); F_B_1D = @XField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::XField, B::XField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @XField((nx, ny)); F_B_2D = @XField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::XField, B::XField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @XField((nx, ny, nz)); F_B_3D = @XField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "YField to Data.Fields.Device.YField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::YField, B::YField); A[ix] = B[ix]; return; end
+            F_A_1D = @YField((nx,)); F_B_1D = @YField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::YField, B::YField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @YField((nx, ny)); F_B_2D = @YField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::YField, B::YField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @YField((nx, ny, nz)); F_B_3D = @YField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "ZField to Data.Fields.Device.ZField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::ZField, B::ZField); A[ix] = B[ix]; return; end
+            F_A_1D = @ZField((nx,)); F_B_1D = @ZField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::ZField, B::ZField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @ZField((nx, ny)); F_B_2D = @ZField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::ZField, B::ZField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @ZField((nx, ny, nz)); F_B_3D = @ZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "BXField to Data.Fields.Device.BXField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::BXField, B::BXField); A[ix] = B[ix]; return; end
+            F_A_1D = @BXField((nx,)); F_B_1D = @BXField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::BXField, B::BXField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @BXField((nx, ny)); F_B_2D = @BXField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::BXField, B::BXField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @BXField((nx, ny, nz)); F_B_3D = @BXField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "BYField to Data.Fields.Device.BYField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::BYField, B::BYField); A[ix] = B[ix]; return; end
+            F_A_1D = @BYField((nx,)); F_B_1D = @BYField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::BYField, B::BYField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @BYField((nx, ny)); F_B_2D = @BYField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::BYField, B::BYField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @BYField((nx, ny, nz)); F_B_3D = @BYField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "BZField to Data.Fields.Device.BZField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::BZField, B::BZField); A[ix] = B[ix]; return; end
+            F_A_1D = @BZField((nx,)); F_B_1D = @BZField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::BZField, B::ZField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @BZField((nx, ny)); F_B_2D = @BZField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::BZField, B::BZField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @BZField((nx, ny, nz)); F_B_3D = @BZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "XXField to Data.Fields.Device.XXField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::XXField, B::XXField); A[ix] = B[ix]; return; end
+            F_A_1D = @XXField((nx,)); F_B_1D = @XXField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::XXField, B::XXField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @XXField((nx, ny)); F_B_2D = @XXField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::XXField, B::XXField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @XXField((nx, ny, nz)); F_B_3D = @XXField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "YYField to Data.Fields.Device.YYField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::YYField, B::YYField); A[ix] = B[ix]; return; end
+            F_A_1D = @YYField((nx,)); F_B_1D = @YYField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::YYField, B::YYField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @YYField((nx, ny)); F_B_2D = @YYField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::YYField, B::YYField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @YYField((nx, ny, nz)); F_B_3D = @YYField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "ZZField to Data.Fields.Device.ZZField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::ZZField, B::ZZField); A[ix] = B[ix]; return; end
+            F_A_1D = @ZZField((nx,)); F_B_1D = @ZZField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::ZZField, B::ZZField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @ZZField((nx, ny)); F_B_2D = @ZZField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::ZZField, B::ZZField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @ZZField((nx, ny, nz)); F_B_3D = @ZZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "XYField to Data.Fields.Device.XYField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::XYField, B::XYField); A[ix] = B[ix]; return; end
+            F_A_1D = @XYField((nx,)); F_B_1D = @XYField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::XYField, B::XYField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @XYField((nx, ny)); F_B_2D = @XYField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::XYField, B::XYField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @XYField((nx, ny, nz)); F_B_3D = @XYField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "XZField to Data.Fields.Device.XZField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::XZField, B::XZField); A[ix] = B[ix]; return; end
+            F_A_1D = @XZField((nx,)); F_B_1D = @XZField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::XZField, B::XZField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @XZField((nx, ny)); F_B_2D = @XZField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::XZField, B::XZField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @XZField((nx, ny, nz)); F_B_3D = @XZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "YZField to Data.Fields.Device.YZField" begin
+            @parallel_indices (ix) function copy_field_1D!(A::YZField, B::YZField); A[ix] = B[ix]; return; end
+            F_A_1D = @YZField((nx,)); F_B_1D = @YZField((nx,)); fill!(F_B_1D, 3.0); @parallel copy_field_1D!(F_A_1D, F_B_1D); @test all(Array(F_A_1D) .== Array(F_B_1D))
+            @parallel_indices (ix,iy) function copy_field_2D!(A::YZField, B::YZField); A[ix,iy] = B[ix,iy]; return; end
+            F_A_2D = @YZField((nx, ny)); F_B_2D = @YZField((nx, ny)); fill!(F_B_2D, 3.0); @parallel copy_field_2D!(F_A_2D, F_B_2D); @test all(Array(F_A_2D) .== Array(F_B_2D))
+            @parallel_indices (ix,iy,iz) function copy_field_3D!(A::YZField, B::YZField); A[ix,iy,iz] = B[ix,iy,iz]; return; end
+            F_A_3D = @YZField((nx, ny, nz)); F_B_3D = @YZField((nx, ny, nz)); fill!(F_B_3D, 3.0); @parallel copy_field_3D!(F_A_3D, F_B_3D); @test all(Array(F_A_3D) .== Array(F_B_3D))
+        end;
+        @testset "VectorField to Data.Fields.Device.VectorField" begin
+            # Each component is shorter than the @parallel auto-range cross-component maximum in at least one dimension, so per-component writes are guarded by size(comp,d) bounds. Named access (V.x, ...) is for readability; `ref_*` is computed from each component's own `size(...)` so the @test matches exactly.
+            @parallel_indices (ix,iy,iz) function fill_vector_3D!(V::VectorField)
+                if ix <= size(V.x,1) && iy <= size(V.x,2) && iz <= size(V.x,3)
+                    V.x[ix,iy,iz] = ix + (iy-1)*size(V.x,1) + (iz-1)*size(V.x,1)*size(V.x,2)
+                end
+                if ix <= size(V.y,1) && iy <= size(V.y,2) && iz <= size(V.y,3)
+                    V.y[ix,iy,iz] = ix + (iy-1)*size(V.y,1) + (iz-1)*size(V.y,1)*size(V.y,2)
+                end
+                if ix <= size(V.z,1) && iy <= size(V.z,2) && iz <= size(V.z,3)
+                    V.z[ix,iy,iz] = ix + (iy-1)*size(V.z,1) + (iz-1)*size(V.z,1)*size(V.z,2)
+                end
+                return
+            end
+            V_3D = @VectorField((nx, ny, nz))
+            @parallel fill_vector_3D!(V_3D)
+            ref_3D_x = [ix + (iy-1)*size(V_3D.x,1) + (iz-1)*size(V_3D.x,1)*size(V_3D.x,2) for ix=1:size(V_3D.x,1), iy=1:size(V_3D.x,2), iz=1:size(V_3D.x,3)]
+            ref_3D_y = [ix + (iy-1)*size(V_3D.y,1) + (iz-1)*size(V_3D.y,1)*size(V_3D.y,2) for ix=1:size(V_3D.y,1), iy=1:size(V_3D.y,2), iz=1:size(V_3D.y,3)]
+            ref_3D_z = [ix + (iy-1)*size(V_3D.z,1) + (iz-1)*size(V_3D.z,1)*size(V_3D.z,2) for ix=1:size(V_3D.z,1), iy=1:size(V_3D.z,2), iz=1:size(V_3D.z,3)]
+            @test all(Array(V_3D.x) .== ref_3D_x)
+            @test all(Array(V_3D.y) .== ref_3D_y)
+            @test all(Array(V_3D.z) .== ref_3D_z)
+        end;
+        @testset "BVectorField to Data.Fields.Device.BVectorField" begin
+            # BVectorField: shapes `BV.x=(nx+1,ny,nz)`, `BV.y=(nx,ny+1,nz)`, `BV.z=(nx,ny,nz+1)` with `padding=false`; same per-component `size(comp,d)` bounds guard and `ref_*` from each component's own `size(...)` as above.
+            @parallel_indices (ix,iy,iz) function fill_bvector_3D!(BV::BVectorField)
+                if ix <= size(BV.x,1) && iy <= size(BV.x,2) && iz <= size(BV.x,3)
+                    BV.x[ix,iy,iz] = ix + (iy-1)*size(BV.x,1) + (iz-1)*size(BV.x,1)*size(BV.x,2)
+                end
+                if ix <= size(BV.y,1) && iy <= size(BV.y,2) && iz <= size(BV.y,3)
+                    BV.y[ix,iy,iz] = ix + (iy-1)*size(BV.y,1) + (iz-1)*size(BV.y,1)*size(BV.y,2)
+                end
+                if ix <= size(BV.z,1) && iy <= size(BV.z,2) && iz <= size(BV.z,3)
+                    BV.z[ix,iy,iz] = ix + (iy-1)*size(BV.z,1) + (iz-1)*size(BV.z,1)*size(BV.z,2)
+                end
+                return
+            end
+            BV_3D = @BVectorField((nx, ny, nz))
+            @parallel fill_bvector_3D!(BV_3D)
+            ref_3D_x = [ix + (iy-1)*size(BV_3D.x,1) + (iz-1)*size(BV_3D.x,1)*size(BV_3D.x,2) for ix=1:size(BV_3D.x,1), iy=1:size(BV_3D.x,2), iz=1:size(BV_3D.x,3)]
+            ref_3D_y = [ix + (iy-1)*size(BV_3D.y,1) + (iz-1)*size(BV_3D.y,1)*size(BV_3D.y,2) for ix=1:size(BV_3D.y,1), iy=1:size(BV_3D.y,2), iz=1:size(BV_3D.y,3)]
+            ref_3D_z = [ix + (iy-1)*size(BV_3D.z,1) + (iz-1)*size(BV_3D.z,1)*size(BV_3D.z,2) for ix=1:size(BV_3D.z,1), iy=1:size(BV_3D.z,2), iz=1:size(BV_3D.z,3)]
+            @test all(Array(BV_3D.x) .== ref_3D_x)
+            @test all(Array(BV_3D.y) .== ref_3D_y)
+            @test all(Array(BV_3D.z) .== ref_3D_z)
+        end;
+        @testset "TensorField to Data.Fields.Device.TensorField" begin
+            # TensorField: `N*(N+1)/2` components (≠ per-component dim `N` → separate alias parameters); with `padding=false` each component has its own shape, so same per-component `size(comp,d)` guards and per-component `ref_*` as the VectorField/BVectorField cases above.
+            @parallel_indices (ix) function fill_tensor_1D!(T::TensorField)
+                if ix <= size(T.xx,1)
+                    T.xx[ix] = ix
+                end
+                return
+            end
+            T_1D = @TensorField((nx,)); @parallel fill_tensor_1D!(T_1D); @test all(Array(T_1D.xx) .== [ix for ix=1:size(T_1D.xx,1)])
+            @parallel_indices (ix,iy) function fill_tensor_2D!(T::TensorField)
+                if ix <= size(T.xx,1) && iy <= size(T.xx,2)
+                    T.xx[ix,iy] = ix + (iy-1)*size(T.xx,1)
+                end
+                if ix <= size(T.yy,1) && iy <= size(T.yy,2)
+                    T.yy[ix,iy] = ix + (iy-1)*size(T.yy,1)
+                end
+                if ix <= size(T.xy,1) && iy <= size(T.xy,2)
+                    T.xy[ix,iy] = ix + (iy-1)*size(T.xy,1)
+                end
+                return
+            end
+            T_2D = @TensorField((nx, ny)); @parallel fill_tensor_2D!(T_2D)
+            ref_2D_xx = [ix + (iy-1)*size(T_2D.xx,1) for ix=1:size(T_2D.xx,1), iy=1:size(T_2D.xx,2)]
+            ref_2D_yy = [ix + (iy-1)*size(T_2D.yy,1) for ix=1:size(T_2D.yy,1), iy=1:size(T_2D.yy,2)]
+            ref_2D_xy = [ix + (iy-1)*size(T_2D.xy,1) for ix=1:size(T_2D.xy,1), iy=1:size(T_2D.xy,2)]
+            @test all(Array(T_2D.xx) .== ref_2D_xx)
+            @test all(Array(T_2D.yy) .== ref_2D_yy)
+            @test all(Array(T_2D.xy) .== ref_2D_xy)
+            @parallel_indices (ix,iy,iz) function fill_tensor_3D!(T::TensorField)
+                if ix <= size(T.xx,1) && iy <= size(T.xx,2) && iz <= size(T.xx,3)
+                    T.xx[ix,iy,iz] = ix + (iy-1)*size(T.xx,1) + (iz-1)*size(T.xx,1)*size(T.xx,2)
+                end
+                if ix <= size(T.yy,1) && iy <= size(T.yy,2) && iz <= size(T.yy,3)
+                    T.yy[ix,iy,iz] = ix + (iy-1)*size(T.yy,1) + (iz-1)*size(T.yy,1)*size(T.yy,2)
+                end
+                if ix <= size(T.zz,1) && iy <= size(T.zz,2) && iz <= size(T.zz,3)
+                    T.zz[ix,iy,iz] = ix + (iy-1)*size(T.zz,1) + (iz-1)*size(T.zz,1)*size(T.zz,2)
+                end
+                if ix <= size(T.xy,1) && iy <= size(T.xy,2) && iz <= size(T.xy,3)
+                    T.xy[ix,iy,iz] = ix + (iy-1)*size(T.xy,1) + (iz-1)*size(T.xy,1)*size(T.xy,2)
+                end
+                if ix <= size(T.xz,1) && iy <= size(T.xz,2) && iz <= size(T.xz,3)
+                    T.xz[ix,iy,iz] = ix + (iy-1)*size(T.xz,1) + (iz-1)*size(T.xz,1)*size(T.xz,2)
+                end
+                if ix <= size(T.yz,1) && iy <= size(T.yz,2) && iz <= size(T.yz,3)
+                    T.yz[ix,iy,iz] = ix + (iy-1)*size(T.yz,1) + (iz-1)*size(T.yz,1)*size(T.yz,2)
+                end
+                return
+            end
+            T_3D = @TensorField((nx, ny, nz)); @parallel fill_tensor_3D!(T_3D)
+            ref_3D_xx = [ix + (iy-1)*size(T_3D.xx,1) + (iz-1)*size(T_3D.xx,1)*size(T_3D.xx,2) for ix=1:size(T_3D.xx,1), iy=1:size(T_3D.xx,2), iz=1:size(T_3D.xx,3)]
+            ref_3D_yy = [ix + (iy-1)*size(T_3D.yy,1) + (iz-1)*size(T_3D.yy,1)*size(T_3D.yy,2) for ix=1:size(T_3D.yy,1), iy=1:size(T_3D.yy,2), iz=1:size(T_3D.yy,3)]
+            ref_3D_zz = [ix + (iy-1)*size(T_3D.zz,1) + (iz-1)*size(T_3D.zz,1)*size(T_3D.zz,2) for ix=1:size(T_3D.zz,1), iy=1:size(T_3D.zz,2), iz=1:size(T_3D.zz,3)]
+            ref_3D_xy = [ix + (iy-1)*size(T_3D.xy,1) + (iz-1)*size(T_3D.xy,1)*size(T_3D.xy,2) for ix=1:size(T_3D.xy,1), iy=1:size(T_3D.xy,2), iz=1:size(T_3D.xy,3)]
+            ref_3D_xz = [ix + (iy-1)*size(T_3D.xz,1) + (iz-1)*size(T_3D.xz,1)*size(T_3D.xz,2) for ix=1:size(T_3D.xz,1), iy=1:size(T_3D.xz,2), iz=1:size(T_3D.xz,3)]
+            ref_3D_yz = [ix + (iy-1)*size(T_3D.yz,1) + (iz-1)*size(T_3D.yz,1)*size(T_3D.yz,2) for ix=1:size(T_3D.yz,1), iy=1:size(T_3D.yz,2), iz=1:size(T_3D.yz,3)]
+            @test all(Array(T_3D.xx) .== ref_3D_xx)
+            @test all(Array(T_3D.yy) .== ref_3D_yy)
+            @test all(Array(T_3D.zz) .== ref_3D_zz)
+            @test all(Array(T_3D.xy) .== ref_3D_xy)
+            @test all(Array(T_3D.xz) .== ref_3D_xz)
+            @test all(Array(T_3D.yz) .== ref_3D_yz)
+        end;
+        # `@require`-gated pre-testset: the runtime launches rely on the host-side [T]Data submodules being populated, so pre-conditions are validated with `@require` (never `@test`).
+        @testset "host-side [T]Data submodules populated" begin
+            @require isdefined(@__MODULE__, :Data)
+            @require isdefined(@__MODULE__, :TData)
+            @require isdefined(Data, :Fields)
+            @require isdefined(Data, :Number)
+            @require isdefined(Data, :Index)
+            @require isdefined(Data.Fields, :Device)
+            @require isdefined(TData, :Fields)
+            @require isdefined(TData.Fields, :Device)
+            @test true
+        end;
+    end;
 ))
 
-end
-end;
+end == nothing || true;

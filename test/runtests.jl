@@ -136,6 +136,7 @@ function runtests(testfiles=String[]; stop_on_fail=false)
             continue
         end
         cmd = `$juliacmd --color=yes -O3 --startup-file=no $f`
+        cmd = addenv(cmd, "PS_CUDA_COMPUTE_CAPABILITY" => get(ENV, "PS_CUDA_COMPUTE_CAPABILITY", "7"))
         stdout_path = tempname()
         stderr_path = tempname()
         stdout_content = ""

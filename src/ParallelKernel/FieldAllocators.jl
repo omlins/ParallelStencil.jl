@@ -24,6 +24,9 @@ Provides macros for the allocation of different kind of fields on a grid of size
 ###### Tensor fields
 - [`@TensorField`](@ref)
 
+###### Double-buffered fields (2B suffix)
+For every field allocator macro there is a corresponding double-buffered version with a `2B` suffix (e.g. [`@Field2B`](@ref), [`@VectorField2B`](@ref), [`@TensorField2B`](@ref)). A `2B` macro allocates a `NamedTuple{(:in, :out)}` of two single-buffer fields and is intended to enable ParallelStencil's automatic double-buffering optimization.
+
 To see a description of a macro type `?<macroname>` (including the `@`).
 """
 module FieldAllocators
@@ -60,7 +63,14 @@ Allocate different kinds of fields on a grid of size `gridsize` at once (and ini
               )
     )
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+    @allocate(gridsize = (nx,ny,nz), 
+              fields   = (Field          => (Rog, Mus),
+                          Field2B        => (Pt),
+                          BVectorField2B => V
+              )
+    )    
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc ALLOCATE_DOC
 macro allocate(args...)
@@ -91,7 +101,7 @@ Using the `allocator`, allocate a scalar `Field` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc FIELD_DOC
 macro Field(args...)
@@ -123,7 +133,7 @@ Using the `allocator`, allocate a `VectorField` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc VECTORFIELD_DOC
 macro VectorField(args...)
@@ -155,7 +165,7 @@ Using the `allocator`, allocate a `BVectorField, a vector field including bounda
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc BVECTORFIELD_DOC
 macro BVectorField(args...)
@@ -187,7 +197,7 @@ Using the `allocator`, allocate a `TensorField` on a grid of size `gridsize`.
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 @doc TENSORFIELD_DOC
 macro TensorField(args...)
@@ -219,7 +229,7 @@ Using the `allocator`, allocate a `{X|Y|Z}Field`, a scalar field of the same siz
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc VECTORFIELD_COMP_DOC
@@ -272,7 +282,7 @@ Using the `allocator`, allocate a `B{X|Y|Z}Field`, a scalar field of the same si
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc BVECTORFIELD_COMP_DOC
@@ -325,7 +335,7 @@ Using the `allocator`, allocate a `{XX|YY|ZZ|XY|XZ|YZ}Field`, a scalar field of 
 # Keyword arguments
 - `eltype::DataType`: the type of the elements (numbers or indices).
 
-See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref)
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
 """
 
 @doc TENSORFIELD_COMP_DOC
@@ -386,6 +396,252 @@ macro YZField(args...)
     eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@YZField")
     posargs = clean_args(posargs)
     esc(_field(__module__, posargs...; eltype=eltype, sizetemplate=:YZ))
+end
+
+
+## DOUBLE-BUFFERED (2B) FIELDS
+
+const FIELD2B_DOC = """
+    @Field2B(gridsize)
+    @Field2B(gridsize, allocator)
+    @Field2B(gridsize, allocator, <keyword arguments>)
+
+Using the `allocator`, allocate a double-buffered scalar `Field2B` on a grid of size `gridsize`. A `Field2B` is a `NamedTuple{(:in, :out)}` of two `Field`s.
+
+!!! note "Advanced"
+    The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory. This needs to be used with care to ensure that no datatype conversions occur in performance critical computations.
+
+# Arguments
+- `gridsize::Tuple`: the size of the grid.
+!!! note "Optional argument"
+    - `allocator`::Macro=@zeros`: the macro to use for the allocation of the field array (`@zeros`, `@ones`, `@rand`, `@falses` or `@trues`).
+
+# Keyword arguments
+- `eltype::DataType`: the type of the elements (numbers or indices).
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
+"""
+@doc FIELD2B_DOC
+macro Field2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@Field2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype))
+end
+
+const VECTORFIELD2B_DOC = """
+    @VectorField2B(gridsize)
+    @VectorField2B(gridsize, allocator)
+    @VectorField2B(gridsize, allocator, <keyword arguments>)
+
+Using the `allocator`, allocate a double-buffered `VectorField2B` on a grid of size `gridsize`. A `VectorField2B` is a `NamedTuple{(:in, :out)}` of two `VectorField`s.
+
+!!! note "Advanced"
+    The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory.
+
+# Arguments
+- `gridsize::Tuple`: the size of the grid.
+!!! note "Optional argument"
+    - `allocator`::Macro=@zeros`.
+
+# Keyword arguments
+- `eltype::DataType`: the type of the elements (numbers or indices).
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
+"""
+@doc VECTORFIELD2B_DOC
+macro VectorField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@VectorField2B")
+    posargs = clean_args(posargs)
+    esc(_vectorfield2B(__module__, posargs...; eltype=eltype))
+end
+
+const BVECTORFIELD2B_DOC = """
+    @BVectorField2B(gridsize)
+    @BVectorField2B(gridsize, allocator)
+    @BVectorField2B(gridsize, allocator, <keyword arguments>)
+
+Using the `allocator`, allocate a double-buffered `BVectorField2B` (a vector field including boundaries) on a grid of size `gridsize`. A `BVectorField2B` is a `NamedTuple{(:in, :out)}` of two `BVectorField`s.
+
+!!! note "Advanced"
+    The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory.
+
+# Arguments
+- `gridsize::Tuple`: the size of the grid.
+!!! note "Optional argument"
+    - `allocator`::Macro=@zeros`.
+
+# Keyword arguments
+- `eltype::DataType`: the type of the elements (numbers or indices).
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
+"""
+@doc BVECTORFIELD2B_DOC
+macro BVectorField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@BVectorField2B")
+    posargs = clean_args(posargs)
+    esc(_vectorfield2B(__module__, posargs...; eltype=eltype, sizetemplate=:B))
+end
+
+const TENSORFIELD2B_DOC = """
+    @TensorField2B(gridsize)
+    @TensorField2B(gridsize, allocator)
+    @TensorField2B(gridsize, allocator, <keyword arguments>)
+
+Using the `allocator`, allocate a double-buffered `TensorField2B` on a grid of size `gridsize`. A `TensorField2B` is a `NamedTuple{(:in, :out)}` of two `TensorField`s.
+
+!!! note "Advanced"
+    The `eltype` can be explicitly passed as keyword argument in order to be used instead of the default `numbertype` chosen with [`@init_parallel_kernel`](@ref). If no default `numbertype` was chosen [`@init_parallel_kernel`](@ref), then the keyword argument `eltype` is mandatory.
+
+# Arguments
+- `gridsize::Tuple`: the size of the grid.
+!!! note "Optional argument"
+    - `allocator`::Macro=@zeros`.
+
+# Keyword arguments
+- `eltype::DataType`: the type of the elements (numbers or indices).
+
+See also: [`@allocate`](@ref), [`@Field`](@ref), [`@XField`](@ref), [`@BXField`](@ref), [`@XXField`](@ref), [`@VectorField`](@ref), [`@BVectorField`](@ref), [`@TensorField`](@ref), [`@Field2B`](@ref), ...
+"""
+@doc TENSORFIELD2B_DOC
+macro TensorField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@TensorField2B")
+    posargs = clean_args(posargs)
+    esc(_tensorfield2B(__module__, posargs...; eltype=eltype))
+end
+
+# Double-buffered (2B) component field macros share the scalar @Field2B docstring.
+const FIELD2B_COMP_DOC = FIELD2B_DOC
+
+@doc FIELD2B_COMP_DOC
+macro XField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:X))
+end
+
+@doc FIELD2B_COMP_DOC
+macro YField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@YField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:Y))
+end
+
+@doc FIELD2B_COMP_DOC
+macro ZField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@ZField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:Z))
+end
+
+@doc FIELD2B_COMP_DOC
+macro BXField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@BXField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:BX))
+end
+
+@doc FIELD2B_COMP_DOC
+macro BYField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@BYField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:BY))
+end
+
+@doc FIELD2B_COMP_DOC
+macro BZField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@BZField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:BZ))
+end
+
+@doc FIELD2B_COMP_DOC
+macro XXField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XXField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:XX))
+end
+
+@doc FIELD2B_COMP_DOC
+macro YYField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@YYField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:YY))
+end
+
+@doc FIELD2B_COMP_DOC
+macro ZZField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@ZZField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:ZZ))
+end
+
+@doc FIELD2B_COMP_DOC
+macro XYField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XYField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:XY))
+end
+
+@doc FIELD2B_COMP_DOC
+macro XZField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@XZField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:XZ))
+end
+
+@doc FIELD2B_COMP_DOC
+macro YZField2B(args...)
+    check_initialized(__module__)
+    checksargs_field_macros(args...)
+    posargs, kwargs_expr = split_args(args)
+    eltype, = extract_kwargvalues(kwargs_expr, (:eltype,), "@YZField2B")
+    posargs = clean_args(posargs)
+    esc(_field2B(__module__, posargs...; eltype=eltype, sizetemplate=:YZ))
 end
 
 
@@ -525,7 +781,7 @@ function checksargs_field_macros(args...)
     posargs = clean_args(posargs)
     if isempty(posargs) @ArgumentError("the gridsize positional argument is mandatory.") end
     if length(posargs) > 2 @ArgumentError("too many positional arguments.") end
-    if (length(posargs) == 2) && !(any(is_same.((posargs[2],), (:@zeros, :@ones, :@rand, :@falses, :@trues)))) @ArgumentError("the second positional argument must be a field allocator macro.") end
+    if (length(posargs) == 2) && !(any(is_same.((posargs[2],), (:@zeros, :@ones, :@rand, :@falses, :@trues, :@zeros_cpu, :@ones_cpu, :@rand_cpu, :@falses_cpu, :@trues_cpu)))) @ArgumentError("the second positional argument must be a field allocator macro.") end
     if length(kwargs_expr) > 1 @ArgumentError("the only allowed keyword argument is eltype.") end
 end
 
@@ -558,6 +814,22 @@ function _allocate(caller::Module; gridsize=nothing, fields=nothing, allocator=n
             elseif (T == :VectorField)  allocation = :($A = @VectorField($gridsize, $allocator, eltype=$eltype))
             elseif (T == :BVectorField) allocation = :($A = @BVectorField($gridsize, $allocator, eltype=$eltype))
             elseif (T == :TensorField)  allocation = :($A = @TensorField($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :Field2B)        allocation = :($A = @Field2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :XField2B)       allocation = :($A = @XField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :YField2B)       allocation = :($A = @YField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :ZField2B)       allocation = :($A = @ZField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :BXField2B)      allocation = :($A = @BXField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :BYField2B)      allocation = :($A = @BYField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :BZField2B)      allocation = :($A = @BZField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :XXField2B)      allocation = :($A = @XXField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :YYField2B)      allocation = :($A = @YYField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :ZZField2B)      allocation = :($A = @ZZField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :XYField2B)      allocation = :($A = @XYField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :XZField2B)      allocation = :($A = @XZField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :YZField2B)      allocation = :($A = @YZField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :VectorField2B)  allocation = :($A = @VectorField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :BVectorField2B) allocation = :($A = @BVectorField2B($gridsize, $allocator, eltype=$eltype))
+            elseif (T == :TensorField2B)  allocation = :($A = @TensorField2B($gridsize, $allocator, eltype=$eltype))
             else @ModuleInternalError("unexpected field type.")
             end
             push!(allocations, allocation)
@@ -616,6 +888,11 @@ function _field(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, siz
     elseif is_same(allocator, :@rand)    arrayalloc = :(ParallelStencil.ParallelKernel.@rand($arraysize..., eltype=$eltype))
     elseif is_same(allocator, :@falses)  arrayalloc = :(ParallelStencil.ParallelKernel.@falses($arraysize..., eltype=$eltype))
     elseif is_same(allocator, :@trues)   arrayalloc = :(ParallelStencil.ParallelKernel.@trues($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@zeros_cpu)  arrayalloc = :(ParallelStencil.ParallelKernel.@zeros_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@ones_cpu)   arrayalloc = :(ParallelStencil.ParallelKernel.@ones_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@rand_cpu)   arrayalloc = :(ParallelStencil.ParallelKernel.@rand_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@falses_cpu) arrayalloc = :(ParallelStencil.ParallelKernel.@falses_cpu($arraysize..., eltype=$eltype))
+    elseif is_same(allocator, :@trues_cpu)  arrayalloc = :(ParallelStencil.ParallelKernel.@trues_cpu($arraysize..., eltype=$eltype))
     else @ModuleInternalError("unexpected allocator macro.")
     end
 
@@ -669,6 +946,25 @@ function _tensorfield(caller::Module, gridsize, allocator=:@zeros; eltype=nothin
                                       (xx = ParallelStencil.ParallelKernel.FieldAllocators.@XXField($gridsize, $allocator, eltype=$eltype),))
 end
 
+## DOUBLE-BUFFERED (2B) ALLOCATOR HELPERS
+function _field2B(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
+    fld_in  = _field(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)
+    fld_out = _field(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)
+    return :(in = $fld_in, out = $fld_out)
+end
+
+function _vectorfield2B(caller::Module, gridsize, allocator=:@zeros; eltype=nothing, sizetemplate=nothing)
+    fld_in  = _vectorfield(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)
+    fld_out = _vectorfield(caller, gridsize, allocator; eltype=eltype, sizetemplate=sizetemplate)
+    return :(in = $fld_in, out = $fld_out)
+end
+
+function _tensorfield2B(caller::Module, gridsize, allocator=:@zeros; eltype=nothing)
+    fld_in  = _tensorfield(caller, gridsize, allocator; eltype=eltype)
+    fld_out = _tensorfield(caller, gridsize, allocator; eltype=eltype)
+    return :(in = $fld_in, out = $fld_out)
+end
+
 function determine_eltype(caller::Module, eltype)
     if isnothing(eltype)
         eltype = get_numbertype(caller)
@@ -688,7 +984,7 @@ end
 
 ## Exports
 
-export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField, @IField, @XXYField, @XYYField
+export @allocate, @Field, @VectorField, @BVectorField, @TensorField, @XField, @BXField, @YField, @BYField, @ZField, @BZField, @XXField, @YYField, @ZZField, @XYField, @XZField, @YZField, @IField, @XXYField, @XYYField, @Field2B, @VectorField2B, @BVectorField2B, @TensorField2B, @XField2B, @BXField2B, @YField2B, @BYField2B, @ZField2B, @BZField2B, @XXField2B, @YYField2B, @ZZField2B, @XYField2B, @XZField2B, @YZField2B
 
 
 end # Module FieldAllocators

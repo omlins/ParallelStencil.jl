@@ -2,7 +2,7 @@ using Test
 using CellArrays, StaticArrays
 import ParallelStencil
 using ParallelStencil.ParallelKernel
-import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
+import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, @get_numbertype, NUMBERTYPE_NONE, SUPPORTED_PACKAGES, PKG_THREADS, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_POLYESTER, PKG_KERNELABSTRACTIONS
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, interpolate, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.FieldAllocators
@@ -1135,5 +1135,137 @@ eval(:(
             @reset_parallel_kernel()
         end;
     end;
-)) end
-end;
+)) end;
+    
+end
+
+# Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules).
+PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
+@static for package in PKG_FOR_XPU_TESTS
+
+eval(:(
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
+        @require !@is_initialized()
+        @init_parallel_kernel($package, Float16, padding=true)
+        @require @is_initialized()
+        (nx, ny, nz) = (3, 4, 5)
+        # Each allocated field must match its host-side `Data.Fields.*` alias under independent parameters (component count and per-component dimensionality, not a single N).
+        @testset "host-side alias" begin
+            @require PKG_KERNELABSTRACTIONS in TEST_PACKAGES || true
+            # 3D: VectorField/BVectorField have 3 components (=N_dim); TensorField has 6 = 3*(3+1)/2 (≠ N_dim).
+            @test typeof(@Field((nx, ny, nz)))       <: Data.Fields.Field{3}
+            @test typeof(@XField((nx, ny, nz)))      <: Data.Fields.XField{3}
+            @test typeof(@YField((nx, ny, nz)))      <: Data.Fields.YField{3}
+            @test typeof(@ZField((nx, ny, nz)))      <: Data.Fields.ZField{3}
+            @test typeof(@BXField((nx, ny, nz)))     <: Data.Fields.BXField{3}
+            @test typeof(@BYField((nx, ny, nz)))     <: Data.Fields.BYField{3}
+            @test typeof(@BZField((nx, ny, nz)))     <: Data.Fields.BZField{3}
+            @test typeof(@XXField((nx, ny, nz)))     <: Data.Fields.XXField{3}
+            @test typeof(@YYField((nx, ny, nz)))     <: Data.Fields.YYField{3}
+            @test typeof(@ZZField((nx, ny, nz)))     <: Data.Fields.ZZField{3}
+            @test typeof(@XYField((nx, ny, nz)))     <: Data.Fields.XYField{3}
+            @test typeof(@XZField((nx, ny, nz)))     <: Data.Fields.XZField{3}
+            @test typeof(@YZField((nx, ny, nz)))     <: Data.Fields.YZField{3}
+            @test typeof(@VectorField((nx, ny, nz))) <: Data.Fields.VectorField{3}
+            @test typeof(@BVectorField((nx, ny, nz)))<: Data.Fields.BVectorField{3}
+            @test typeof(@TensorField((nx, ny, nz))) <: Data.Fields.TensorField{6, 3}
+            # 2D: TensorField has 3 = 2*(2+1)/2 components (≠ N_dim 2).
+            @test typeof(@Field((nx, ny)))       <: Data.Fields.Field{2}
+            @test typeof(@XField((nx, ny)))      <: Data.Fields.XField{2}
+            @test typeof(@YField((nx, ny)))      <: Data.Fields.YField{2}
+            @test typeof(@ZField((nx, ny)))      <: Data.Fields.ZField{2}
+            @test typeof(@BXField((nx, ny)))     <: Data.Fields.BXField{2}
+            @test typeof(@BYField((nx, ny)))     <: Data.Fields.BYField{2}
+            @test typeof(@BZField((nx, ny)))     <: Data.Fields.BZField{2}
+            @test typeof(@XXField((nx, ny)))     <: Data.Fields.XXField{2}
+            @test typeof(@YYField((nx, ny)))     <: Data.Fields.YYField{2}
+            @test typeof(@ZZField((nx, ny)))     <: Data.Fields.ZZField{2}
+            @test typeof(@XYField((nx, ny)))     <: Data.Fields.XYField{2}
+            @test typeof(@XZField((nx, ny)))     <: Data.Fields.XZField{2}
+            @test typeof(@YZField((nx, ny)))     <: Data.Fields.YZField{2}
+            @test typeof(@VectorField((nx, ny))) <: Data.Fields.VectorField{2}
+            @test typeof(@BVectorField((nx, ny)))<: Data.Fields.BVectorField{2}
+            @test typeof(@TensorField((nx, ny))) <: Data.Fields.TensorField{3, 2}
+            # 1D: TensorField has 1 = 1*(1+1)/2 components (≠ N_dim 1).
+            @test typeof(@Field((nx,)))       <: Data.Fields.Field{1}
+            @test typeof(@XField((nx,)))      <: Data.Fields.XField{1}
+            @test typeof(@YField((nx,)))      <: Data.Fields.YField{1}
+            @test typeof(@ZField((nx,)))      <: Data.Fields.ZField{1}
+            @test typeof(@BXField((nx,)))     <: Data.Fields.BXField{1}
+            @test typeof(@BYField((nx,)))     <: Data.Fields.BYField{1}
+            @test typeof(@BZField((nx,)))     <: Data.Fields.BZField{1}
+            @test typeof(@XXField((nx,)))     <: Data.Fields.XXField{1}
+            @test typeof(@YYField((nx,)))     <: Data.Fields.YYField{1}
+            @test typeof(@ZZField((nx,)))     <: Data.Fields.ZZField{1}
+            @test typeof(@XYField((nx,)))     <: Data.Fields.XYField{1}
+            @test typeof(@XZField((nx,)))     <: Data.Fields.XZField{1}
+            @test typeof(@YZField((nx,)))     <: Data.Fields.YZField{1}
+            @test typeof(@VectorField((nx,))) <: Data.Fields.VectorField{1}
+            @test typeof(@BVectorField((nx,)))<: Data.Fields.BVectorField{1}
+            @test typeof(@TensorField((nx,))) <: Data.Fields.TensorField{1, 1}
+        end;
+        # @allocate host-side-alias-matching coverage, mirroring the dominant-loop `@allocate` sub-testsets but adding the host-side-alias assertions (no `@prettystring`; that is covered in the dominant loop).
+        @testset "@allocate" begin
+            @testset "single field" begin
+                # @allocate(gridsize=..., fields=Kind=>Name) binds `Name` itself (no leading LHS).
+                @allocate(gridsize = (nx, ny, nz), fields = Field=>F)
+                @test typeof(F) <: Data.Fields.Field{3}
+            end;
+            @testset "multiple fields - one per type (default allocator and eltype)" begin
+                @allocate(gridsize = (nx, ny, nz),
+                          fields   = (Field        => F,
+                                      XField       => X,
+                                      YField       => Y,
+                                      ZField       => Z,
+                                      BXField      => BX,
+                                      BYField      => BY,
+                                      BZField      => BZ,
+                                      XXField      => XX,
+                                      YYField      => YY,
+                                      ZZField      => ZZ,
+                                      XYField      => XY,
+                                      XZField      => XZ,
+                                      YZField      => YZ,
+                                      VectorField  => V,
+                                      BVectorField => BV,
+                                      TensorField  => T) )
+                @test typeof(F)  <: Data.Fields.Field{3}
+                @test typeof(X)  <: Data.Fields.XField{3}
+                @test typeof(Y)  <: Data.Fields.YField{3}
+                @test typeof(Z)  <: Data.Fields.ZField{3}
+                @test typeof(BX) <: Data.Fields.BXField{3}
+                @test typeof(BY) <: Data.Fields.BYField{3}
+                @test typeof(BZ) <: Data.Fields.BZField{3}
+                @test typeof(XX) <: Data.Fields.XXField{3}
+                @test typeof(YY) <: Data.Fields.YYField{3}
+                @test typeof(ZZ) <: Data.Fields.ZZField{3}
+                @test typeof(XY) <: Data.Fields.XYField{3}
+                @test typeof(XZ) <: Data.Fields.XZField{3}
+                @test typeof(YZ) <: Data.Fields.YZField{3}
+                @test typeof(V)  <: Data.Fields.VectorField{3}
+                @test typeof(BV) <: Data.Fields.BVectorField{3}
+                # TensorField: component count 6 ≠ per-component dimensionality 3 → two separate alias parameters.
+                @test typeof(T)  <: Data.Fields.TensorField{6, 3}
+            end;
+            @testset "multiple fields - multiple per type (custom allocator and eltype)" begin
+                # Includes a 3D TensorField to exercise the separate-parameter-for-component-count case.
+                @allocate(gridsize = (nx, ny, nz),
+                          fields   = (Field        => (F1, F2),
+                                      XField       => X,
+                                      VectorField  => (V1, V2, V3),
+                                      TensorField  => T),
+                          allocator = @rand,
+                          eltype    = Float16)
+                @test typeof(F1) <: Data.Fields.Field{3}
+                @test typeof(F2) <: Data.Fields.Field{3}
+                @test typeof(X)  <: Data.Fields.XField{3}
+                @test typeof(V1) <: Data.Fields.VectorField{3}
+                @test typeof(V2) <: Data.Fields.VectorField{3}
+                @test typeof(V3) <: Data.Fields.VectorField{3}
+                @test typeof(T)  <: Data.Fields.TensorField{6, 3}
+            end;
+        end;
+    end;
+))
+
+end == nothing || true;

@@ -201,7 +201,7 @@ function parallel_kernel(caller::Module, package::Symbol, numbertype::DataType, 
             body = substitute(body, indices_aliases[i], indices[i])
         end
     end
-    if isgpu(package) || isxpu(package) kernel = insert_device_types(caller, kernel) end
+    kernel = insert_device_types(caller, kernel) # NOTE: also for CPU, to keep one code path.
     kernel = adjust_signatures(kernel, package)
     body   = handle_padding(caller, body, padding, indices)
     body   = handle_inverses(body)
@@ -350,7 +350,7 @@ function parallel_call_cpu(ranges::Union{Symbol,Expr}, kernelcall::Expr, async::
             return kernelcall
         end
     else
-        return :(@which $kernelcall)
+        return :(() -> $kernelcall) # NOTE: returning @which $kernelcall would require importing InteractiveUtils.
     end
 end
 

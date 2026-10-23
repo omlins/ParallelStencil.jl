@@ -14,6 +14,9 @@ Declare the `kernel` parallel and containing stencil computations be performed w
 # Optional keyword arguments
 - `inbounds::Bool`: whether to apply `@inbounds` to the kernel. The default is `false` or as set with the `inbounds` keyword argument of [`@init_parallel_stencil`](@ref).
 - `memopt::Bool=false`: whether to perform advanced stencil-specific on-chip memory optimisations. Eligible memory-optimized declarations support two or three parallel indices.
+- `double_buffering_opt::Bool=true`: whether to attempt to apply the automatic double buffering optimization. When `true` and the kernel signature contains double-buffered (`2B`-suffixed) field/array types (e.g. `Pt::Field2B`, `V::BVectorField2B`), the kernel body is rewritten to avoid race conditions when the kernel has been created by fusion of multiple kernels. After each kernel launch, the `in`/`out` buffers of all `2B` arguments are automatically swapped. When `false` or no `2B` fields are present, this is a no-op. See also the `use_old` keyword arguments below and `swap_double_buffers` keyword arguments of `@parallel` kernel calls (farther below).
+- `use_old::Tuple{Vararg{Symbol}}=()`: when set, the listed `2B` fields use the *old* values (`.in`) instead of the freshly-computed on-the-fly values after their on-the-fly definition. This is a numerical optimization that produces a different (cheaper) numerical scheme — the user must explicitly opt in.
+
 !!! note "Advanced optional keyword arguments"
     - `ndims::Integer|Tuple`: the number of dimensions used for the stencil computations in the kernels: 1, 2 or 3 (or a tuple containing any of the previous in order to generate a method for each of the given values - this can only work correctly if the macros used *and loaded* work for any of the chosen values of `ndims`!). A default can be set with the `ndims` keyword argument of [`@init_parallel_stencil`](@ref). The keyword argument `N` becomes mandatory when `ndims` is a tuple in order to dispatch on the number of dimensions (see below).
     - `N::Integer|Tuple`: the value(s) a type parameter `N` in the kernel method signatures must take. The values are typically computed based on `ndims` (set with the corresponding keyword argument of the `@parallel` macro or `@init_parallel_stencil`), which will be substituted in the expression before evaluating it. This enables dispatching on the number of dimensions in the kernel methods (e.g., `@parallel ndims=(1,3) N=ndims function f(A::Data.Array{N}) ... end`). The keyword argument `N` is mandatory if `ndims` is a tuple and must then furthermore be a tuple of the same length as `ndims`.
@@ -64,10 +67,14 @@ Declare the `kernelcall` parallel. The kernel will automatically be called as re
     - `ad_mode=Enzyme.Reverse`: the automatic differentiation mode (see the documentation of Enzyme.jl for more information).
     - `ad_annotations=()`: Enzyme variable annotations for automatic differentiation in the format `(<keyword>=<variable(s)>, <keyword>=<variable(s)>, ...)`, where `<variable(s)>` can be a single variable or a tuple of variables (e.g., `ad_annotations=(Duplicated=B, Active=(a,b))`). Currently supported annotations are: $(keys(AD_SUPPORTED_ANNOTATIONS)).
     - `configcall=kernelcall`: a call to a kernel that is declared parallel, which is used for determining the kernel launch parameters. This keyword is useful, e.g., for generic automatic differentiation using the low-level submodule [`AD`](@ref).
+    - `swap_double_buffers::Bool=true`: whether to automatically swap the `in`/`out` buffers of all double-buffered (`2B`) arguments after the kernel launch. The swap is only performed if the kernel was declared with `2B` fields and `double_buffering_opt=true`; it is suppressed when `launch=false` (compile-only case) or `swap_double_buffers=false`.
     - `backendkwargs...`: keyword arguments to be passed further to CUDA.jl, AMDGPU.jl, Metal.jl or KernelAbstractions.jl (ignored for Threads and Polyester).
 
 !!! note "Performance note"
     Kernel launch parameters are automatically defined with heuristics, where not defined with optional kernel arguments. For CUDA and AMDGPU, `nthreads` is typically set to (32,8,1) and `nblocks` accordingly to ensure that enough threads are launched.
+
+!!! note "Field and data type annotations"
+    The host-side `Data.*` / `TData.*` and `Data.Fields.*` / `TData.Fields.*` types (cf. the generated `Data`/`TData` module docstrings) are intended to be usable as argument type annotations in `@parallel` kernel definitions: the parallel kernel declaration and launch system automatically converts these host-side types to the corresponding `Device` types of the active backend so that the resulting device-side kernel signature dispatches correctly when the kernel is launched with a field allocated by the matching field allocation macro (cf. [`ParallelStencil.FieldAllocators`](@ref)).
 
 See also: [`@init_parallel_stencil`](@ref)
 """
@@ -101,6 +108,9 @@ Declare the `kernel` parallel and generate the given parallel `indices` inside t
 
 !!! note "Memory optimization"
     Two-index memory-optimized declarations use register-only caching in the second dimension. Shared-memory caching belongs only to the 3-D memory-optimized declaration surface, where `loopdim=3` and `useshmemhalos` may be used.
+
+!!! note "Field and data type annotations"
+    The host-side `Data.*` / `TData.*` and `Data.Fields.*` / `TData.Fields.*` types (cf. the generated `Data`/`TData` module docstrings) are intended to be usable as argument type annotations in `@parallel_indices` kernel definitions: the parallel kernel declaration and launch system automatically converts these host-side types to the corresponding `Device` types of the active backend so that the resulting device-side kernel signature dispatches correctly when the kernel is launched with a field allocated by the matching field allocation macro (cf. [`ParallelStencil.FieldAllocators`](@ref)).
 
 See also: [`@init_parallel_stencil`](@ref)
 """
@@ -192,7 +202,7 @@ parallel_async(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}.
 function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Expr}...; package::Symbol=get_package(caller), async::Bool=false)
     if is_kernel(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+        kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :use_old, :optvars, :loopdim, :loopsize, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel <kernel>"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module))
         memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
         check_memopt_supported(memopt, package, "@parallel <kernel>")
         ndims = haskey(kwargs, :ndims) ? kwargs.ndims : get_ndims(caller)
@@ -215,24 +225,76 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
         end
     elseif is_call(args[end])
         posargs, kwargs_expr, kernelarg = split_parallel_args(args)
-        kwargs, backend_kwargs_expr = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations), "@parallel <kernelcall>", true; eval_args=(:memopt,))
+        kwargs, backend_kwargs_expr, ~, kwargs_unknown_dict = extract_kwargs(caller, kwargs_expr, (:memopt, :configcall, :∇, :ad_mode, :ad_annotations, :swap_double_buffers), "@parallel <kernelcall>", true; eval_args=(:memopt, :swap_double_buffers))
         memopt                = haskey(kwargs, :memopt) ? kwargs.memopt : nothing
         if memopt === true check_memopt_supported(true, package, "@parallel <kernelcall>") end
         configcall            = haskey(kwargs, :configcall) ? kwargs.configcall : kernelarg
         configcall_kwarg_expr = :(configcall=$configcall)
         is_ad_highlevel       = haskey(kwargs, :∇)
         if !is_ad_highlevel && (haskey(kwargs, :ad_mode) || haskey(kwargs, :ad_annotations)) @IncoherentArgumentError("incoherent arguments `ad_mode`/`ad_annotations` in @parallel call: AD keywords are only valid if automatic differentiation is triggered with the keyword argument `∇`.") end
+        # Read launch and swap_double_buffers for the double-buffering swap gate. `launch` is an unknown kwarg (forwarded to ParallelKernel via backend_kwargs_expr); read it from kwargs_unknown_dict (default true). `swap_double_buffers` is a known kwarg consumed by ParallelStencil (default true).
+        launch_val            = haskey(kwargs_unknown_dict, :launch) ? kwargs_unknown_dict[:launch] : true
+        swap_double_buffers   = haskey(kwargs, :swap_double_buffers) ? kwargs.swap_double_buffers : true
         if is_ad_highlevel
-            ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+            # Error out if the kernel was double-buffering-transformed (visible in the metadata via double_buffer_args); automatic differentiation is not yet supported in combination with double buffering.
+            metadata_call = create_metadata_call(configcall)
+            md_var = gensym("metadata")
+            ad_call = ParallelKernel.parallel_call_ad(caller, kernelarg, backend_kwargs_expr, async, package, posargs, kwargs)
+            quote
+                local $md_var = $metadata_call
+                if isdefined($md_var, :double_buffer_args) && !isempty($md_var.double_buffer_args)
+                    @ArgumentError("automatic differentiation (∇) is not yet supported in combination with double buffering (the kernel was transformed with the double buffering rewrite pass).")
+                end
+                $ad_call
+            end
         elseif memopt === true
             if (length(posargs) > 1) @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.") end
-            parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+            let
+                md_var = gensym("metadata")
+                db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                launch_call = parallel_call_memopt(caller, posargs..., kernelarg, backend_kwargs_expr, async; kwargs...)
+                if isnothing(db_swap)
+                    launch_call
+                else
+                    quote
+                        local $md_var = $(create_metadata_call(configcall))
+                        $launch_call
+                        $db_swap
+                    end
+                end
+            end
         elseif memopt === false
             if isempty(posargs)
                 ranges = :(ParallelStencil.compute_parallel_ranges(Val(($(create_metadata_call(configcall))).nb_parallel_indices), $(configcall.args[2:end]...)))
-                ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                let
+                    md_var = gensym("metadata")
+                    db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                    launch_call = ParallelKernel.parallel(caller, ranges, backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                    if isnothing(db_swap)
+                        launch_call
+                    else
+                        quote
+                            local $md_var = $(create_metadata_call(configcall))
+                            $launch_call
+                            $db_swap
+                        end
+                    end
+                end
             else
-                ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                let
+                    md_var = gensym("metadata")
+                    db_swap = build_swap_expr(md_var, configcall.args[2:end], launch_val, swap_double_buffers)
+                    launch_call = ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, kernelarg; package=package, async=async)
+                    if isnothing(db_swap)
+                        launch_call
+                    else
+                        quote
+                            local $md_var = $(create_metadata_call(configcall))
+                            $launch_call
+                            $db_swap
+                        end
+                    end
+                end
             end
         else
             metadata_call = create_metadata_call(configcall)
@@ -244,31 +306,67 @@ function parallel(source::LineNumberNode, caller::Module, args::Union{Symbol,Exp
             else
                 ParallelKernel.parallel(caller, posargs..., backend_kwargs_expr..., configcall_kwarg_expr, ordinary_kernelarg; package=package, async=async)
             end
-            if isempty(posargs)
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
-                    else
-                        $ordinary_call
+            # Build the double-buffering swap expression (emitted after the kernel launch). The swap is gated by launch_val && swap_double_buffers at build time, and by isdefined(metadata, :double_buffer_args) at runtime. When disabled, swap_expr is nothing.
+            swap_expr = build_swap_expr(metadata_var, configcall.args[2:end], launch_val, swap_double_buffers)
+            if isnothing(swap_expr)
+                if isempty(posargs)
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
                     end
-                end
-            elseif length(posargs) == 1
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
-                    else
-                        $ordinary_call
+                elseif length(posargs) == 1
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
+                    end
+                else
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            @ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                        else
+                            $ordinary_call
+                        end
                     end
                 end
             else
-                quote
-                    local $metadata_var = $metadata_call
-                    if $metadata_var.memopt
-                        ParallelStencil.@ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
-                    else
-                        $ordinary_call
+                if isempty(posargs)
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
+                    end
+                elseif length(posargs) == 1
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            $(parallel_call_memopt_metadata(caller, metadata_var, posargs[1], kernelarg, backend_kwargs_expr, async; configcall=configcall))
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
+                    end
+                else
+                    quote
+                        local $metadata_var = $metadata_call
+                        if $metadata_var.memopt
+                            ParallelStencil.@ArgumentError("maximum one positional argument (ranges) is allowed in a @parallel memopt=true call.")
+                        else
+                            $ordinary_call
+                        end
+                        $swap_expr
                     end
                 end
             end
@@ -281,7 +379,7 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
     is_parallel_kernel = false
     numbertype = get_numbertype(caller)
     posargs, kwargs_expr, kernelarg = split_parallel_args(args, is_call=false)
-    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :optvars, :loopdim, :loopsize, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :loopdim, :optranges, :useshmemhalos, :optimize_halo_read, :metadata_module))
+    kwargs = extract_kwargs(caller, kwargs_expr, (:ndims, :N, :inbounds, :padding, :memopt, :double_buffering_opt, :optvars, :loopdim, :loopsize, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module, :metadata_function), "@parallel_indices"; eval_args=(:ndims, :inbounds, :padding, :memopt, :double_buffering_opt, :loopdim, :optranges, :optranges_length, :optranges_drop_front, :optranges_drop_by_access_count, :useshmemhalos, :optimize_halo_read, :metadata_module))
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
     check_memopt_supported(memopt, package, "@parallel_indices")
     indices_expr = posargs[1]
@@ -368,15 +466,25 @@ function parallel_indices_splatarg(caller::Module, package::Symbol, ndims::Integ
     return :(@parallel_indices $indices_expr $(kwargs_expr...) $kernel)  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from signature: package::Symbol, numbertype::DataType, )
 end
 
-function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(package), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
+function parallel_indices_memopt(metadata_module::Module, metadata_function::Expr, is_parallel_kernel::Bool, caller::Module, package::Symbol, indices::Union{Symbol,Expr}, kernel::Expr; ndims::Integer=get_ndims(caller), inbounds::Bool=get_inbounds(caller), padding::Bool=get_padding(caller), memopt::Bool=get_memopt(caller), optvars::Union{Expr,Symbol}=Symbol(""), loopdim::Integer=determine_loopdim(indices), loopsize::Integer=compute_loopsize(package), optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}=nothing, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}=nothing, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}=nothing, optimize_halo_read::Bool=true)
     if (!memopt) @ModuleInternalError("parallel_indices_memopt: called with `memopt=false` which should never happen.") end
     if (!isa(indices,Symbol) && !isa(indices.head,Symbol)) @ArgumentError("@parallel_indices: argument 'indices' must be a tuple of indices, a single index or a variable followed by the splat operator representing a tuple of indices (e.g. (ix, iy, iz) or (ix, iy) or ix or I...).") end
     if (!isa(optvars,Symbol) && !isa(optvars.head,Symbol)) @KeywordArgumentError("@parallel_indices: keyword argument 'optvars' must be a tuple of optvars or a single optvar (e.g. (A, B, C) or A ).") end
     context = is_parallel_kernel ? "@parallel <kernel>" : "@parallel_indices <kernel>"
     check_memopt_declaration_args(indices, loopdim, useshmemhalos, context)
+    # Coherence error (parse time): `optranges_drop_by_access_count=true` together with an explicit `optranges_drop_front` (any value) for the same optvar. The former takes precedence over the latter, so setting both is incoherent. Both keywords arrive already evaluated (NamedTuple with dotted-expr symbol keys, or `nothing`). An optvar not present in a keyword NamedTuple uses the corresponding default (resolved later in `memopt`).
+    optvars_syms = ParallelStencil.ParallelKernel.extract_tuple(optvars)
+    optvars_syms = Tuple((isa(s, Symbol) && s === Symbol("")) ? () : dotted_expr_to_symbol(s) for s in optvars_syms)
+    for s in optvars_syms
+        by_count_explicit = !isnothing(optranges_drop_by_access_count) && isa(optranges_drop_by_access_count, NamedTuple) && haskey(optranges_drop_by_access_count, s) && getproperty(optranges_drop_by_access_count, s) === true
+        drop_front_explicit = !isnothing(optranges_drop_front) && isa(optranges_drop_front, NamedTuple) && haskey(optranges_drop_front, s)
+        if by_count_explicit && drop_front_explicit
+            @IncoherentArgumentError("incoherent arguments memopt in $context: `optranges_drop_by_access_count=true` takes precedence over `optranges_drop_front`; do not set both for the same optvar (offending optvar: $s).")
+        end
+    end
     body = get_body(kernel)
     body = remove_return(body)
-    body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read)
+    body = add_memopt(metadata_module, is_parallel_kernel, caller, package, body, indices, optvars, loopdim, loopsize, optranges, optranges_length, optranges_drop_front, optranges_drop_by_access_count, useshmemhalos, optimize_halo_read)
     body = add_return(body, package)
     set_body!(kernel, body)
     indices = extract_tuple(indices)
@@ -389,13 +497,25 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     inbounds = haskey(kwargs, :inbounds) ? kwargs.inbounds : get_inbounds(caller)
     padding  = haskey(kwargs, :padding)  ? kwargs.padding  : get_padding(caller)
     memopt = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
+    # Read the double-buffering opt (per-kernel kwarg or init default) and the 2B argument positions in the kernel signature; both are stored in the metadata module so the launch wrapper knows which arguments to swap and the AD check can detect double-buffered kernels.
+    double_buffering_opt = haskey(kwargs, :double_buffering_opt) ? kwargs.double_buffering_opt : get_double_buffering_opt(caller)
+    kernelargs_for_db = splitarg.(extract_kernel_args(kernel)[1])
+    double_buffer_args = compute_double_buffer_args(kernelargs_for_db)
     if !haskey(kwargs, :metadata_module)
         if memopt
-            store_metadata(metadata_module, caller, ndims)
+            store_metadata(metadata_module, caller, ndims; double_buffer_args=double_buffer_args, double_buffering_opt=double_buffering_opt)
         else
-            store_metadata(metadata_module, caller, ndims; memopt=false)
+            store_metadata(metadata_module, caller, ndims; memopt=false, double_buffer_args=double_buffer_args, double_buffering_opt=double_buffering_opt)
         end
     end
+    # Double-buffering body rewrite: when enabled and 2B fields are present, rewrite the body and return a NEW @parallel expression with double_buffering_opt=false injected (to prevent infinite recursion); normal Julia expansion then applies extract_onthefly_arrays!, handle_padding, memopt, etc. to the rewritten body. No-op (returns nothing) otherwise.
+    db_result = handle_double_buffering!(metadata_module, metadata_function, caller, package, ndims, numbertype, kernel, nothing; kwargs)
+    if !isnothing(db_result)
+        return db_result
+    end
+    # Consume the double-buffering-specific kwargs (double_buffering_opt, use_old) so they do not flow further down the call chain to functions that don't accept them (e.g. parallel_indices_memopt). These kwargs have been consumed by handle_double_buffering! above (and by store_metadata above); they must not be forwarded.
+    remaining_keys = filter(k -> k ∉ (:double_buffering_opt, :use_old), keys(kwargs))
+    kwargs = NamedTuple{remaining_keys}(kwargs[k] for k in remaining_keys)
     indices = get_indices_expr(ndims).args
     indices_dir = get_indices_dir_expr(ndims).args
     body = get_body(kernel)
@@ -419,7 +539,7 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
         create_onthefly_macro.((caller,), onthefly_syms, onthefly_exprs, onthefly_vars, (indices,), (indices_dir,))
     end
     body = handle_padding(caller, body, padding, indices; handle_indexing=false)
-    if isgpu(package) kernel = insert_device_types(caller, kernel) end
+    kernel = insert_device_types(caller, kernel) # NOTE: also for CPU, to keep one code path.
     if !memopt
         kernel = adjust_signatures(kernel, package)
         body   = handle_inverses(body)
@@ -519,8 +639,8 @@ end
 
 ## FUNCTIONS FOR APPLYING OPTIMISATIONS
 
-function add_memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool)
-    memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, useshmemhalos, optimize_halo_read, body; package=package)
+function add_memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, package::Symbol, body::Expr, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}, useshmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool)
+    memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, optranges_length, optranges_drop_front, optranges_drop_by_access_count, useshmemhalos, optimize_halo_read, body; package=package)
 end
 
 
@@ -755,7 +875,7 @@ function create_metadata_call(configcall::Expr)
     return metadata_call
 end
 
-function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing)
+function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing, double_buffer_args::Union{Nothing,Tuple{Vararg{Int}}}=nothing, double_buffering_opt::Union{Nothing,Bool}=nothing)
     nonconst_metadata = get_nonconst_metadata(caller)
     if nonconst_metadata
         if isnothing(memopt)
@@ -781,6 +901,25 @@ function store_metadata(metadata_module::Module, caller::Module, nb_parallel_ind
         end
     end
     @eval(metadata_module, $storeexpr)
+    # Store double_buffering_opt and double_buffer_args (the 2B argument positions) so the launch wrapper knows whether the kernel was double-buffering-transformed and which arguments to swap after launch. Both honor nonconst_metadata (first definition is const); double_buffer_args is only stored when non-empty.
+    db_storeexprs = Expr(:block)
+    if !isnothing(double_buffering_opt)
+        if nonconst_metadata || isdefined(metadata_module, :double_buffering_opt)
+            push!(db_storeexprs.args, :(double_buffering_opt = $double_buffering_opt))
+        else
+            push!(db_storeexprs.args, :(const double_buffering_opt = $double_buffering_opt))
+        end
+    end
+    if !isnothing(double_buffer_args) && !isempty(double_buffer_args)
+        if nonconst_metadata || isdefined(metadata_module, :double_buffer_args)
+            push!(db_storeexprs.args, :(double_buffer_args = $double_buffer_args))
+        else
+            push!(db_storeexprs.args, :(const double_buffer_args = $double_buffer_args))
+        end
+    end
+    if !isempty(db_storeexprs.args)
+        @eval(metadata_module, $db_storeexprs)
+    end
 end
 
 get_kernelid(kernelname, file, line) = Symbol("$(kernelname)_$(file)_$(line)")
@@ -860,6 +999,296 @@ function create_onthefly_macro(caller, m, expr, var, indices, indices_dir)
     @eval(caller, $m_function)
     @eval(caller, $m_macro)
     return
+end
+
+
+## FUNCTIONS TO DEAL WITH DOUBLE BUFFERING
+
+# Extract the leaf type name from a type annotation expression. The annotation can be: a bare Symbol (e.g. :Field2B, :Field), a qualified `.` expression (e.g. :(Data.Fields.Field2B), :(Data.Number)), or a parameterized `curly` expression (e.g. :(Data.Fields.BVectorField2B{3, (:x,:y,:z)})). Returns the leaf Symbol (e.g. :Field2B, :Number), or `nothing` if it cannot be extracted.
+function extract_typename(type_expr::Symbol)
+    return type_expr
+end
+
+function extract_typename(type_expr::Expr)
+    if type_expr.head == :.
+        lastarg = type_expr.args[end]
+        return (lastarg isa QuoteNode) ? lastarg.value : (lastarg isa Symbol) ? lastarg : nothing
+    elseif type_expr.head == :curly
+        return extract_typename(type_expr.args[1])
+    elseif type_expr.head == :(::)
+        # e.g. :(Pt::Field2B) — but splitarg already separates name/type, so this shouldn't occur; handle defensively
+        return extract_typename(type_expr.args[end])
+    else
+        return nothing
+    end
+end
+
+extract_typename(::Any) = nothing
+
+# Check whether a type annotation denotes a double-buffered ("2B") type. A type is 2B if its leaf name ends with the suffix "2B" (e.g. Field2B, BVectorField2B, Array2B, SubArray2B, XField2B, ...). This is purely syntactic (no semantic interpretation of parameters) and matches the FIELDTYPES/ARRAYTYPES entries added for the 2B feature.
+function is_2B_type(type_expr)
+    name = extract_typename(type_expr)
+    return !isnothing(name) && endswith(string(name), "2B")
+end
+
+# Compute the positions (1-based) of double-buffered ("2B") arguments in a kernel signature. `kernelargs` is the result of `splitarg.(extract_kernel_args(kernel)[1])`, where each element is a tuple `(name, type, slack, default)` from MacroTools.splitarg. Returns a tuple of Int positions (e.g. (1, 2) if the 1st and 2nd args are 2B).
+function compute_double_buffer_args(kernelargs)
+    positions = Int[]
+    for (i, ka) in enumerate(kernelargs)
+        type_expr = ka[2]
+        if !isnothing(type_expr) && is_2B_type(type_expr)
+            push!(positions, i)
+        end
+    end
+    return (positions...,)
+end
+
+# Substitute all occurrences of a bare Symbol `A` in `expr` with the replacement `new`. The replacement can be a Symbol (e.g. A_onthefly) or an Expr (e.g. :(A.in)). Only replaces bare Symbol occurrences (not field accesses like A.in which are Expr).
+function substitute_symbol(expr::Symbol, A::Symbol, new)
+    return (expr == A) ? new : expr
+end
+
+function substitute_symbol(expr::Expr, A::Symbol, new)
+    return postwalk(expr) do ex
+        (ex isa Symbol && ex == A) ? new : ex
+    end
+end
+
+substitute_symbol(expr, A::Symbol, new) = expr
+
+# Build the runtime swap expression for double-buffered arguments, emitted after the kernel launch and gated by `launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args)`; for each position in `metadata_var.double_buffer_args` the argument is swapped: `arg = (in=arg.out, out=arg.in)`.
+function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bool, swap_double_buffers::Bool)
+    if !launch_val || !swap_double_buffers
+        return nothing  # swap disabled — no expression to emit
+    end
+    # Generate conditional swaps for each argument position (1-based). Each swap is a direct `if` check (no `let` scope) to avoid soft-scope issues: the swap assignments (e.g. `Pt = (in=Pt.out, out=Pt.in)`) must modify the caller's variables, whether they are global or local. Using a `let` block or `global` keyword would break in local-scope contexts (functions, @testset).
+    conditional_swaps = Expr[]
+    for (i, arg) in enumerate(args)
+        if arg isa Symbol
+            swap = :($arg = (in = $(arg).out, out = $(arg).in))
+            check = :(isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args) && $i in $metadata_var.double_buffer_args)
+            push!(conditional_swaps, :(if $check; $swap; end))
+        end
+    end
+    if isempty(conditional_swaps)
+        return nothing
+    end
+    return quote $(conditional_swaps...) end
+end
+
+# Check if a statement is an array assignment with LHS @all(A) for a given A. @all(A) is a macrocall: Expr(:macrocall, Symbol("@all"), LineNumberNode, A).
+function is_all_assignment_to(statement, A::Symbol)
+    if !is_array_assignment(statement) return false end
+    lhs = statement.args[1]  # the macrocall @m_(...)
+    if lhs.head != :macrocall return false end
+    if lhs.args[1] != Symbol("@all") return false end
+    # @all(A) has args[3] = A (a Symbol); @all(A.x) has args[3] = :(A.x)
+    target = lhs.args[3]
+    if target isa Symbol return target == A end
+    if target isa Expr && target.head == :. return target.args[1] == A end
+    return false
+end
+
+# Extract the field A from a statement's LHS macrocall (e.g. @all(A) → A, @inn(A.x) → A). Returns the Symbol of the field being written to, or nothing if not an array assignment.
+function get_lhs_field(statement)
+    if !is_array_assignment(statement) return nothing end
+    lhs = statement.args[1]
+    if lhs.head != :macrocall return nothing end
+    target = lhs.args[3]
+    if target isa Symbol return target
+    elseif target isa Expr && target.head == :. return target.args[1]
+    elseif target isa Expr && target.head == :ref return target.args[1]
+    end
+    return nothing
+end
+
+# Check if a statement's LHS uses @all (vs @inn/@d_xi/etc which are partial updates).
+function is_all_assignment(statement)
+    if !is_array_assignment(statement) return false end
+    lhs = statement.args[1]
+    return lhs.head == :macrocall && lhs.args[1] == Symbol("@all")
+end
+
+# Rewrite the LHS of a statement: replace the bare field A with the replacement expr. E.g. @inn(A.x) with A→A.out becomes @inn(A.out.x).
+function rewrite_lhs_field(statement, A::Symbol, new)
+    stmt = deepcopy(statement)
+    lhs = stmt.args[1]  # macrocall
+    lhs.args[3] = substitute_symbol(lhs.args[3], A, new)
+    return stmt
+end
+
+# The main double-buffering rewrite pass. When double_buffering_opt=true and the kernel signature contains 2B fields, this rewrites the body (steps 0-3 from the spec) and returns a NEW @parallel expression with double_buffering_opt=false injected (to prevent infinite recursion), use_old consumed, and all other kwargs preserved. The returned expression is returned all the way back to the user code and let normal Julia expansion handle it (no macroexpand call on it). When no 2B fields are present or the opt is false, returns the kernel unchanged (no-op early-return).
+function handle_double_buffering!(metadata_module::Module, metadata_function::Expr, caller::Module, package::Symbol, ndims::Integer, numbertype::DataType, kernel::Expr, posargs; kwargs::NamedTuple)
+    double_buffering_opt = haskey(kwargs, :double_buffering_opt) ? kwargs.double_buffering_opt : get_double_buffering_opt(caller)
+    # Early no-op return when the optimization is disabled.
+    if !double_buffering_opt
+        return nothing
+    end
+    # Compute 2B arg positions and names.
+    kernelargs = splitarg.(extract_kernel_args(kernel)[1])
+    double_buffer_args = compute_double_buffer_args(kernelargs)
+    # Early no-op return when no 2B fields are present.
+    if isempty(double_buffer_args)
+        return nothing
+    end
+    # Collect the 2B field names (Symbols) from the signature.
+    db_fields = Symbol[ kernelargs[i][1] for i in double_buffer_args ]
+    # Read the use_old option (a tuple of field names to use old values for, or nothing).
+    use_old = haskey(kwargs, :use_old) ? kwargs.use_old : ()
+    # use_old may arrive as an unevaluated Expr (e.g. :(Pt,) or :((Pt, V))) since it is not in eval_args (the field names are Symbols, not variables to evaluate). Extract the Symbols; if it's already a Tuple of Symbols, use it directly.
+    if use_old isa Expr && use_old.head == :tuple
+        use_old = Tuple(arg isa QuoteNode ? arg.value : arg for arg in use_old.args)
+    elseif use_old isa Symbol
+        use_old = (use_old,)
+    elseif !isa(use_old, Tuple)
+        use_old = ()
+    end
+    use_old_set = Set(use_old)
+
+    body = get_body(kernel)
+    # NOTE: do NOT call remove_return here — the downstream @parallel expansion will handle the return statement. We only need to read the body statements.
+    statements = get_statements(body)
+
+    # Classify 2B fields: @all-updated vs partial-updated. Also check that no field has more than one @all(A)=... assignment (not allowed: the user must merge multiple updates into a single @all(A)=... statement; for on-the-fly variables, use a different variable for each case).
+    all_updated = Symbol[]
+    partial_updated = Symbol[]
+    for A in db_fields
+        all_count = 0
+        has_partial = false
+        for stmt in statements
+            if is_array_assignment(stmt)
+                fld = get_lhs_field(stmt)
+                if fld == A
+                    if is_all_assignment(stmt)
+                        all_count += 1
+                    else
+                        has_partial = true
+                    end
+                end
+            end
+        end
+        if all_count > 1
+            @ArgumentError("unsupported kernel statements in @parallel kernel definition: multiple @all($A) = ... statements for the same field $A are not allowed in a kernel; merge them into a single @all($A) = ... (or use different variable names for on-the-fly variables).")
+        end
+        if all_count > 0
+            push!(all_updated, A)
+        elseif has_partial
+            push!(partial_updated, A)
+        end
+    end
+
+    # Step 0: For partial-updated 2B fields, check A is not used after the update; rewrite LHS to A.out.
+    for A in partial_updated
+        first_update_idx = 0
+        for (i, stmt) in enumerate(statements)
+            if is_array_assignment(stmt) && get_lhs_field(stmt) == A && !is_all_assignment(stmt)
+                first_update_idx = i
+                break
+            end
+        end
+        # Check A is not used after the update (on the RHS of any subsequent statement).
+        for i in (first_update_idx+1):length(statements)
+            stmt = statements[i]
+            if isa(stmt, Expr) && inexpr_walk(stmt, A) && !(is_array_assignment(stmt) && get_lhs_field(stmt) == A)
+                @ArgumentError("unsupported kernel statements in @parallel kernel definition: the double-buffered field $A is used after its partial update, which is not allowed (it would read a mix of old and new values).")
+            end
+        end
+    end
+
+    # Build the new statements list (step 0 LHS rewrite for partial-updated fields, step 1 on-the-fly creation for @all-updated fields, steps 2-3 RHS rewriting).
+    new_statements = Any[]
+    # Track for each @all-updated field: its onthefly symbol, and whether we've passed its def.
+    onthefly_syms = Dict{Symbol,Symbol}()
+    onthefly_seen = Set{Symbol}()  # fields whose onthefly def has been emitted
+    for A in all_updated
+        onthefly_syms[A] = gensym_world("$(A)_onthefly", caller)
+    end
+    # Helper: build the :(A.in) or :(A.out) expression for a given field Symbol A.
+    make_in(sym::Symbol) = Expr(:., sym, QuoteNode(:in))
+    make_out(sym::Symbol) = Expr(:., sym, QuoteNode(:out))
+
+    for stmt in statements
+        if !is_array_assignment(stmt)
+            push!(new_statements, stmt)
+            continue
+        end
+        fld = get_lhs_field(stmt)
+
+        if fld in all_updated && is_all_assignment(stmt)
+            # Step 1: @all(A) = RHS  →  @all(A_onthefly) = RHS[A→A.in]
+            A = fld
+            onthefly_sym = onthefly_syms[A]
+            new_rhs = substitute_symbol(stmt.args[2], A, make_in(A))
+            # Rewrite @all(A) → @all(A_onthefly) on LHS
+            new_lhs = deepcopy(stmt.args[1])
+            new_lhs.args[3] = onthefly_sym
+            push!(new_statements, Expr(:(=), new_lhs, new_rhs))
+            # Step 2: insert @all(A.out) = @all(A_onthefly) after
+            out_lhs = deepcopy(stmt.args[1])
+            out_lhs.args[3] = make_out(A)
+            out_rhs_lhs = deepcopy(stmt.args[1])  # @all(...)
+            out_rhs_lhs.args[3] = onthefly_sym
+            push!(new_statements, Expr(:(=), out_lhs, out_rhs_lhs))
+            push!(onthefly_seen, A)
+        elseif fld in partial_updated
+            # Step 0: rewrite LHS @inn(A[...]) → @inn(A.out[...])
+            A = fld
+            new_stmt = rewrite_lhs_field(stmt, A, make_out(A))
+            # Step 3b: rewrite RHS A → A.in (for the partial-updated field itself)
+            new_rhs = substitute_symbol(deepcopy(stmt.args[2]), A, make_in(A))
+            # Also rewrite RHS for @all-updated 2B fields (step 3a)
+            for B in all_updated
+                if B in onthefly_seen && !(B in use_old_set)
+                    new_rhs = substitute_symbol(new_rhs, B, onthefly_syms[B])
+                else
+                    new_rhs = substitute_symbol(new_rhs, B, make_in(B))
+                end
+            end
+            new_stmt.args[2] = new_rhs
+            push!(new_statements, new_stmt)
+        else
+            # Non-2B field assignment: rewrite RHS for any 2B fields appearing on RHS.
+            new_rhs = deepcopy(stmt.args[2])
+            for A in all_updated
+                if A in onthefly_seen && !(A in use_old_set)
+                    # Step 3a (non-use_old): after the onthefly def, A → A_onthefly
+                    new_rhs = substitute_symbol(new_rhs, A, onthefly_syms[A])
+                else
+                    # use_old, or before the onthefly def: A → A.in
+                    new_rhs = substitute_symbol(new_rhs, A, make_in(A))
+                end
+            end
+            for A in partial_updated
+                # Step 3b: A → A.in
+                new_rhs = substitute_symbol(new_rhs, A, make_in(A))
+            end
+            new_stmt = deepcopy(stmt)
+            new_stmt.args[2] = new_rhs
+            push!(new_statements, new_stmt)
+        end
+    end
+
+    # Rebuild the kernel with the new body.
+    new_kernel = deepcopy(kernel)
+    set_body!(new_kernel, Expr(:block, new_statements...))
+
+    # Build the kwargs for the returned @parallel expression: inject double_buffering_opt=false, consume use_old, preserve all other kwargs.
+    kwargs_expr = Expr[]
+    for key in keys(kwargs)
+        if key == :double_buffering_opt
+            push!(kwargs_expr, :(double_buffering_opt = false))
+        elseif key == :use_old
+            # consumed — do not forward
+        else
+            push!(kwargs_expr, Expr(:(=), key, getproperty(kwargs, key)))
+        end
+    end
+    # If double_buffering_opt was not in kwargs (it came from the init default), inject it now.
+    if !(:double_buffering_opt in keys(kwargs))
+        push!(kwargs_expr, :(double_buffering_opt = false))
+    end
+
+    return :(ParallelStencil.@parallel $(kwargs_expr...) $new_kernel)
 end
 
 

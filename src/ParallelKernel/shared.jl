@@ -66,8 +66,8 @@ const MODULENAME_TDATA             = :TData
 const MODULENAME_DEVICE            = :Device
 const MODULENAME_FIELDS            = :Fields
 const SCALARTYPES                  = (:Index, :Number, :IndexTuple, :NumberTuple, :IndexCollection, :NumberCollection, :NamedIndexTuple, :NamedNumberTuple)
-const ARRAYTYPES                   = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection)
-const FIELDTYPES                   = (:Field, :XField, :YField, :ZField, :BXField, :BYField, :BZField, :XXField, :YYField, :ZZField, :XYField, :XZField, :YZField, :VectorField, :BVectorField, :TensorField)
+const ARRAYTYPES                   = (:Array, :Cell, :CellArray, :ArrayTuple, :CellTuple, :CellArrayTuple, :NamedArrayTuple, :NamedCellTuple, :NamedCellArrayTuple, :ArrayCollection, :CellCollection, :CellArrayCollection, :Array2B, :SubArray2B, :AbstractArray2B)
+const FIELDTYPES                   = (:Field, :XField, :YField, :ZField, :BXField, :BYField, :BZField, :XXField, :YYField, :ZZField, :XYField, :XZField, :YZField, :VectorField, :BVectorField, :TensorField, :Field2B, :XField2B, :YField2B, :ZField2B, :BXField2B, :BYField2B, :BZField2B, :XXField2B, :YYField2B, :ZZField2B, :XYField2B, :XZField2B, :YZField2B, :VectorField2B, :BVectorField2B, :TensorField2B)
 const VECTORNAMES                  = (:x, :y, :z)
 const TENSORNAMES                  = (:xx, :yy, :zz, :xy, :xz, :yz)
 const AD_MODE_DEFAULT              = :(Enzyme.Reverse)
@@ -275,9 +275,11 @@ function insert_device_types(caller::Module, kernel::Expr)
     for T in FIELDTYPES
         if !isnothing(eval_try(caller, :(Data.Fields.Device)))
             kernel = substitute(kernel, :(Data.Fields.$T), :(Data.Fields.Device.$T))
+            kernel = substitute(kernel, :(Fields.$T), :(Data.Fields.Device.$T))
         end
         if !isnothing(eval_try(caller, :(TData.Fields.Device)))
             kernel = substitute(kernel, :(TData.Fields.$T), :(TData.Fields.Device.$T))
+            kernel = substitute(kernel, :(Fields.$T), :(TData.Fields.Device.$T))
         end
         Device_val = eval_try(caller, :(Fields.Device))
         if !isnothing(Device_val) && Device_val in (eval_try(caller, :(Data.Fields.Device)), eval_try(caller, :(TData.Fields.Device)))
@@ -294,9 +296,18 @@ function insert_device_types(caller::Module, kernel::Expr)
             T_d = (!isnothing(T_val) && T_val == eval_try(caller, :(TData.Fields.$T))) ? :(TData.Fields.Device.$T) : T_d
         end
         if !isnothing(T_d) kernel = substitute_in_kernel(kernel, T, T_d, signature_only=true) end
+        # Also handle unqualified aliases brought into scope via `using .Data.Fields`.
+        if isnothing(T_d) && !isnothing(eval_try(caller, :(Data.Fields.Device)))
+            kernel = substitute_in_kernel(kernel, T, :(Data.Fields.Device.$T), signature_only=true)
+        elseif isnothing(T_d) && !isnothing(eval_try(caller, :(TData.Fields.Device)))
+            kernel = substitute_in_kernel(kernel, T, :(TData.Fields.Device.$T), signature_only=true)
+        end
     end
     return kernel
 end
+
+strip_parent(A::Expr) = (A.head == :. && length(A.args) == 2 && A.args[2] isa QuoteNode && A.args[2].value == :parent) ? strip_parent(A.args[1]) : A
+strip_parent(A)       = A
 
 function find_vars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N; readonly=false)
     vars         = Dict()
@@ -304,11 +315,13 @@ function find_vars(body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N; 
     postwalk(body) do ex
         if is_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a indices array access could not be pattern matched.")
+            A = strip_parent(A)
             if haskey(vars, A) vars[A] += 1
             else               vars[A]  = 1
             end
         end
         if @capture(ex, (A_[indices_expr__] = rhs_) | (A_[indices_expr__] .= rhs_)) && is_access(:($A[$(indices_expr...)]), indices...)
+            A = strip_parent(A)
             if haskey(writevars, A) writevars[A] += 1
             else                    writevars[A]  = 1
             end
@@ -394,7 +407,7 @@ function extract_kwargs(caller::Module, kwargs_expr, valid_kwargs, macroname, ha
     kwargs = split_kwargs(kwargs_expr, separator=separator, keyword_type=keyword_type)
     if (!has_unknown_kwargs) validate_kwargkeys(kwargs, valid_kwargs, macroname) end
     for k in keys(kwargs)
-        if (k in eval_args) kwargs[k] = eval_arg(caller, kwargs[k]) end
+        if (k in eval_args) kwargs[k] = eval_arg(caller, normalize_dotted_namedtuple_fields(kwargs[k])) end
     end
     kwargs_known        = NamedTuple(filter(x -> x.first ∈ valid_kwargs, kwargs))
     kwargs_unknown      = (keyword_type == Symbol) ? NamedTuple(filter(x -> x.first ∉ valid_kwargs, kwargs)) : NamedTuple()
@@ -526,13 +539,70 @@ inexpr_walk(expr,         e::Expr)                          = false
 Base.unquoted(s::Symbol) = s
 Base.unquoted(b::Bool)   = b
 
+function dotted_expr_to_symbol(ex::Union{Symbol,Expr})
+    if isa(ex, Symbol) return ex end
+    if @capture(ex, obj_.field_) && (isa(obj, Symbol) || isa(obj, Expr)) && isa(field, Symbol)
+        return Symbol(string(obj), ".", string(field))
+    end
+    return ex
+end
+
+function normalize_dotted_namedtuple_fields(expr)
+    if isa(expr, Expr) && expr.head == :tuple && any(isa(a, Expr) && a.head == :(=) for a in expr.args)
+        kv = Tuple{Any,Any,Any}[]
+        has_dotted = false
+        for arg in expr.args
+            if isa(arg, Expr) && arg.head == :(=) && length(arg.args) == 2
+                lhs_orig = arg.args[1]
+                lhs_sym = dotted_expr_to_symbol(lhs_orig)
+                is_dotted = (lhs_sym !== lhs_orig)
+                has_dotted = has_dotted || is_dotted
+                rhs = normalize_dotted_namedtuple_fields(arg.args[2])
+                key_expr_dotted = :(Symbol($(string(lhs_sym))))
+                key_expr_plain  = lhs_sym
+                push!(kv, (key_expr_plain, key_expr_dotted, rhs))
+            else
+                push!(kv, (nothing, nothing, normalize_dotted_namedtuple_fields(arg)))
+            end
+        end
+        if has_dotted
+            keys_exprs = Any[]
+            vals_exprs = Any[]
+            for (k_plain, k_dotted, v) in kv
+                if isnothing(k_plain)
+                    push!(vals_exprs, v)
+                else
+                    push!(keys_exprs, k_dotted)
+                    push!(vals_exprs, v)
+                end
+            end
+            keys_tuple = Expr(:tuple, keys_exprs...)
+            vals_tuple = Expr(:tuple, vals_exprs...)
+            return :(NamedTuple{$keys_tuple}($vals_tuple))
+        else
+            return Expr(:tuple, [Expr(:(=), k_plain, v) for (k_plain, k_dotted, v) in kv if !isnothing(k_plain)]...)
+        end
+    elseif isa(expr, Expr)
+        return Expr(expr.head, normalize_dotted_namedtuple_fields.(expr.args)...)
+    else
+        return expr
+    end
+end
+
+function extract_tuple_arg(x)
+    if isa(x, Symbol)        return x
+    elseif isa(x, QuoteNode) return x.value
+    else                     return x
+    end
+end
+
 function extract_tuple(t::Union{Expr,Symbol}; nested=false) # NOTE: this could return a tuple, but would require to change all small arrays to tuples...
     if isa(t, Expr) && t.head == :tuple
         if (nested) return t.args
-        else        return Base.unquoted.(t.args)
+        else        return extract_tuple_arg.(t.args)
         end
     else 
-        return [t]
+        return [extract_tuple_arg(t)]
     end
 end
 
@@ -550,8 +620,11 @@ check_padding(padding)          = ( if !isa(padding, Bool) @ArgumentError("$ERRM
 
 ## FUNCTIONS AND MACROS FOR UNIT TESTS
 
-prettystring(expr::Expr)   = string(remove_linenumbernodes!(expr))
-gorgeousstring(expr::Expr) = string(simplify_varnames!(remove_linenumbernodes!(expr)))
+# Reserved words (e.g. `end`) are printed escaped (e.g. as `var"end"`) from Julia 1.13 on, but not before; unescape them to render identically on all Julia versions.
+unescapereserved(s::AbstractString) = replace(s, r"var\"(end|begin)\"" => s"\1")
+
+prettystring(expr::Expr)   = unescapereserved(string(remove_linenumbernodes!(expr)))
+gorgeousstring(expr::Expr) = unescapereserved(string(simplify_varnames!(remove_linenumbernodes!(expr))))
 longnameof(f)              = "$(parentmodule(f)).$(nameof(f))"
 symbols(eval_mod::Union{Symbol,Module}, mod::Union{Symbol,Expr,Module}; imported=false, all=true) = @eval(eval_mod, names($mod, all=$all, imported=$imported))
 macro symbols(eval_mod, mod, imported=false, all=true) symbols(eval_mod, mod; all=all, imported=imported) end
@@ -566,8 +639,8 @@ macro prettyexpand(n::Integer, expr)   return QuoteNode(remove_linenumbernodes!(
 macro gorgeousexpand(n::Integer, expr) return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpandn(__module__, expr, n)))) end
 macro prettyexpand(expr)               return QuoteNode(remove_linenumbernodes!(macroexpand(__module__, expr; recursive=true))) end
 macro gorgeousexpand(expr)             return QuoteNode(simplify_varnames!(remove_linenumbernodes!(macroexpand(__module__, expr; recursive=true)))) end
-macro prettystring(args...)            return esc(:(string(ParallelStencil.ParallelKernel.@prettyexpand($(args...))))) end
-macro gorgeousstring(args...)          return esc(:(string(ParallelStencil.ParallelKernel.@gorgeousexpand($(args...))))) end
+macro prettystring(args...)            return esc(:(ParallelStencil.ParallelKernel.unescapereserved(string(ParallelStencil.ParallelKernel.@prettyexpand($(args...)))))) end
+macro gorgeousstring(args...)          return esc(:(ParallelStencil.ParallelKernel.unescapereserved(string(ParallelStencil.ParallelKernel.@gorgeousexpand($(args...)))))) end
 macro interpolate(args...)             esc(interpolate(args...)) end
 
 function macroexpandn(m::Module, expr, n::Integer)
