@@ -85,7 +85,7 @@ end
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_revise.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
 
 const STDERR_SUPPRESSION_RULES = (
-    (name="metadata method overwrite warnings", start=r"^WARNING: Method definition .*###META.* overwritten.*$", stop=nothing),
+    (name="metadata method overwrite warnings", start=r"^WARNING: Method definition .*\(ParallelStencil\.KernelMetadata, .* overwritten.*$", stop=nothing),
     (name="[T]Data module replacement warnings", start=r"^WARNING: replacing module [T]?Data\.$", stop=nothing),
     (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on (macOS|Apple Silicon)$", stop=r"^└ @ Metal .*$"),
 )

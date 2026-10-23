@@ -1416,6 +1416,22 @@ eval(:(
                 @test metadata.nb_parallel_indices == 3
                 @test all(Array(A) .== 0)
             end;
+            @testset "kernel not called by its name (issue #234)" begin
+                @parallel_indices (ix, iy, iz) function metadata_indirect_probe!(A, B)
+                    A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
+                    return
+                end
+                A = @zeros(4, 5, 6)
+                B = @ones(4, 5, 6)
+                s = (kernel=metadata_indirect_probe!, A=A, B=B)
+                launch!(kernel, A, B) = @parallel kernel(A, B)
+                @test (@metadata s.kernel(A, B)).nb_parallel_indices == 3
+                @parallel s.kernel(s.A, s.B)
+                @test all(Array(A) .== 2.0)
+                A .= 0
+                launch!(metadata_indirect_probe!, A, B)
+                @test all(Array(A) .== 2.0)
+            end;
             @static if $package != $PKG_KERNELABSTRACTIONS
                 @testset "memopt" begin
                     @parallel_indices (ix, iy, iz) memopt=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,0:0),) function metadata_memopt_probe!(A, B, D)
