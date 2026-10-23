@@ -25,6 +25,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
     env:
+      PS_TEST_AD: ${{ matrix.version == 'pre' && '0' || '1' }} # No Enzyme (automatic differentiation tests) on the upcoming Julia release: its GPUCompiler/LLVM dependencies typically lag behind.
       PS_TEST_BACKEND: ${{ startsWith(matrix.os, 'macOS') && 'Metal' || '' }} # The macOS runners (Apple silicon) have a functional Metal GPU: the test runner installs Metal into the test environment and the Metal tests must run.
     strategy:
       fail-fast: false

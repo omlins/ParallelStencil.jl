@@ -6,8 +6,10 @@
 # controls the test run:
 #   PS_TEST_BACKEND: GPU backend to test ("CUDA", "AMDGPU" or "Metal"): its package is installed into the test environment if it is not already,
 #                    and the test run fails instead of skipping the tests of this backend if it is not functional.
-# The GPU packages are not dependencies of the test environment (test/Project.toml), as resolving them all together holds each of them back to
-# an old version; the one to test is installed into the (temporary) test environment by this file (see the Testing page of the documentation).
+#   PS_TEST_AD:      set to "0" to not install Enzyme into the test environment and skip the tests of automatic differentiation (default: "1").
+# The GPU packages and Enzyme are not dependencies of the test environment (test/Project.toml), as resolving the GPU packages all together holds
+# each of them back to an old version and Enzyme typically lags behind new Julia releases; this file installs them into the (temporary) test
+# environment as requested (see the Testing page of the documentation).
 
 const PREIMPORT_STDERR_SUPPRESSION_RULES = (
     (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on (macOS|Apple Silicon)$", stop=r"^└ @ Metal .*$"),
@@ -61,10 +63,13 @@ backend = get(ENV, "PS_TEST_BACKEND", "")
 if !(backend in ["", string(PKG_CUDA), string(PKG_AMDGPU), string(PKG_METAL)])
     error("PS_TEST_BACKEND: invalid value ($backend). Valid values are: $PKG_CUDA, $PKG_AMDGPU, $PKG_METAL or empty.")
 end
-if (!isempty(backend) && !is_installed(Symbol(backend)))
+test_ad  = get(ENV, "PS_TEST_AD", "1") != "0"
+packages = String[]
+if (!isempty(backend) && !is_installed(Symbol(backend))) append!(packages, (backend == string(PKG_CUDA)) ? ["CUDA", "CUDA_Runtime_jll"] : [backend]) end # NOTE: CUDA_Runtime_jll must be a direct dependency of the test environment for a local CUDA runtime preference (e.g. of an HPC system) to apply.
+if (test_ad && !is_installed(:Enzyme)) push!(packages, "Enzyme") end
+if !isempty(packages)
     import Pkg
-    packages = (backend == string(PKG_CUDA)) ? ["CUDA", "CUDA_Runtime_jll"] : [backend] # NOTE: CUDA_Runtime_jll must be a direct dependency of the test environment for a local CUDA runtime preference (e.g. of an HPC system) to apply.
-    printstyled("Installing $(join(packages, ", ")) into the test environment (PS_TEST_BACKEND=$backend)\n"; bold=true, color=:white)
+    printstyled("Installing $(join(packages, ", ")) into the test environment (PS_TEST_BACKEND=$backend, PS_TEST_AD=$(test_ad ? 1 : 0))\n"; bold=true, color=:white)
     withenv("JULIA_PKG_PRECOMPILE_AUTO" => "0") do # NOTE: the automatic precompilation after Pkg.add fails with "Unknown package" for indirect dependencies whose version changed (e.g. GPUCompiler when adding AMDGPU), as it identifies them by name in the test environment; the environment is precompiled explicitly instead.
         Pkg.add(packages)
     end
