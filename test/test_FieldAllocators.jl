@@ -4,27 +4,7 @@ import ParallelStencil: @reset_parallel_stencil, @is_initialized, SUPPORTED_PACK
 import ParallelStencil: @require
 using ParallelStencil.Exceptions
 using ParallelStencil.FieldAllocators
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 
 
 @static for package in TEST_PACKAGES
