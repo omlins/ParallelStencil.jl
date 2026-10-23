@@ -17,6 +17,8 @@ for package in (PKG_CUDA, PKG_AMDGPU, PKG_METAL)
     end
 end
 import KernelAbstractions, Polyester
+const TEST_AD = is_installed(:Enzyme) # Whether the tests of automatic differentiation are run (Enzyme is installed by the test runner unless PS_TEST_AD=0).
+@static if TEST_AD import Enzyme end
 
 TEST_PACKAGES = copy(SUPPORTED_PACKAGES)
 if (PKG_CUDA               in TEST_PACKAGES && !(is_installed(PKG_CUDA)   && CUDA.functional()))        filter!(x->x≠PKG_CUDA,               TEST_PACKAGES) end
