@@ -48,6 +48,6 @@ The test environment of `Pkg.test` is temporary, so the installation is repeated
 
   For pull requests by other contributors, a maintainer starts the pipelines by commenting `cscs-ci run`.
 
-  Each job sets `PS_TEST_BACKEND` to the GPU backend it tests (`CUDA` on Daint, `AMDGPU` on Beverin and `Metal` on the macOS runners of GitHub Actions); the Linux jobs of GitHub Actions test the CPU backends only.
+  Each job sets `PS_TEST_BACKEND` to the GPU backend it tests (`CUDA` on Daint, `AMDGPU` on Beverin and `Metal` on the macOS runners of GitHub Actions); the Linux jobs of GitHub Actions test the CPU backends only. The newest KernelAbstractions (0.10) and AMDGPU (2.9) require LLVM.jl 10, which Enzyme does not support yet: one Linux job and the MI300 job run without Enzyme (`PS_TEST_AD=0`) to test them, the other jobs test with Enzyme (KernelAbstractions 0.9).
 
 Coverage of all jobs is uploaded to [Codecov](https://app.codecov.io/gh/omlins/ParallelStencil.jl) (flags `cpu`, `gh200`, `mi250` and `mi300`).
