@@ -1858,11 +1858,12 @@ end
 # Optional single-init-once / no-reset "xPU" second block (requires runtime-reachable Data/TData submodules). The macro-expansion + runtime-launch halves of the Field type use verification cannot be exercised in the dominant reset-driven loop on GPU backends after the first `@reset_parallel_stencil`, so they are merged here. Each runtime launch follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom; VectorField/BVectorField use the shared single parameter (components == per-component dim) and TensorField uses separate parameters (components = N*(N+1)/2 vs per-component dim = N).
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
     @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_stencil($package, Float64, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
+        @init_parallel_stencil($package, $FloatDefault, 3, padding=true) #NOTE: padding=true is intentionally set here to test this code path, whereas in ParallelKernel/test_parallel.jl it is set to false to test that code path (we can test only one path per file... - so this is a pragmatic choice). It must by no means be changed to padding=false here!
         @require @is_initialized()
         using .Data.Fields
         (nx, ny, nz) = (3, 4, 5)
@@ -1989,7 +1990,7 @@ eval(:(
             end
             V_B_tmpl = @VectorField((nx, ny, nz))
             V_B_cpu  = NamedTuple{keys(V_B_tmpl)}(map(values(V_B_tmpl)) do comp
-                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                parent_cpu = Array{$FloatDefault}(undef, size(comp.parent))
                 Base.SubArray(parent_cpu, comp.indices)
             end)
             for ci in (:x, :y, :z)
@@ -2017,7 +2018,7 @@ eval(:(
             end
             BV_B_tmpl = @BVectorField((nx, ny, nz))
             BV_B_cpu  = NamedTuple{keys(BV_B_tmpl)}(map(values(BV_B_tmpl)) do comp
-                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                parent_cpu = Array{$FloatDefault}(undef, size(comp.parent))
                 Base.SubArray(parent_cpu, comp.indices)
             end)
             for ci in (:x, :y, :z)
@@ -2048,7 +2049,7 @@ eval(:(
             end
             T_B_tmpl = @TensorField((nx, ny, nz))
             T_B_cpu  = NamedTuple{keys(T_B_tmpl)}(map(values(T_B_tmpl)) do comp
-                parent_cpu = Array{Float64}(undef, size(comp.parent))
+                parent_cpu = Array{$FloatDefault}(undef, size(comp.parent))
                 Base.SubArray(parent_cpu, comp.indices)
             end)
             for ci in (:xx, :yy, :zz, :xy, :xz, :yz)
