@@ -612,11 +612,12 @@ end
 # Host-to-device field-type conversion cannot be exercised in the dominant loop on GPU backends after the first `@reset_parallel_kernel`, so the macro-expansion and runtime-launch halves are merged here. Each sub-testset follows the established `@parallel_indices (1D/2D/3D) → @parallel <kernel>; @test all(Array(...) .== ...)` idiom.
 PKG_FOR_XPU_TESTS = (PKG_CUDA in TEST_PACKAGES) ? [PKG_CUDA] : (PKG_AMDGPU in TEST_PACKAGES) ? [PKG_AMDGPU] : (PKG_METAL in TEST_PACKAGES) ? [PKG_METAL] : (PKG_THREADS in TEST_PACKAGES) ? [PKG_THREADS] : []
 @static for package in PKG_FOR_XPU_TESTS
+    FloatDefault = (package == PKG_METAL) ? Float32 : Float64 # Metal does not support Float64
 
 eval(:(
-    @testset "$(basename(@__FILE__)) (package: Threads - xPU)" begin
+    @testset "$(basename(@__FILE__)) (package: $(nameof($package)) - xPU)" begin
         @require !@is_initialized()
-        @init_parallel_kernel($package, Float64, padding=false)
+        @init_parallel_kernel($package, $FloatDefault, padding=false)
         @require @is_initialized()
         # `using .Data.Fields` brings in both the `Fields` module name and the leaf alias names.
         using .Data.Fields
