@@ -8,30 +8,10 @@ import ParallelStencil.ParallelKernel: checkargs_CellType, _CellType
 using ParallelStencil.ParallelKernel.FieldAllocators
 import ParallelStencil.ParallelKernel.FieldAllocators: checksargs_field_macros, checkargs_allocate
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-    @define_CuCellArray
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-    @define_ROCCellArray
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-    @define_MtlCellArray
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
+@static if (PKG_CUDA   in TEST_PACKAGES) @define_CuCellArray  end # NOTE: @static, as the macros import the GPU package at expansion time.
+@static if (PKG_AMDGPU in TEST_PACKAGES) @define_ROCCellArray end
+@static if (PKG_METAL  in TEST_PACKAGES) @define_MtlCellArray end
 const DATA_INDEX = ParallelStencil.INT_THREADS # TODO: using Data.Index does not work in combination with @reset_parallel_kernel, because the macros from module Test alternate the order of evaluation, resulting in the Data module being replaced with an empty module before Data.Index is evaluated. If at some point the indexing varies depending on the used package, then something more sophisticated is needed here (e.g., wrapping the test for each package in a module and using then Data.Index everywhere).
 kernelabstractions_valid_symbols() = Tuple(filter(!isnothing, (
     :cpu,
@@ -309,10 +289,10 @@ eval(:(
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4))                            == CellArrays.fill!(ROCCellArray{T_Float16}(undef,2,3), T_Float16(ones((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4)))                    == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4)))                 == typeof(ROCCellArray{T_Float16,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:AMDGPU.ROCArray}
+                            @test @rand(2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4)) isa CellArray{T_Float16,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             @test @zeros(2,3, celldims=(3,4), eltype=DATA_INDEX)        == CellArrays.fill!(ROCCellArray{T_Index}(undef,2,3), T_Index(zeros((3,4))))
@@ -432,8 +412,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Index)         == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Index}(undef,2,3), SymmetricTensor2D_Index(zeros(3)))
                             AMDGPU.allowscalar(false)
                         elseif symbol == :gpu_metal
@@ -593,8 +573,8 @@ eval(:(
                             AMDGPU.allowscalar(true)
                             @test @zeros(2,3, celldims=(3,4), eltype=Float32)           == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(zeros((3,4))))
                             @test @ones(2,3, celldims=(3,4), eltype=Float32)            == CellArrays.fill!(ROCCellArray{T_Float32}(undef,2,3), T_Float32(ones((3,4))))
-                            @test typeof(@rand(2,3, celldims=(3,4), eltype=Float64))    == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celldims=(3,4), eltype=Float64)) == typeof(ROCCellArray{T_Float64,0}(undef,2,3))
+                            @test @rand(2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celldims=(3,4), eltype=Float64) isa CellArray{T_Float64,2,1,<:AMDGPU.ROCArray}
                             @test @falses(2,3, celldims=(3,4))                          == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), falses((3,4)))
                             @test @trues(2,3, celldims=(3,4))                           == CellArrays.fill!(ROCCellArray{T_Bool}(undef,2,3), trues((3,4)))
                             AMDGPU.allowscalar(false)
@@ -691,8 +671,8 @@ eval(:(
                             @test @zeros(2,3, celltype=SymmetricTensor2D_T{Float64})    == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_T{Float64}}(undef,2,3), SymmetricTensor2D_T{Float64}(zeros(3)))
                             @test @zeros(2,3, celltype=SymmetricTensor2D_Float32)       == CellArrays.fill!(ROCCellArray{SymmetricTensor2D_Float32}(undef,2,3), SymmetricTensor2D_Float32(zeros(3)))
                             @test @ones(2,3, celltype=SymmetricTensor2D)                == CellArrays.fill!(ROCCellArray{SymmetricTensor2D}(undef,2,3), SymmetricTensor2D(ones(3)))
-                            @test typeof(@rand(2,3, celltype=SymmetricTensor2D))        == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
-                            @test typeof(@fill(9, 2,3, celltype=SymmetricTensor2D))     == typeof(ROCCellArray{SymmetricTensor2D,0}(undef,2,3))
+                            @test @rand(2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
+                            @test @fill(9, 2,3, celltype=SymmetricTensor2D) isa CellArray{SymmetricTensor2D,2,1,<:AMDGPU.ROCArray}
                             AMDGPU.allowscalar(false)
                         elseif symbol == :gpu_metal
                             @require PKG_METAL in TEST_PACKAGES

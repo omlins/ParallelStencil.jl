@@ -1,34 +1,13 @@
 using Test
 import ParallelStencil
-using Enzyme
 using ParallelStencil.ParallelKernel
 import ParallelStencil.ParallelKernel.AD
 import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_THREADS, PKG_POLYESTER, PKG_KERNELABSTRACTIONS, INDICES, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import ParallelStencil.ParallelKernel: @require, @prettystring, @gorgeousstring, @isgpu, @iscpu, interpolate, @select_hardware, @current_hardware, handle
 import ParallelStencil.ParallelKernel: checkargs_parallel, checkargs_parallel_indices, parallel_indices, maxsize, compute_nthreads, NTHREADS_X_MAX_AMDGPU, NTHREADS_MAX
 using ParallelStencil.ParallelKernel.Exceptions
-using ParallelStencil.ParallelKernel.FieldAllocators
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
+@static if TEST_AD using Enzyme end # Enzyme is installed by the test runner unless PS_TEST_AD=0 (see test/packages.jl).
 
 macro compute(A)              esc(:($(INDICES[1]) + ($(INDICES[2])-1)*size($A,1))) end
 macro compute_with_aliases(A) esc(:(ix            + (iz           -1)*size($A,1))) end
@@ -258,7 +237,9 @@ eval(:(
                     end
                 end;
                 @testset "ad numerical" begin
-                    @static if $package == $PKG_KERNELABSTRACTIONS
+                    @static if !TEST_AD
+                        @test_skip "Enzyme is not installed in the test environment (PS_TEST_AD=0)."
+                    elseif $package == $PKG_KERNELABSTRACTIONS
                         @test_skip "KernelAbstractions AD numerical runtime execution is currently unstable in Enzyme integration; only expansion-level AD mapping is validated here."
                     elseif $package == $PKG_THREADS && VERSION >= v"1.13"
                         @test_skip "Enzyme segfaults on Julia 1.13 when differentiating code containing Threads.@threads (https://github.com/EnzymeAD/Enzyme.jl/issues/3877)."

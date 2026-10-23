@@ -4,7 +4,12 @@
 # (e.g. "test_parallel.jl", matching all files of this name) or by path relative to the test folder (e.g. "ParallelKernel/test_parallel.jl").
 # The option "--stop-on-fail" stops the test run at the first test file with failed or errored tests. The following environment variable
 # controls the test run:
-#   PS_TEST_BACKEND: GPU backend that must be functional ("CUDA", "AMDGPU" or "Metal"); if it is not, the test run fails instead of skipping the tests of this backend.
+#   PS_TEST_BACKEND: GPU backend to test ("CUDA", "AMDGPU" or "Metal"): its package is installed into the test environment if it is not already,
+#                    and the test run fails instead of skipping the tests of this backend if it is not functional.
+#   PS_TEST_AD:      set to "0" to not install Enzyme into the test environment and skip the tests of automatic differentiation (default: "1").
+# The GPU packages and Enzyme are not dependencies of the test environment (test/Project.toml), as resolving the GPU packages all together holds
+# each of them back to an old version and Enzyme typically lags behind new Julia releases; this file installs them into the (temporary) test
+# environment as requested (see the Testing page of the documentation).
 
 const PREIMPORT_STDERR_SUPPRESSION_RULES = (
     (name="Metal OS support warnings", start=r"^┌ Error: Metal\.jl is only supported on (macOS|Apple Silicon)$", stop=r"^└ @ Metal .*$"),
@@ -52,9 +57,29 @@ end
 
 import ParallelStencil # Precompile it.
 import ParallelStencil: SUPPORTED_PACKAGES, PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS
-@static if (PKG_CUDA in SUPPORTED_PACKAGES) import CUDA end
-@static if (PKG_AMDGPU in SUPPORTED_PACKAGES) import AMDGPU end
-@static if (PKG_METAL in SUPPORTED_PACKAGES) import_with_filtered_stderr(:Metal) end
+is_installed(package::Symbol) = !isnothing(Base.find_package(string(package)))
+
+backend = get(ENV, "PS_TEST_BACKEND", "")
+if !(backend in ["", string(PKG_CUDA), string(PKG_AMDGPU), string(PKG_METAL)])
+    error("PS_TEST_BACKEND: invalid value ($backend). Valid values are: $PKG_CUDA, $PKG_AMDGPU, $PKG_METAL or empty.")
+end
+test_ad  = get(ENV, "PS_TEST_AD", "1") != "0"
+packages = String[]
+if (!isempty(backend) && !is_installed(Symbol(backend))) append!(packages, (backend == string(PKG_CUDA)) ? ["CUDA", "CUDA_Runtime_jll"] : [backend]) end # NOTE: CUDA_Runtime_jll must be a direct dependency of the test environment for a local CUDA runtime preference (e.g. of an HPC system) to apply.
+if (test_ad && !is_installed(:Enzyme)) push!(packages, "Enzyme") end
+if !isempty(packages)
+    import Pkg
+    printstyled("Installing $(join(packages, ", ")) into the test environment (PS_TEST_BACKEND=$backend, PS_TEST_AD=$(test_ad ? 1 : 0))\n"; bold=true, color=:white)
+    withenv("JULIA_PKG_PRECOMPILE_AUTO" => "0") do # NOTE: the automatic precompilation after Pkg.add fails with "Unknown package" for indirect dependencies whose version changed (e.g. GPUCompiler when adding AMDGPU), as it identifies them by name in the test environment; the environment is precompiled explicitly instead.
+        Pkg.add(packages)
+    end
+    Pkg.precompile()
+end
+
+# NOTE: the GPU packages are only imported if they are installed in the test environment.
+@static if (PKG_CUDA in SUPPORTED_PACKAGES && is_installed(PKG_CUDA)) import CUDA end
+@static if (PKG_AMDGPU in SUPPORTED_PACKAGES && is_installed(PKG_AMDGPU)) import AMDGPU end
+@static if (PKG_METAL in SUPPORTED_PACKAGES && is_installed(PKG_METAL)) import_with_filtered_stderr(:Metal) end
 @static if (PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES) import KernelAbstractions end # KernelAbstractions does not require extra harness env vars beyond the existing CUDA/AMDGPU settings.
 
 excludedfiles = [ "test_excluded.jl", "test_incremental_compilation.jl", "test_revise.jl"]; # TODO: test_incremental_compilation has to be deactivated until Polyester support released
@@ -76,7 +101,6 @@ function runtests(testfiles=String[]; stop_on_fail=false)
         if (!isempty(unknown)) error("Test files not found: $(join(unknown, ", ")).") end
         testfiles = filter(f -> basename(f) ∈ selected || relpath(f, testdir) ∈ selected, testfiles)
     end
-    backend   = get(ENV, "PS_TEST_BACKEND", "")
 
     nabort = 0
     nfail  = 0
@@ -85,23 +109,19 @@ function runtests(testfiles=String[]; stop_on_fail=false)
     first_fail_file = ""
     printstyled("Testing package ParallelStencil.jl\n"; bold=true, color=:white)
 
-    if !(backend in ["", string(PKG_CUDA), string(PKG_AMDGPU), string(PKG_METAL)])
-        error("PS_TEST_BACKEND: invalid value ($backend). Valid values are: $PKG_CUDA, $PKG_AMDGPU, $PKG_METAL or empty.")
-    end
-
-    if (PKG_CUDA in SUPPORTED_PACKAGES && !CUDA.functional())
+    if (PKG_CUDA in SUPPORTED_PACKAGES && (!is_installed(PKG_CUDA) || !CUDA.functional()))
         if (backend == string(PKG_CUDA)) error("PS_TEST_BACKEND=$backend, but CUDA is not functional (type `import CUDA; CUDA.functional(true)` to debug your CUDA installation).") end
-        @warn "Test Skip: All CUDA tests will be skipped because CUDA is not functional (if this is unexpected type `import CUDA; CUDA.functional(true)` to debug your CUDA installation)."
+        @warn "Test Skip: All CUDA tests will be skipped because CUDA is not installed in the test environment or not functional (if this is unexpected type `import CUDA; CUDA.functional(true)` to debug your CUDA installation)."
     end
 
-    if (PKG_AMDGPU in SUPPORTED_PACKAGES && !AMDGPU.functional())
+    if (PKG_AMDGPU in SUPPORTED_PACKAGES && (!is_installed(PKG_AMDGPU) || !AMDGPU.functional()))
         if (backend == string(PKG_AMDGPU)) error("PS_TEST_BACKEND=$backend, but AMDGPU is not functional (type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation).") end
-        @warn "Test Skip: All AMDGPU tests will be skipped because AMDGPU is not functional (if this is unexpected type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation)."
+        @warn "Test Skip: All AMDGPU tests will be skipped because AMDGPU is not installed in the test environment or not functional (if this is unexpected type `import AMDGPU; AMDGPU.functional()` to debug your AMDGPU installation)."
     end
 
-    if (PKG_METAL in SUPPORTED_PACKAGES && (!Sys.isapple() || !Metal.functional()))
+    if (PKG_METAL in SUPPORTED_PACKAGES && (!is_installed(PKG_METAL) || !Sys.isapple() || !Metal.functional()))
         if (backend == string(PKG_METAL)) error("PS_TEST_BACKEND=$backend, but Metal is not functional (type `import Metal; Metal.functional()` to debug your Metal installation).") end
-        @warn "Test Skip: All Metal tests will be skipped because Metal is not functional (if this is unexpected type `import Metal; Metal.functional()` to debug your Metal installation)."
+        @warn "Test Skip: All Metal tests will be skipped because Metal is not installed in the test environment or not functional (if this is unexpected type `import Metal; Metal.functional()` to debug your Metal installation)."
     end
 
     if (PKG_KERNELABSTRACTIONS in SUPPORTED_PACKAGES && !KernelAbstractions.functional(KernelAbstractions.CPU()))

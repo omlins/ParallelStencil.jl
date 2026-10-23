@@ -1,0 +1,12 @@
+# Test environment of ParallelStencil. The GPU packages (CUDA, AMDGPU, Metal) and Enzyme are NOT dependencies: resolving the GPU packages
+# all together holds each of them back to an old version (or fails altogether), and Enzyme (GPUCompiler) typically lags behind new Julia
+# releases. The test runner (runtests.jl) installs the GPU package given by the environment variable PS_TEST_BACKEND and, unless
+# PS_TEST_AD=0, Enzyme into the temporary test environment of Pkg.test, see the Testing page of the documentation.
+[deps]
+CellArrays = "d35fcfd7-7af4-4c67-b1aa-d78070614af4"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Polyester = "f517fe37-dbe3-4b94-8317-1923a5111588"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
