@@ -12,7 +12,7 @@ include:
     JULIA_UENV: 'julia/26.3:v1'
     JULIA_CUDA_USE_COMPAT: 'false'
     JULIA_NUM_THREADS: 2
-    PS_TEST_BACKEND: 'CUDA'            # Fail instead of skipping the GPU tests if CUDA is not functional.
+    PS_TEST_BACKEND: 'CUDA'            # The test runner installs CUDA into the test environment; fail instead of skipping the GPU tests if it is not functional.
     PS_TEST_FILES: ''                  # Test files to run (default: all).
   script:
     - ulimit -c 0

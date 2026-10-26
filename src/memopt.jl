@@ -54,8 +54,9 @@ end
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threads must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package(caller))
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package(caller))
     optvars        = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
+    use_optvars    = (optvars != ())
     indices        = Tuple(extract_tuple(indices))
     use_shmemhalos = isnothing(use_shmemhalos) ? use_shmemhalos : eval_arg(caller, use_shmemhalos)
     optranges      = isnothing(optranges) ? optranges : eval_arg(caller, optranges)
@@ -64,7 +65,14 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     if loopdim != length(indices) @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: two-index kernels require `loopdim=2` and three-index kernels require `loopdim=3`.") end
     if loopdim == 2 && !isnothing(use_shmemhalos) @IncoherentArgumentError("incoherent arguments memopt in @parallel[_indices] <kernel>: shared-memory-related keywords are not supported for two-index memory-optimized kernels.") end
     if optvars == (Symbol(""),)
-        optvars = Tuple(keys(readonlyvars))
+        optvars = Tuple(A for A in keys(readonlyvars) if isa(dotted_expr_to_symbol(A), Symbol))
+        if length(optvars) > MAX_AUTO_OPTVARS
+            if AUTO_OPTRANGES_DROP_LEAST_ACCESSED
+                optvars = Tuple(first(Iterators.take(sort(collect(optvars); by=A->readonlyvars[A], rev=true), MAX_AUTO_OPTVARS)))
+            else
+                optvars = Tuple(collect(Iterators.take(optvars, MAX_AUTO_OPTVARS)))
+            end
+        end
     else
         for A in optvars
             if !haskey(readonlyvars, A) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied to arrays that are only read within the kernel (not applicable to: $A).") end
@@ -81,14 +89,27 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     body                  = eval_offsets(caller, body, indices, int_type)
     offsets, offsets_by_z = extract_offsets(caller, body, indices, int_type, optvars, loopdim)
     optvars               = remove_single_point_optvars(optvars, optranges, offsets, offsets_by_z)
-    if (length(optvars)==0) @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set memopt=false for this kernel.") end
-    optranges             = define_optranges(optranges, optvars, offsets, int_type, package)
+    compute_capability          = get_compute_capability(package)
+    length_default              = (compute_capability >= v"8") ? OPTRANGES_LENGTH_DEFAULT_NEW : OPTRANGES_LENGTH_DEFAULT_OLD
+    optvar_syms                 = Tuple(dotted_expr_to_symbol(A) for A in optvars)
+    explicit_optranges_syms     = (!isnothing(optranges)                 && isa(optranges, NamedTuple))           ? Tuple(filter(s -> haskey(optranges, s),                   optvar_syms)) : ()
+    explicit_length_syms        = (!isnothing(optranges_length)          && isa(optranges_length, NamedTuple))    ? Tuple(filter(s -> haskey(optranges_length, s),          optvar_syms)) : ()
+    explicit_drop_front_syms    = (!isnothing(optranges_drop_front)      && isa(optranges_drop_front, NamedTuple))  ? Tuple(filter(s -> haskey(optranges_drop_front, s),      optvar_syms)) : ()
+    explicit_drop_by_count_syms = (!isnothing(optranges_drop_by_access_count) && isa(optranges_drop_by_access_count, NamedTuple)) ? Tuple(filter(s -> haskey(optranges_drop_by_access_count, s), optvar_syms)) : ()
+    length_pairs        = [(s, (s ∈ explicit_length_syms        ? getproperty(optranges_length, s)          : length_default)) for s in optvar_syms]
+    drop_front_pairs    = [(s, (s ∈ explicit_drop_front_syms    ? getproperty(optranges_drop_front, s)      : OPTRANGES_DROP_FRONT_DEFAULT))         for s in optvar_syms]
+    drop_by_count_pairs = [(s, (s ∈ explicit_drop_by_count_syms ? getproperty(optranges_drop_by_access_count, s) : OPTRANGES_DROP_BY_ACCESS_COUNT_DEFAULT)) for s in optvar_syms]
+    optranges_length_resolved        = NamedTuple{Tuple(first.(length_pairs))}(Tuple(last.(length_pairs)))
+    optranges_drop_front_resolved      = NamedTuple{Tuple(first.(drop_front_pairs))}(Tuple(last.(drop_front_pairs)))
+    optranges_drop_by_count_resolved   = NamedTuple{Tuple(first.(drop_by_count_pairs))}(Tuple(last.(drop_by_count_pairs)))
+    if (length(optvars)==0) && use_optvars @IncoherentArgumentError("incoherent argument memopt in @parallel[_indices] <kernel>: optimization can only be applied if there is at least one array that is read-only within the kernel (and accessed with a multi-point stencil). Set memopt=false for this kernel, or set optvars=() to use the z-loop only (no register queues).") end
+    optranges             = define_optranges(optranges, optvars, offsets, int_type, package, optranges_length_resolved, optranges_drop_front_resolved, optranges_drop_by_count_resolved, explicit_optranges_syms, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails = define_regqueues(offsets, optranges, optvars, indices, int_type, loopdim)
 
     if loopdim == 2
                 loopentrys = Dict(A => 1 - (offset_maxs[A][2] - offset_mins[A][2]) for A in optvars)
                 oy_maxs = Dict(A => offset_maxs[A][2] for A in optvars)
-                loopstart = minimum(values(loopentrys))
+                loopstart = isempty(loopentrys) ? 1 : minimum(values(loopentrys))
                 loopend = loopsize
                 use_any_shmem = false
                 shmem_optvars = ()
@@ -189,16 +210,16 @@ $((
                                      end
     elseif loopdim == 3
         oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = define_helper_variables(offset_mins, offset_maxs, optvars, use_shmemhalos, loopdim)
-        oz_span_max        = maximum(values(oz_spans))
+        oz_span_max        = isempty(oz_spans) ? 0 : maximum(values(oz_spans))
         # TODO: this only leads to correct result after row two executions in a row, probably due to the same compiler bug has below. # loopsize           = (oz_span_max<=0) ? 1 : loopsize # NOTE: if the stencilrange in z is only one point, no loop is needed.
-        loopstart          = minimum(values(loopentrys))
+        loopstart          = isempty(loopentrys) ? 1 : minimum(values(loopentrys))
         loopend            = loopsize
         use_any_shmem      = any(values(use_shmems))
-        shmem_optvars      = tuple((A for A in optvars if use_shmems[A])...)::Tuple{Vararg{Symbol}}
+        shmem_optvars      = tuple((A for A in optvars if use_shmems[A])...)
         shmem_index_groups = define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars, use_shmems, loopdim)
         shmem_vars         = define_shmem_vars(oz_maxs, hx1s, hy1s, hx2s, hy2s, optvars, indices, use_shmems, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim)
         shmem_exprs        = define_shmem_exprs(shmem_vars, loopdim)
-        shmem_z_ranges     = define_shmem_z_ranges(offsets_by_z, use_shmems, loopdim)
+        shmem_z_ranges     = use_optvars ? define_shmem_z_ranges(offsets_by_z, use_shmems, loopdim) : Dict{Any, UnitRange{Int}}()
         shmem_loopentrys   = define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, loopdim)
         shmem_loopexits    = define_shmem_loopexits(loopend, shmem_z_ranges, offset_maxs, loopdim)
         mainloopstart      = (optimize_halo_read && !isempty(shmem_loopentrys)) ? minimum(values(shmem_loopentrys)) : loopstart
@@ -574,7 +595,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     else
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, shmem_optvars, use_any_shmem, loopdim, loopsize, optranges, use_shmemhalos)
+    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, shmem_optvars, use_any_shmem, loopdim, loopsize, optranges, use_shmemhalos, optranges_length_resolved, optranges_drop_front_resolved, optranges_drop_by_count_resolved, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
@@ -619,12 +640,13 @@ function eval_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symb
     end
 end
 
-function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::NTuple{N,Symbol} where N, loopdim::Integer)
-    offsets_by_xy = Dict(A => Dict() for A in optvars)
-    offsets_by_z  = Dict(A => Dict() for A in optvars)
+function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, loopdim::Integer)
+    offsets_by_xy = Dict{Any, Dict{Any, Any}}(A => Dict{Any, Any}() for A in optvars)
+    offsets_by_z  = Dict{Any, Dict{Any, Any}}(A => Dict{Any, Any}() for A in optvars)
     postwalk(body) do ex
         if is_stencil_access(ex, indices...)
             @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+            A = ParallelStencil.ParallelKernel.strip_parent(A)
             if A in optvars
                 offsets = ()
                 for i = 1:length(indices)
@@ -669,13 +691,14 @@ function extract_offsets(caller::Module, body::Expr, indices::NTuple{N,<:Union{S
 end
 
 function remove_single_point_optvars(optvars, optranges_arg, offsets, offsets_by_z)
-    return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && A ∈ keys(optranges_arg)))...)
+    return tuple((A for A in optvars if !(length(keys(offsets[A]))==1 && length(keys(offsets_by_z[A]))==1) || (!isnothing(optranges_arg) && dotted_expr_to_symbol(A) ∈ keys(optranges_arg)))...)
 end
 
-function define_optranges(optranges_arg, optvars, offsets, int_type, package)
+function define_optranges(optranges_arg, optvars, offsets, int_type, package, optranges_length, optranges_drop_front, optranges_drop_by_access_count, explicit_optranges_syms, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     compute_capability = get_compute_capability(package)
     optranges = Dict()
     for A in optvars
+        sym_A = dotted_expr_to_symbol(A)
         loopspan_max = 0
         offsets_with_max_span = ()
         for nonloop_offsets in sort(collect(keys(offsets[A])); by=o -> (sum(abs, o), o)) # NOTE: the offsets are sorted by distance to the stencil center to obtain a deterministic choice when several have the maximal loop span (the iteration order of a Dict depends on the Julia version).
@@ -688,31 +711,88 @@ function define_optranges(optranges_arg, optvars, offsets, int_type, package)
         fullrange    = typemin(int_type):typemax(int_type)
         pointrange_x = offsets_with_max_span[1]:offsets_with_max_span[1]
         pointrange_y = (length(offsets_with_max_span) > 1) ? (offsets_with_max_span[2]:offsets_with_max_span[2]) : fullrange
-        if     (!isnothing(optranges_arg) && A ∈ keys(optranges_arg))                   optranges[A] = getproperty(optranges_arg, A)
-        elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))  optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                          optranges[A] = (fullrange,    fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                          optranges[A] = (pointrange_x, fullrange,    fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                          optranges[A] = (fullrange,    pointrange_y, fullrange)
-        elseif (USE_FULLRANGE_DEFAULT == (false, false, true))                          optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        # Effective z-offset access counts: by default the per-Δz accesses of the already-chosen `(Δx,Δy)` point-range cell (`offsets_with_max_span`), NOT aggregated across all `(Δx,Δy)`. Because `optranges[1:2]` will keep exactly that cell, its z-window is guaranteed non-empty after `define_regqueue` filters to it (avoiding the "optranges in z dimension do not include any array access" error for optvars whose accesses split across several `(Δx,Δy)` cells with single, non-contiguous z-offsets, e.g. `higher_order_memopt!`). If an explicit `optranges[A]` is supplied together with ≥1 of the new keywords, narrow that chosen cell's z-offsets to `optranges[A][3]`; if the chosen cell does not lie in `optranges[A][1:2]`, fall back to today's full-filter behaviour across all `(Δx,Δy)`.
+        explicit_optranges_A   = sym_A ∈ explicit_optranges_syms
+        any_new_kw_explicit_A  = (sym_A ∈ explicit_length_syms) || (sym_A ∈ explicit_drop_front_syms) || (sym_A ∈ explicit_drop_by_count_syms)
+        L_A                    = getproperty(optranges_length, sym_A)
+        drop_front_A           = getproperty(optranges_drop_front, sym_A)
+        drop_by_count_A        = getproperty(optranges_drop_by_access_count, sym_A)
+        ozc_chosen = get(offsets[A], offsets_with_max_span, Dict{Any, Any}())
+        if explicit_optranges_A && any_new_kw_explicit_A
+            ox_range = getproperty(optranges_arg, sym_A)[1]
+            oy_range = getproperty(optranges_arg, sym_A)[2]
+            oz_range = getproperty(optranges_arg, sym_A)[3]
+            if (offsets_with_max_span[1] ∈ ox_range && (length(offsets_with_max_span) < 2 || offsets_with_max_span[2] ∈ oy_range))
+                effective_z_counts = Dict{Any, Int}(z => c for (z, c) in ozc_chosen if z ∈ oz_range)
+            else
+                effective_z_counts = Dict{Any, Int}()
+                for (oxy, ozc) in offsets[A]
+                    (oxy[1] ∈ ox_range && (length(oxy) < 2 || oxy[2] ∈ oy_range)) || continue
+                    for (z, c) in ozc
+                        z ∈ oz_range || continue
+                        effective_z_counts[z] = get(effective_z_counts, z, 0) + c
+                    end
+                end
+            end
+        else
+            effective_z_counts = Dict{Any, Int}(z => c for (z, c) in ozc_chosen)
+        end
+        # Full-control path: explicit `optranges[A]` AND none of the three new keywords explicitly set for `A` → take the explicit columns directly (no cluster/window processing). Pre-v"8" CUDA keeps today's `(fullrange, fullrange, fullrange)`. `optranges_length = Inf` keeps today's full z-range (no cluster/window). Otherwise apply the cluster/window selection to the effective z-offset set.
+        any_new_kw_explicit_A = (sym_A ∈ explicit_length_syms) || (sym_A ∈ explicit_drop_front_syms) || (sym_A ∈ explicit_drop_by_count_syms)
+        L_A              = getproperty(optranges_length, sym_A)
+        drop_front_A     = getproperty(optranges_drop_front, sym_A)
+        drop_by_count_A  = getproperty(optranges_drop_by_access_count, sym_A)
+        if     (explicit_optranges_A && !any_new_kw_explicit_A)                          optranges[A] = getproperty(optranges_arg, sym_A)
+        elseif (compute_capability < v"8" && (length(optvars) <= FULLRANGE_THRESHOLD))   optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  true,  true))                           optranges[A] = (fullrange,    fullrange,    fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (true,  false, true))                           optranges[A] = (fullrange,    pointrange_y, fullrange)
+        elseif (USE_FULLRANGE_DEFAULT == (false, true,  true))                           optranges[A] = (pointrange_x, fullrange,    fullrange)
+        elseif (L_A === Inf)                                                             optranges[A] = (pointrange_x, pointrange_y, fullrange)
+        else                                                                             optranges[A] = (pointrange_x, pointrange_y, z_window(effective_z_counts, L_A, drop_front_A, drop_by_count_A, int_type))
         end
     end
     return optranges
 end
 
-function define_regqueues(offsets::Dict{Symbol, Dict{Any, Any}}, optranges::Dict{Any, Any}, optvars::NTuple{N,Symbol} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
+# Select the z-window (a consecutive `L`-offset `UnitRange`) from a single effective cluster of accessed z-offsets (the per-Δz access counts of the `(Δx,Δy)` cell that `define_optranges` already chose via `offsets_with_max_span`). The cluster is the maximal contiguous run containing the offset structure; `optranges_length` is capped to the cluster width (keeping the whole cluster when `L >= width`). With `drop_by_access_count` the window of `L` consecutive offsets with the highest summed access count is kept; otherwise (default) the topmost `L` (`drop_front=false`) or the lowest `L` (`drop_front=true`). All offsets outside the kept window are emitted as direct global-memory reads each iteration by `define_regqueue`.
+function z_window(z_counts::Dict, L, drop_front::Bool, drop_by_access_count::Bool, int_type::Type{<:Integer})
+    fullrange = typemin(int_type):typemax(int_type)
+    isempty(z_counts) && return fullrange
+    L <= 0 && return fullrange
+    z_offsets = sort(collect(keys(z_counts)))
+    T = eltype(z_offsets)
+    width = length(z_offsets)
+    effective_L = min(L, width)
+    if width <= effective_L
+        return z_offsets[1]:z_offsets[end]
+    elseif drop_by_access_count
+        best = (zmin=z_offsets[1], zmax=z_offsets[effective_L], count=sum(z_counts[z] for z in z_offsets[1:effective_L]))
+        for i in 2:(width-effective_L+1)
+            c = sum(z_counts[z] for z in z_offsets[i:i+effective_L-1])
+            if c > best.count best = (zmin=z_offsets[i], zmax=z_offsets[i+effective_L-1], count=c) end
+        end
+        return best.zmin:best.zmax
+    elseif drop_front
+        return z_offsets[1]:z_offsets[effective_L]
+    else
+        return z_offsets[end-effective_L+1]:z_offsets[end]
+    end
+end
+
+function define_regqueues(offsets, optranges::Dict{Any, Any}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
     regqueue_heads = Dict(A => Dict() for A in optvars)
     regqueue_tails = Dict(A => Dict() for A in optvars)
-    offset_mins    = Dict{Symbol, NTuple{3,Integer}}()
-    offset_maxs    = Dict{Symbol, NTuple{3,Integer}}()
-    nb_regs_heads  = Dict{Symbol, Integer}()
-    nb_regs_tails  = Dict{Symbol, Integer}()
+    offset_mins    = Dict{Union{Symbol,Expr}, NTuple{3,Integer}}()
+    offset_maxs    = Dict{Union{Symbol,Expr}, NTuple{3,Integer}}()
+    nb_regs_heads  = Dict{Union{Symbol,Expr}, Integer}()
+    nb_regs_tails  = Dict{Union{Symbol,Expr}, Integer}()
     for A in optvars
         regqueue_heads[A], regqueue_tails[A], offset_mins[A], offset_maxs[A], nb_regs_heads[A], nb_regs_tails[A] = define_regqueue(offsets[A], optranges[A], A, indices, int_type, loopdim)
     end
     return regqueue_heads, regqueue_tails, offset_mins, offset_maxs, nb_regs_heads, nb_regs_tails
 end
 
-function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Symbol, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
+function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}, A::Union{Symbol,Expr}, indices::NTuple{N,<:Union{Symbol,Expr}} where N, int_type::Type{<:Integer}, loopdim::Integer)
     regqueue_head = Dict()
     regqueue_tail = Dict()
     nb_regs_head  = 0
@@ -801,7 +881,7 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
     return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
 end
 
-function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}}, offset_maxs::Dict{Symbol, <:NTuple{3,Integer}}, optvars::NTuple{N,Symbol} where N, use_shmemhalos_arg, loopdim::Integer)
+function define_helper_variables(offset_mins::Dict{<:Any, NTuple{3,Integer}}, offset_maxs::Dict{<:Any, NTuple{3,Integer}}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_shmemhalos_arg, loopdim::Integer)
     oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys = Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict(), Dict()
     if loopdim == 3
         for A in optvars
@@ -812,9 +892,9 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
             use_shmem_x    = (hx1 + hx2 > 0)
             use_shmem_y    = (hy1 + hy2 > 0)
             use_shmem      = use_shmem_x || use_shmem_y
-            use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (A ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, A)
-                             elseif !(use_shmem_x && use_shmem_y)                                  USE_SHMEMHALO_1D_DEFAULT
-                             else                                                                  USE_SHMEMHALO_DEFAULT
+            use_shmemhalo  = if (!isnothing(use_shmemhalos_arg) && (dotted_expr_to_symbol(A) ∈ keys(use_shmemhalos_arg))) getproperty(use_shmemhalos_arg, dotted_expr_to_symbol(A))
+                             elseif !(use_shmem_x && use_shmem_y)                                                   USE_SHMEMHALO_1D_DEFAULT
+                             else                                                                                   USE_SHMEMHALO_DEFAULT
                              end
             use_shmemindex = use_shmem && use_shmemhalo && (use_shmem_x && use_shmem_y)
             offset_span    = offset_max .- offset_min
@@ -828,8 +908,8 @@ function define_helper_variables(offset_mins::Dict{Symbol, <:NTuple{3,Integer}},
     return oz_maxs, hx1s, hy1s, hx2s, hy2s, use_shmems, use_shmem_xs, use_shmem_ys, use_shmemhalos, use_shmemindices, offset_spans, oz_spans, loopentrys
 end
 
-function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, use_shmems::Dict{Any, Any}, loopdim::Integer)
-    shmem_index_groups = Dict()
+function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_shmems::Dict{Any, Any}, loopdim::Integer)
+    shmem_index_groups = Dict{Any, Any}() # NOTE: explicit Dict{Any, Any} (not Dict()) so the empty case (no optvar uses shared memory) still has a concrete value type; values are Tuples of optvars (not Dicts), so this is *not* constrained to Dict{Any, Any}.
     if loopdim == 3
         for A in optvars
             if use_shmems[A]
@@ -843,9 +923,18 @@ function define_shmem_index_groups(hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Sym
     return shmem_index_groups
 end
 
-function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::NTuple{N,Symbol} where N, indices, use_shmems::Dict{Any, Any}, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim::Integer)
+function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, indices, use_shmems::Dict{Any, Any}, use_shmem_xs, use_shmem_ys, shmem_index_groups, use_shmemhalos, use_shmemindices, loopdim::Integer)
     ix, iy, iz = indices
-    shmem_vars = Dict(A => Dict() for A in optvars if use_shmems[A])
+    # NOTE: explicit Dict{Any, Dict{Any, Any}} (value Dict{Any, Any}) so that the empty case
+    # (no optvar uses shared memory, e.g. the auto path on get_compute_capability(package) >= v"8"
+    # with point x/y ranges) still has value type Dict{Any, Any}, satisfying
+    # define_shmem_exprs(::Dict{<:Any, Dict{Any, Any}}, ::Integer) and
+    # define_shmem_z_ranges(::Dict{<:Any, Dict{Any, Any}}, ::Integer). Previously the bare
+    # `Dict(A => Dict() for ...)` could yield an empty `Dict{Any, Any}` (when `optvars`
+    # mixes `Expr` dotted identifiers (e.g. `Pt.in`) with bare `Symbol`s (e.g. `Mus`),
+    # forcing the key type to `Any`), whose value type is `Any`, causing
+    # `MethodError: no method matching define_shmem_exprs(::Dict{Any, Any}, ::Int64)` at declaration time.
+    shmem_vars = Dict{Any, Dict{Any, Any}}(A => Dict{Any, Any}() for A in optvars if use_shmems[A])
     if loopdim == 3
         for vars in values(shmem_index_groups)
             suffix = join(string.(vars), "_")
@@ -965,7 +1054,7 @@ function define_shmem_vars(oz_maxs::Dict{Any, Any}, hx1s, hy1s, hx2s, hy2s, optv
     return shmem_vars
 end
 
-function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, loopdim::Integer)
+function define_shmem_exprs(shmem_vars::Dict{<:Any, Dict{Any, Any}}, loopdim::Integer)
     exprs = Dict(A => Dict() for A in keys(shmem_vars))
     offset = ()
     if loopdim == 3
@@ -979,8 +1068,8 @@ function define_shmem_exprs(shmem_vars::Dict{Symbol, Dict{Any, Any}}, loopdim::I
     return exprs
 end
 
-function define_shmem_z_ranges(offsets_by_z::Dict{Symbol, Dict{Any, Any}}, use_shmems::Dict{Any, Any}, loopdim::Integer)
-    shmem_z_ranges = Dict()
+function define_shmem_z_ranges(offsets_by_z::Dict{<:Any, Dict{Any, Any}}, use_shmems::Dict{Any, Any}, loopdim::Integer)
+    shmem_z_ranges = Dict{Any, UnitRange{Int}}() # NOTE: explicit Dict{Any, UnitRange{Int}} (not Dict()) so the empty case keeps the documented value type.
     shmem_As = (A for (A, use_shmem) in use_shmems if use_shmem)
     for A in shmem_As
         shmem_z_ranges[A] = define_shmem_z_range(offsets_by_z[A], loopdim)
@@ -1022,7 +1111,7 @@ function find_rangelimit(offsets_by_z::Dict{Any, Any}, loopdim::Integer; upper=f
 end
 
 function define_shmem_loopentrys(loopentrys, shmem_z_ranges, offset_mins, loopdim::Integer)
-    shmem_loopentrys = Dict()
+    shmem_loopentrys = Dict{Any, Int}() # NOTE: explicit Dict{Any, Int} (not Dict()) so the empty case keeps the documented value type.
     shmem_As = (A for A in keys(shmem_z_ranges))
     for A in shmem_As
         shmem_loopentrys[A] = define_shmem_loopentry(loopentrys[A], shmem_z_ranges[A], offset_mins[A], loopdim)
@@ -1040,7 +1129,7 @@ function define_shmem_loopentry(loopentry, shmem_z_range, offset_min, loopdim::I
 end
 
 function define_shmem_loopexits(loopexit, shmem_z_ranges, offset_maxs, loopdim::Integer)
-    shmem_loopexits = Dict()
+    shmem_loopexits = Dict{Any, Int}() # NOTE: explicit Dict{Any, Int} (not Dict()) so the empty case keeps the documented value type.
     shmem_As = (A for A in keys(shmem_z_ranges))
     for A in shmem_As
         shmem_loopexits[A] = define_shmem_loopexit(loopexit, shmem_z_ranges[A], offset_maxs[A], loopdim)
@@ -1057,7 +1146,7 @@ function define_shmem_loopexit(loopexit, shmem_z_range, offset_max, loopdim::Int
     return shmem_loopexit
 end
 
-function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
+function varname(A::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N; i::String="ix", j::String="iy", k::String="iz")
     ndims = length(offsets)
     ox    = offsets[1]
     x = if     (ox > 0) i * "p" * string(ox)
@@ -1084,7 +1173,7 @@ function varname(A::Symbol, offsets::NTuple{N,Integer} where N; i::String="ix", 
     end
 end
 
-function regtarget(A::Symbol, offsets::NTuple{N,Integer} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+function regtarget(A::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N, indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     ix    = indices[1]
@@ -1114,7 +1203,7 @@ function regtarget(A::Symbol, offsets::NTuple{N,Integer} where N, indices::NTupl
     end
 end
 
-function regsource(A_head::Symbol, offsets::NTuple{N,Integer} where N, local_indices::NTuple{N,<:Union{Symbol,Expr}} where N)
+function regsource(A_head::Union{Symbol,Expr}, offsets::NTuple{N,Integer} where N, local_indices::NTuple{N,<:Union{Symbol,Expr}} where N)
     ndims = length(offsets)
     ox    = offsets[1]
     tx    = local_indices[1]
@@ -1176,10 +1265,10 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{Symbol, <:Tuple}, offset_maxs::Dict{Symbol, <:Tuple}, offsets::Dict{Symbol, Dict{Any, Any}}, optvars::NTuple{N,Symbol} where N, shmem_optvars::NTuple{M,Symbol} where M, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{<:Any, <:Tuple},     offset_maxs::Dict{<:Any, <:Tuple}, offsets::Dict{<:Any, <:Dict}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, shmem_optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos, optranges_length::NamedTuple, optranges_drop_front::NamedTuple, optranges_drop_by_access_count::NamedTuple, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
-    stencilranges     = NamedTuple(A => begin
+    stencilranges     = NamedTuple(dotted_expr_to_symbol(A) => begin
         offset_min = offset_mins[A]
         offset_max = offset_maxs[A]
         ndims = length(offset_min)
@@ -1188,29 +1277,53 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
         z = (ndims > 2 ? offset_min[3] : 0):(ndims > 2 ? offset_max[3] : 0)
         (x, y, z)
     end for A in optvars)
-    use_shmemhalos    = NamedTuple(A => get(use_shmemhalos, A, false) for A in optvars)
+    use_shmemhalos    = NamedTuple(dotted_expr_to_symbol(A) => get(use_shmemhalos, A, false) for A in optvars)
     loopsizes         = (loopdim==3) ? (1, 1, loopsize) : (loopdim==2) ? (1, loopsize, 1) : (loopsize, 1, 1)
     shmem_dim1        = (loopdim==3) ? 1 : (loopdim==2) ? 1 : 2
     shmem_dim2        = (loopdim==3) ? 2 : (loopdim==2) ? 3 : 3
-    shmem_spans       = NamedTuple(A => (length(stencilranges[A][shmem_dim1]) - 1, length(stencilranges[A][shmem_dim2]) - 1) for A in optvars)
+    shmem_spans       = NamedTuple(dotted_expr_to_symbol(A) => (length(stencilranges[dotted_expr_to_symbol(A)][shmem_dim1]) - 1, length(stencilranges[dotted_expr_to_symbol(A)][shmem_dim2]) - 1) for A in optvars)
+    optvars_meta      = Tuple(dotted_expr_to_symbol(A) for A in optvars)
+    shmem_optvars_meta= Tuple(dotted_expr_to_symbol(A) for A in shmem_optvars)
+    offsets_meta      = Dict(dotted_expr_to_symbol(A) => v for (A, v) in offsets)
+    optranges_meta    = Dict(dotted_expr_to_symbol(A) => v for (A, v) in optranges)
+    # NOTE: `offset_mins`/`offset_maxs` are the per-dim extents AFTER applying `optranges` (i.e. the optimization-chosen region), as produced by `define_regqueues`. Store them (keyed by `dotted_expr_to_symbol(A)`, analogously to `offsets_meta`/`optranges_meta`) so the actual cluster of accesses selected for optimization can be inspected without re-running the regqueue logic. The full, unfiltered kernel access histogram is already available via `offsets`; the per-dim min/max of that histogram is therefore trivially derivable and intentionally not duplicated here.
+    offset_mins_meta  = Dict(dotted_expr_to_symbol(A) => v for (A, v) in offset_mins)
+    offset_maxs_meta  = Dict(dotted_expr_to_symbol(A) => v for (A, v) in offset_maxs)
+    # Resolved per-optvar z-window settings (Step 2/3): `optranges_length` (how many consecutive z-offsets are kept; default 2 for `get_compute_capability(package) >= v"8"`, else Inf), `optranges_drop_front` (drop the highest/front vs lowest/back offsets when narrowing; default false = drop back/keep topmost), `optranges_drop_by_access_count` (drop by lowest access count vs by end; default false). Also store the resolved z column of `optranges` (the actually-kept z window) as `optranges_z`, and the per-optvar sets for which each setting was explicitly provided by the user (so default vs override can be distinguished by the performance tests).
+    optranges_length_meta          = NamedTuple(dotted_expr_to_symbol(A) => getproperty(optranges_length, dotted_expr_to_symbol(A))          for A in optvars)
+    optranges_drop_front_meta      = NamedTuple(dotted_expr_to_symbol(A) => getproperty(optranges_drop_front, dotted_expr_to_symbol(A))      for A in optvars)
+    optranges_drop_by_count_meta   = NamedTuple(dotted_expr_to_symbol(A) => getproperty(optranges_drop_by_access_count, dotted_expr_to_symbol(A)) for A in optvars)
+    optranges_z_meta               = NamedTuple(dotted_expr_to_symbol(A) => optranges[A][3]                                                             for A in optvars)
+    explicit_length_syms_meta      = Tuple(explicit_length_syms)
+    explicit_drop_front_syms_meta  = Tuple(explicit_drop_front_syms)
+    explicit_drop_by_count_syms_meta = Tuple(explicit_drop_by_count_syms)
     if nonconst_metadata
         storeexpr = quote
             is_parallel_kernel = $is_parallel_kernel
             memopt             = $memopt
             nonconst_metadata  = $nonconst_metadata
             stencilranges      = $stencilranges
-            offsets            = $offsets
-            optvars            = $optvars
-            shmem_optvars      = $shmem_optvars
+            offsets            = $offsets_meta
+            optvars            = $optvars_meta
+            shmem_optvars      = $shmem_optvars_meta
             shmem_spans        = $shmem_spans
             loopdim            = $loopdim
             loopsize           = $loopsize
             loopsizes          = $loopsizes
             shmem_dim1         = $shmem_dim1
             shmem_dim2         = $shmem_dim2
-            optranges          = $optranges
+            optranges          = $optranges_meta
             use_any_shmem      = $use_any_shmem
             use_shmemhalos     = $use_shmemhalos
+            offset_mins        = $offset_mins_meta
+            offset_maxs        = $offset_maxs_meta
+            optranges_length               = $optranges_length_meta
+            optranges_drop_front           = $optranges_drop_front_meta
+            optranges_drop_by_access_count = $optranges_drop_by_count_meta
+            optranges_z                    = $optranges_z_meta
+            explicit_optranges_length_syms      = $explicit_length_syms_meta
+            explicit_optranges_drop_front_syms  = $explicit_drop_front_syms_meta
+            explicit_optranges_drop_by_count_syms = $explicit_drop_by_count_syms_meta
         end
     else
         storeexpr = quote
@@ -1218,18 +1331,27 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             const memopt             = $memopt
             const nonconst_metadata  = $nonconst_metadata
             const stencilranges      = $stencilranges
-            const offsets            = $offsets
-            const optvars            = $optvars
-            const shmem_optvars      = $shmem_optvars
+            const offsets            = $offsets_meta
+            const optvars            = $optvars_meta
+            const shmem_optvars      = $shmem_optvars_meta
             const shmem_spans        = $shmem_spans
             const loopdim            = $loopdim
             const loopsize           = $loopsize
             const loopsizes          = $loopsizes
             const shmem_dim1         = $shmem_dim1
             const shmem_dim2         = $shmem_dim2
-            const optranges          = $optranges
+            const optranges          = $optranges_meta
             const use_any_shmem      = $use_any_shmem
             const use_shmemhalos     = $use_shmemhalos
+            const offset_mins        = $offset_mins_meta
+            const offset_maxs        = $offset_maxs_meta
+            const optranges_length               = $optranges_length_meta
+            const optranges_drop_front           = $optranges_drop_front_meta
+            const optranges_drop_by_access_count = $optranges_drop_by_count_meta
+            const optranges_z                    = $optranges_z_meta
+            const explicit_optranges_length_syms      = $explicit_length_syms_meta
+            const explicit_optranges_drop_front_syms  = $explicit_drop_front_syms_meta
+            const explicit_optranges_drop_by_count_syms = $explicit_drop_by_count_syms_meta
         end
     end
     @eval(metadata_module, $storeexpr)

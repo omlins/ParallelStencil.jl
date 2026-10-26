@@ -4,7 +4,11 @@ on:
     branches:
       - main
     tags: '*'
+    paths-ignore: &docs_only # Changes to the documentation only do not run the tests (the Documentation workflow builds and deploys the documentation).
+      - 'docs/**'
+      - 'README.md'
   pull_request:
+    paths-ignore: *docs_only
 concurrency:
   # Skip intermediate builds: always.
   # Cancel intermediate builds: only if it is a pull request build.
@@ -17,9 +21,12 @@ env:
   JULIA_NUM_THREADS: 2
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}${{ matrix.ad == false && ' - no AD' || '' }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.version == 'pre' }}
+    env:
+      PS_TEST_AD: ${{ (matrix.version == 'pre' || matrix.ad == false) && '0' || '1' }} # No Enzyme (automatic differentiation tests) on the upcoming Julia release (its GPUCompiler/LLVM dependencies typically lag behind) and in the job testing KernelAbstractions 0.10 (requires LLVM.jl 10, which Enzyme does not support yet).
+      PS_TEST_BACKEND: ${{ startsWith(matrix.os, 'macOS') && 'Metal' || '' }} # The macOS runners (Apple silicon) have a functional Metal GPU: the test runner installs Metal into the test environment and the Metal tests must run.
     strategy:
       fail-fast: false
       matrix:
@@ -29,8 +36,11 @@ jobs:
         os:
           - ubuntu-latest
           - macOS-latest # NOTE: the architecture of the runner is used (aarch64), not x64 (Rosetta).
+        ad:
+          - true # Tests of automatic differentiation (Enzyme in the test environment)
         include:
-          - {version: 'pre', os: ubuntu-latest} # Upcoming Julia release (allowed to fail)
+          - {version: '1',   os: ubuntu-latest, ad: false} # KernelAbstractions 0.10 (resolved only without Enzyme, see PS_TEST_AD)
+          - {version: 'pre', os: ubuntu-latest}            # Upcoming Julia release (allowed to fail)
     steps:
       - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3

@@ -5,7 +5,7 @@ layout: home
 hero:
   name: ParallelStencil.jl
   text: Architecture-agnostic high-performance stencil computations
-  tagline: Write high-level code once, run it on GPUs and CPUs, from a single thread to thousands of GPUs.
+  tagline: One code, from laptop to supercomputer.
   actions:
     - theme: brand
       text: Usage 🚀

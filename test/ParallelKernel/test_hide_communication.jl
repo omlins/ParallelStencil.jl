@@ -5,27 +5,7 @@ import ParallelStencil.ParallelKernel: @reset_parallel_kernel, @is_initialized, 
 import ParallelStencil.ParallelKernel: @require, @prettyexpand, @gorgeousexpand, gorgeousstring, @isgpu
 import ParallelStencil.ParallelKernel: checkargs_hide_communication, hide_communication_gpu
 using ParallelStencil.ParallelKernel.Exceptions
-TEST_PACKAGES = SUPPORTED_PACKAGES
-@static if PKG_CUDA in TEST_PACKAGES
-    import CUDA
-    if !CUDA.functional() TEST_PACKAGES = filter!(x->x≠PKG_CUDA, TEST_PACKAGES) end
-end
-@static if PKG_AMDGPU in TEST_PACKAGES
-    import AMDGPU
-    if !AMDGPU.functional() TEST_PACKAGES = filter!(x->x≠PKG_AMDGPU, TEST_PACKAGES) end
-end
-@static if PKG_KERNELABSTRACTIONS in TEST_PACKAGES
-    import KernelAbstractions
-    if !KernelAbstractions.functional(KernelAbstractions.CPU()) TEST_PACKAGES = filter!(x->x≠PKG_KERNELABSTRACTIONS, TEST_PACKAGES) end
-end
-@static if PKG_METAL in TEST_PACKAGES
-    import Metal
-    if !Metal.functional() TEST_PACKAGES = filter!(x->x≠PKG_METAL, TEST_PACKAGES) end
-end
-@static if PKG_POLYESTER in TEST_PACKAGES
-    import Polyester
-end
-Base.retry_load_extensions() # Potentially needed to load the extensions after the packages have been filtered.
+include(joinpath(@__DIR__, "../packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 
 
 @testset "$(basename(@__FILE__))" verbose=true begin # NOTE: the package testsets are nested in this testset (and the package loop is run at run time) in order to test all packages even if the tests of one package fail.
@@ -199,8 +179,8 @@ eval(:(
                 end;
                 @testset "@hide_communication ranges_outer ranges_inner block" begin
                     A  = @zeros(6, 7, 8)
-                    ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
-                    ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((1, 1, 2), ParallelStencil.ParallelKernel.get_ranges(A))
+                    ranges_outer = ParallelStencil.ParallelKernel.get_ranges_outer((2, 2, 3), ParallelStencil.ParallelKernel.get_ranges(A))
+                    ranges_inner = ParallelStencil.ParallelKernel.get_ranges_inner((2, 2, 3), ParallelStencil.ParallelKernel.get_ranges(A))
                     @hide_communication ranges_outer ranges_inner begin
                         @parallel add_indices!(A);
                         communication!(A);
