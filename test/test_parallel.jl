@@ -8,12 +8,11 @@ import ParallelStencil.FiniteDifferences2D
 using ParallelStencil.FiniteDifferences3D
 using ParallelStencil.FieldAllocators
 import ParallelStencil.FieldAllocators: @XXYYZField, @XYYZZField
-import ParallelStencil.ParallelKernel: handle, @ka
+import ParallelStencil.ParallelKernel: handle, @ka, prettystring
 ix, iy, iz = INDICES[1], INDICES[2], INDICES[3]
 ixi, iyi, izi = INDICES_INN[1], INDICES_INN[2], INDICES_INN[3]
 ixd, iyd, izd = INDICES_DIR[1], INDICES_DIR[2], INDICES_DIR[3]
 ix_s, iy_s, iz_s = "var\"$ix\"", "var\"$iy\"", "var\"$iz\""
-end_s = string(:(A[end]))[3:end-1] # NOTE: `end` as printed in an indexing expression (Julia >= 1.13 prints var"end").
 include(joinpath(@__DIR__, "packages.jl")) # Selection of the packages to test (TEST_PACKAGES), imports of the backend packages.
 
 parallel_indices(args::Union{Symbol,Expr}...; package::Symbol=ParallelStencil.ParallelKernel.get_package(@__MODULE__)) = (ParallelStencil.checkargs_parallel_indices(args...); ParallelStencil.parallel_indices(LineNumberNode(@__LINE__, Symbol(@__FILE__)), @__MODULE__, args...; package=package))
@@ -1219,10 +1218,17 @@ eval(:(
                 @test occursin("A[$ix_s + 1, $iy_s + 1, $iz_s + 1] = A[$ix_s + 1, $iy_s + 1, $iz_s + 1] + B[$ix_s + 1, $iy_s + 1, $iz_s + 1]", expansion)
             end;
             @testset "apply masks | handling padding (padding=true)" begin
+                # The needles containing `end` in ref position are generated with the prettystring *function* from quoted mask
+                # conditions (with the gensym index variables interpolated), so that they are rendered exactly like the expansion
+                # on all Julia versions (reserving words like `end` are printed escaped only from Julia 1.13 on, but are unescaped
+                # by prettystring). Note: with padding=true the *in* indices (ixi, iyi, izi) are substituted by the plain indices
+                # (ix, iy, iz) in the expansion (see substitute_indices_inn), hence ix/iy/iz are also spliced for the @inn needle.
+                mask_all_false = prettystring(:((A.indices[1])[1] <= $ix <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz <= (A.indices[3])[end])))
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
+                @test occursin("if $mask_all_false", expansion)
+                mask_inn_false = prettystring(:((A.indices[1])[1] < $ix < (A.indices[1])[end] && ((A.indices[2])[1] < $iy < (A.indices[2])[end] && (A.indices[3])[1] < $iz < (A.indices[3])[end])))
                 expansion = @prettystring(1, @parallel padding=true sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
+                @test occursin("if $mask_inn_false", expansion)
                 @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
             end;
             @reset_parallel_stencil()
@@ -1410,10 +1416,14 @@ eval(:(
                     @init_parallel_stencil($package, $FloatDefault, 3, padding=true, nonconst_metadata=true)
                     @require @is_initialized
                     @testset "apply masks | handling padding (padding=true (globally))" begin
+                        # Needles generated like in the corresponding testset above (prettystring *function*; ix/iy/iz spliced
+                        # for @inn too, since with padding=true the *in* indices are substituted by the plain indices).
+                        mask_all_true = prettystring(:((A.indices[1])[1] <= $ix <= (A.indices[1])[end] && ((A.indices[2])[1] <= $iy <= (A.indices[2])[end] && (A.indices[3])[1] <= $iz <= (A.indices[3])[end])))
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@all(A) = @all(A) + @all(B); return))
-                        @test occursin("if (A.indices[1])[1] <= $ix_s <= (A.indices[1])[$end_s] && ((A.indices[2])[1] <= $iy_s <= (A.indices[2])[$end_s] && (A.indices[3])[1] <= $iz_s <= (A.indices[3])[$end_s])", expansion)
+                        @test occursin("if $mask_all_true", expansion)
+                        mask_inn_true = prettystring(:((A.indices[1])[1] < $ix < (A.indices[1])[end] && ((A.indices[2])[1] < $iy < (A.indices[2])[end] && (A.indices[3])[1] < $iz < (A.indices[3])[end])))
                         expansion = @prettystring(1, @parallel sum!(A, B) = (@inn(A) = @inn(A) + @inn(B); return))
-                        @test occursin("if (A.indices[1])[1] < $ix_s < (A.indices[1])[$end_s] && ((A.indices[2])[1] < $iy_s < (A.indices[2])[$end_s] && (A.indices[3])[1] < $iz_s < (A.indices[3])[$end_s])", expansion)
+                        @test occursin("if $mask_inn_true", expansion)
                         @test occursin("A.parent[$ix_s, $iy_s, $iz_s] = A.parent[$ix_s, $iy_s, $iz_s] + B.parent[$ix_s, $iy_s, $iz_s]", expansion)
                     end;
                     @testset "apply masks | handling padding (padding=false)" begin
