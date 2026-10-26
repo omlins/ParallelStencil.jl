@@ -374,11 +374,11 @@ eval(:(
                     Pt_rt = @Field2B((8, 8, 8))
                     V_rt  = @XField2B((8, 8, 8))
                     A_rt  = @Field((8, 8, 8))
-                    A_rt .= 10.0
-                    V_rt.in .= 5.0
-                    @parallel step_rt!(Pt_rt, V_rt, A_rt, 2.0)
-                    @test all(Pt_rt.in .== 11.0)
-                    @test all(V_rt.in[2:end-1,2:end-1,2:end-1] .== 27.0)
+                    A_rt .= $FloatDefault(10.0) # Numbertype literals: Float64 literals would make the device broadcast operate on Float64 values (unsupported by Metal).
+                    V_rt.in .= $FloatDefault(5.0)
+                    @parallel step_rt!(Pt_rt, V_rt, A_rt, $FloatDefault(2.0)) # Numbertype argument: a Float64 kernel argument would make the kernel compute in Float64 (unsupported by Metal).
+                    @test all(Array(Pt_rt.in) .== 11.0) # Compare on the host: comparing device array elements against a Float64 literal would promote the operation to Float64 on the device (unsupported by Metal).
+                    @test all(Array(V_rt.in[2:end-1,2:end-1,2:end-1]) .== 27.0)
                 end;
             end;
             @static if $package != $PKG_POLYESTER # Enzyme does not support Polyester.
