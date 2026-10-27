@@ -67,8 +67,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     if optvars == (Symbol(""),)
         optvars = Tuple(A for A in keys(readonlyvars) if isa(dotted_expr_to_symbol(A), Symbol))
         if length(optvars) > MAX_AUTO_OPTVARS
-            if AUTO_OPTRANGES_DROP_LEAST_ACCESSED
-                optvars = Tuple(first(Iterators.take(sort(collect(optvars); by=A->readonlyvars[A], rev=true), MAX_AUTO_OPTVARS)))
+            if AUTO_OPTVARS_DROP_LEAST_ACCESSED
+                optvars = Tuple(collect(Iterators.take(sort(collect(optvars); by=A->readonlyvars[A], rev=true), MAX_AUTO_OPTVARS)))
             else
                 optvars = Tuple(collect(Iterators.take(optvars, MAX_AUTO_OPTVARS)))
             end

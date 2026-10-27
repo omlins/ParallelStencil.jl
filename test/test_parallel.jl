@@ -1687,7 +1687,7 @@ eval(:(
                         return
                     end
                     metadata_full = @metadata metadata_memopt_fullstencil_probe!(A, B, D)
-                    # All read-only accesses of `B` sit at the single (Δx,Δy)=(0,0) cell with z-offsets {-1,0,1} (one contiguous 3-cell cluster). x/y collapse to the `(0,0)` point range; the auto path keeps the whole `[-1:1]` z-stencil when `optranges_length[B]=Inf` (pre-v"8" CUDA), and the lowest two consecutive z-offsets → `-1:0` otherwise (`optranges_length[B]=2` and `optranges_drop_front[B]=true` (default) for CUDA >= v"8" and all non-CUDA, which report `v"∞"`). Either way there is no x/y halo here, so no shared memory is allocated. The branch keys off `optranges_length` (in the metadata) rather than `get_compute_capability($package)`, because `$package` is interpolated as a `Module` (not a `Symbol`) inside this `eval(:(` block.
+                    # All read-only accesses of `B` sit at the single (Δx,Δy)=(0,0) cell with z-offsets {-1,0,1} (one contiguous 3-cell cluster). x/y collapse to the `(0,0)` point range; the auto path keeps the whole `[-1:1]` z-stencil when `optranges_length[B]=Inf` (pre-v"8" CUDA), and the highest two consecutive z-offsets → `0:1` otherwise (`optranges_length[B]=2` and `optranges_drop_front[B]=false` (default) for CUDA >= v"8" and all non-CUDA, which report `v"∞"`). Either way there is no x/y halo here, so no shared memory is allocated. The branch keys off `optranges_length` (in the metadata) rather than `get_compute_capability($package)`, because `$package` is interpolated as a `Module` (not a `Symbol`) inside this `eval(:(` block.
                     if metadata_full.optranges_length[:B] === Inf
                         @test metadata_full.shmem_optvars == ()
                         @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
@@ -1698,7 +1698,7 @@ eval(:(
                         @test metadata_full.shmem_optvars == ()
                         @test metadata_full.shmem_optvars isa NTuple{0,Symbol}
                         @test metadata_full.shmem_spans == (B = (0, 0),)
-                        @test metadata_full.stencilranges == (B = (0:0, 0:0, -1:0),)
+                        @test metadata_full.stencilranges == (B = (0:0, 0:0, 0:1),)
                         @test metadata_full.use_any_shmem == false
                         @test metadata_full.optranges_length == (B = 2,)
                     end
