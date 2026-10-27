@@ -3,9 +3,9 @@
 [![Docs stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://omlins.github.io/ParallelStencil.jl/stable)
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://omlins.github.io/ParallelStencil.jl/dev)
 [![CI](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/omlins/ParallelStencil.jl/actions/workflows/ci.yml)
-[![Daint GH200](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/badges/main/pipeline.svg?ignore_skipped=true&key_text=Daint%20GH200&key_width=82)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)
-[![Beverin MI250](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767613/badges/main/pipeline.svg?ignore_skipped=true&key_text=Beverin%20MI250&key_width=92)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767613/-/pipelines)
-[![Beverin MI300](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767614/badges/main/pipeline.svg?ignore_skipped=true&key_text=Beverin%20MI300&key_width=92)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767614/-/pipelines)
+[![Daint GH200](https://raw.githubusercontent.com/omlins/ParallelStencil.jl/badges/cscs-gh200.svg)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767612/-/pipelines)
+[![Beverin MI250](https://raw.githubusercontent.com/omlins/ParallelStencil.jl/badges/cscs-mi250.svg)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767613/-/pipelines)
+[![Beverin MI300](https://raw.githubusercontent.com/omlins/ParallelStencil.jl/badges/cscs-mi300.svg)](https://gitlab.com/cscs-ci/ci-testing/webhook-ci/mirrors/7487078532071147/3127735853767614/-/pipelines)
 [![Coverage](https://codecov.io/gh/omlins/ParallelStencil.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/omlins/ParallelStencil.jl)
 [![DOI](https://proceedings.juliacon.org/papers/10.21105/jcon.00138/status.svg)](https://doi.org/10.21105/jcon.00138)
 

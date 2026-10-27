@@ -1,0 +1,56 @@
+name: CSCS CI badges
+# The CSCS CI reports the result of each pipeline as a commit status on GitHub (contexts `cscs/GH200`, `cscs/MI250` and `cscs/MI300`). This workflow
+# turns the statuses of the head of main into the badges shown in the README (SVG files on the branch `badges`, served by raw.githubusercontent.com).
+# The pipeline badges of the GitLab mirrors cannot be embedded in the README directly: GitHub's image proxy fetches them without caching and
+# gitlab.com rate-limits it, which breaks the badges; and the GitLab badges of shields.io cannot ignore the "skipped" pipeline that the mirroring
+# creates next to each real pipeline.
+on:
+  status:            # A commit status was created or updated.
+  workflow_dispatch: # Regenerate all badges from the current statuses of the head of main.
+concurrency:
+  group: cscs-ci-badges
+  cancel-in-progress: false # Queue the runs: each run regenerates all badges, so the last one reflects the latest statuses.
+jobs:
+  badges:
+    # Ignore the statuses of other integrations and the statuses of pull requests (the badges show the head of main only).
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.context, 'cscs/') && contains(github.event.branches.*.name, 'main'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push the badges to the branch badges.
+      statuses: read  # Needed to read the commit statuses.
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check out the branch badges
+        run: git fetch --depth=1 origin badges:badges && git switch badges || git switch --orphan badges # The branch is created by the first run.
+      - name: Generate the badges from the statuses of the head of main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          declare -A labels=([cscs/GH200]="Daint GH200"  [cscs/MI250]="Beverin MI250" [cscs/MI300]="Beverin MI300")
+          declare -A files=( [cscs/GH200]=cscs-gh200.svg [cscs/MI250]=cscs-mi250.svg [cscs/MI300]=cscs-mi300.svg)
+          statuses=$(gh api "repos/$GITHUB_REPOSITORY/commits/main/status" --jq '.statuses[] | "\(.context) \(.state)"') # The latest status of each context.
+          for context in "${!labels[@]}"; do
+              file=${files[$context]}
+              state=$(awk -v context="$context" '$1 == context {print $2}' <<< "$statuses")
+              if [ -z "$state" ]; then
+                  if [ -f "$file" ]; then continue; fi # The head of main has no status of this context yet: keep the current badge.
+                  message=unknown; color=lightgrey
+              else
+                  case $state in
+                      success) message=passing; color=brightgreen;;
+                      failure) message=failing; color=red;;
+                      error)   message=error;   color=red;;
+                      pending) message=pending; color=yellow;;
+                      *)       message=$state;  color=lightgrey;;
+                  esac
+              fi
+              curl -fsS --retry 10 --retry-delay 5 --retry-all-errors -G https://img.shields.io/static/v1 --data-urlencode "label=${labels[$context]}" --data-urlencode "message=$message" --data-urlencode "color=$color" -o "$file"
+              echo "$file: ${labels[$context]} $message"
+          done
+      - name: Push the badges
+        run: |
+          git add -A
+          tree=$(git write-tree)
+          if [ "$tree" = "$(git rev-parse -q --verify 'HEAD^{tree}' || true)" ]; then echo "The badges are up to date."; exit 0; fi
+          commit=$(echo "update the CSCS CI badges" | git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit-tree "$tree")
+          git push --force origin "$commit:refs/heads/badges" # The branch holds a single commit without history.
