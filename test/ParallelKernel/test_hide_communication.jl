@@ -187,6 +187,71 @@ eval(:(
                     end
                     @test all(Array(A) .== communication!([ix + (iy-1)*size(A,1) + (iz-1)*size(A,1)*size(A,2) for ix=1:size(A,1), iy=1:size(A,2), iz=1:size(A,3)]))
                 end;
+                @testset "@hide_communication: implicit synchronization of the arrays suspended" begin # NOTE: CUDA.jl (from v6.3) and AMDGPU.jl order every use of an array on a stream after its last use on another stream; unless this is suspended, the communication waits for the inner computation.
+                    @static if $(package in (PKG_CUDA, PKG_AMDGPU))
+                        @static if $(package == PKG_CUDA)
+                            has_optout       = isdefined(CUDA, :enable_synchronization!)
+                            has_query        = has_optout
+                            isdone(s)        = CUDA.isdone(s)
+                            sync_enabled(A)  = A.data[].synchronizing
+                            set_sync!(A, on) = CUDA.enable_synchronization!(A, on)
+                        else
+                            has_optout       = isdefined(AMDGPU, :enable_synchronization!)
+                            has_query        = isdefined(AMDGPU, :synchronization_enabled)
+                            isdone(s)        = AMDGPU.HIP.isdone(s)
+                            sync_enabled(A)  = AMDGPU.synchronization_enabled(A)
+                            set_sync!(A, on) = AMDGPU.enable_synchronization!(A, on)
+                        end
+                        @parallel_indices (ix,iy,iz) function slow!(A, n)
+                            x = A[ix,iy,iz]
+                            for _ in 1:n
+                                x = x*0.999 + 0.001
+                            end
+                            A[ix,iy,iz] = x
+                            return
+                        end
+                        @parallel_indices (ix,iy,iz) function touch!(A)
+                            A[ix,iy,iz] = A[ix,iy,iz]
+                            return
+                        end
+                        function communication_busy!(A, busy) # NOTE: as update_halo! of ImplicitGlobalGrid: a kernel on the array and a memory copy through its pointer, on a stream of its own.
+                            s = ParallelStencil.ParallelKernel.@get_priority_stream(8)
+                            @parallel_async (1:1, 1:1, 1:1) stream=s touch!(A)
+                            pointer(A)
+                            ParallelStencil.ParallelKernel.@synchronize(s)
+                            busy[] = !isdone(ParallelStencil.ParallelKernel.@get_stream(1)) # NOTE: whether the inner computation is still running.
+                            return
+                        end
+                        A    = @zeros(64, 64, 64)
+                        busy = Ref(false)
+                        n    = 1
+                        @hide_communication (8,8,8) begin # NOTE: warm-up (compilation).
+                            @parallel slow!(A, n);
+                            communication_busy!(A, busy);
+                        end
+                        while (@elapsed @parallel slow!(A, n)) < 0.2 n *= 2 end # NOTE: an inner computation of at least about 0.2 s.
+                        @hide_communication (8,8,8) begin
+                            @parallel slow!(A, n);
+                            communication_busy!(A, busy);
+                        end
+                        @static if $(package == PKG_CUDA)
+                            @test busy[]
+                        else
+                            if has_optout @test busy[] else @test_broken busy[] end # NOTE: AMDGPU.jl versions without enable_synchronization! cannot overlap.
+                        end
+                        if has_optout && has_query # NOTE: the state of each array is restored, also of an array excluded from the implicit synchronization by the user.
+                            B = @zeros(64, 64, 64)
+                            set_sync!(B, false)
+                            @hide_communication (8,8,8) begin
+                                @parallel slow!(A, 1);
+                                communication_busy!(B, busy);
+                            end
+                            @test sync_enabled(A)
+                            @test !sync_enabled(B)
+                            set_sync!(B, true)
+                        end
+                    end
+                end;
                 @testset "@get_stream and @get_priority_stream" begin
                     @static if ParallelStencil.ParallelKernel.iscpu($package)
                         @test ParallelStencil.ParallelKernel.@get_stream(1) === nothing

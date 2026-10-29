@@ -82,6 +82,9 @@ Hide the communication behind the computation within the code `block`.
         update_halo!(Te2);
     end
 
+!!! note "Implicit synchronization of arrays (CUDA, AMDGPU)"
+    CUDA.jl (from v6.3) and AMDGPU.jl order every use of an array on a stream after its last use on another stream. Within the block, the work is ordered explicitly, and this implicit synchronization would prevent the overlap; it is therefore suspended for the arrays passed to the calls in `block` (after waiting for the work pending on them) and resumed at the end of the block. This relies on the rule above: the code to set boundary conditions and to perform communication only accesses the boundary regions of the fields modified in the computation. Suspending it requires `CUDA.enable_synchronization!` or `AMDGPU.enable_synchronization!` (AMDGPU.jl versions that provide it); otherwise, the block is executed correctly, but computation and communication may not overlap. If the block throws an exception, the implicit synchronization of these arrays remains suspended; a program that continues after catching it should re-enable it (`CUDA.enable_synchronization!(A, true)` / `AMDGPU.enable_synchronization!(A, true)`).
+
 !!! note "Developers note"
     The communication should not perform any blocking operations to enable a maximal overlap of communication with computation.
 
@@ -187,8 +190,9 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
         push!(compcalls_outer, :(@parallel_async $ranges_outer[i] stream=ParallelStencil.ParallelKernel.@get_priority_stream(i) $(kwargs...) $compkernelcall)) #NOTE: it cannot directly go to ParallelStencil.ParallelKernel.@parallel_async as else it cannot honour ParallelStencil args as memopt (fixing it to ParallelStencil is also not possible as it assumes, else the ParalellKernel hide_communication unit tests fail).
         push!(compcalls_inner, :(@parallel_async $ranges_inner[i] stream=ParallelStencil.ParallelKernel.@get_stream(i) $(kwargs...) $compkernelcall))          #NOTE: ...
     end
+    sync_args = implicit_sync_args(compcalls..., bc_and_commcalls)
     bc_and_commcalls = flatten(process_bc_and_commcalls(bc_and_commcalls))
-    if comm_is_splitted(bc_and_commcalls)
+    body = if comm_is_splitted(bc_and_commcalls)
         bc_and_commcalls_z, bc_and_commcalls_xy = split_bc_and_commcalls(bc_and_commcalls)
         quote
             ParallelStencil.ParallelKernel.@synchronize() # NOTE: wait for pending work on the default stream (e.g. array initializations or broadcasts issued before the block), as the computations are launched on other streams and the backends do not order work across the streams of a task: Metal batches the work on the default queue and submits it lazily (without this synchronization, e.g. a preceding zero-initialization would be executed after the computations); on CUDA and AMDGPU, this closes the same latent race.
@@ -219,6 +223,7 @@ function hide_communication_gpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::
             for i in 1:length($ranges_inner) ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream(i)); end
         end
     end
+    return suspend_implicit_sync_in(body, sync_args)
 end
 
 function hide_communication_cpu(ranges_outer::Union{Symbol,Expr}, ranges_inner::Union{Symbol,Expr}, block::Expr; computation_calls::Integer=1)
@@ -334,6 +339,61 @@ function split_bc_and_commcalls(block::Expr)
     bc_and_commcalls_xy = quote $(statements[comm_z_pos+1:end]...) end
     return bc_and_commcalls_z, bc_and_commcalls_xy
 end
+
+
+## FUNCTIONS TO SUSPEND THE IMPLICIT SYNCHRONIZATION OF ARRAYS
+
+# CUDA.jl (from v6.3) and AMDGPU.jl order every use of an array on a stream after its last use on another stream (implicit synchronization). In @hide_communication and @overlap, the work is ordered explicitly by stream synchronizations, and the implicit synchronization would serialize the computations on the different streams and the communication (e.g. update_halo! of ImplicitGlobalGrid, which runs on streams of its own). It is therefore suspended for the arrays used in the block, after waiting for the work pending on them, and resumed at the end of the block. The extensions implement implicit_sync_off! and implicit_sync_set! for the arrays of their package, where the package allows it.
+
+function suspend_implicit_sync_in(body::Expr, sync_args)
+    suspended = gensym("suspended")
+    quote
+        $suspended = ParallelStencil.ParallelKernel.suspend_implicit_sync($(sync_args...))
+        $body
+        ParallelStencil.ParallelKernel.resume_implicit_sync($suspended) # NOTE: not in a finally clause, as try would introduce a new scope for the code of the block: variables assigned in the block would not be visible after it anymore (declaring them local first only helps inside functions, not at the top level of a script, and the macro cannot know where it is expanded). If the block throws, the arrays keep the implicit synchronization suspended (documented).
+    end
+end
+
+# The arguments that may refer to arrays in the statements of the block: those of all the calls in it (e.g. of the kernel calls in @parallel calls, of update_halo!(A), also within assignments or macro calls). Only variables and field accesses (e.g. A, V.x) are retained, as their evaluation has no side effects; each is evaluated only if its variable is defined at the start of the block, as the block could define it.
+function implicit_sync_args(statements...)
+    args = []
+    for statement in statements
+        postwalk(statement) do x
+            if is_call(x)
+                for arg in x.args[2:end]
+                    if is_variable_or_field(arg) push!(args, arg) end
+                end
+            end
+            return x
+        end
+    end
+    return [Expr(:if, :(@isdefined($(root_variable(arg)))), arg, :nothing) for arg in unique(args)]
+end
+
+is_variable_or_field(x) = isa(x, Symbol) || (isexpr(x, :.) && length(x.args) == 2 && isa(x.args[2], QuoteNode) && is_variable_or_field(x.args[1]))
+root_variable(x)        = isa(x, Symbol) ? x : root_variable(x.args[1])
+
+function suspend_implicit_sync(args...)
+    arrays = collect_gpu_arrays!(Any[], args)
+    states = Any[implicit_sync_off!(A) for A in arrays]
+    return (arrays, states)
+end
+
+function resume_implicit_sync(suspended)
+    arrays, states = suspended
+    for i in reverse(eachindex(arrays)) # NOTE: in reverse order, so that arrays sharing memory get back the state they had before the block.
+        if !isnothing(states[i]) implicit_sync_set!(arrays[i], states[i]) end
+    end
+    return
+end
+
+implicit_sync_off!(A)              = nothing # NOTE: returns the state before suspending it, or nothing if the implicit synchronization of A cannot be suspended.
+implicit_sync_set!(A, state::Bool) = nothing
+
+collect_gpu_arrays!(arrays, x)                          = arrays
+collect_gpu_arrays!(arrays, x::Union{Tuple,NamedTuple}) = (foreach(y -> collect_gpu_arrays!(arrays, y), x); arrays)
+collect_gpu_arrays!(arrays, x::CellArray)               = collect_gpu_arrays!(arrays, x.data)
+collect_gpu_arrays!(arrays, x::AbstractArray)           = (parent(x) === x) ? arrays : collect_gpu_arrays!(arrays, parent(x))
 
 
 ## FUNCTIONS TO GET INNER AND OUTER RANGES AND TO PROMOTE BOUNDARY_WIDTH TO 3D
