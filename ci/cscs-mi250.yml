@@ -3,7 +3,9 @@ include:
 
 # Pkg.test runs on the allocated node in the uenv, which provides ROCm (the uenv has no Julia: an x86 Julia build of the CI user is used):
 # the GPU backends (AMDGPU, KernelAbstractions) run on a MI250X GPU and the CPU backends (Threads, Polyester, KernelAbstractions) on the
-# EPYC CPU. JULIA_DEPOT_PATH is a dedicated x86 CI depot. No core dumps are written on crashes (GBs).
+# EPYC CPU. JULIA_DEPOT_PATH: a job-local depot in front of a dedicated x86 CI depot, which the MI250 and MI300 jobs share and which jobs
+# of different pipelines use at the same time: Julia keeps at most 10 precompile caches per package in the depot it writes to, evicting
+# the oldest, which can be the one another job is loading. No core dumps are written on crashes (GBs).
 .mi250:
   extends: .baremetal-runner-beverin-mi200
   variables:
@@ -20,12 +22,12 @@ include:
   script:
     - ulimit -c 0
     - |
-      uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci-beverin $JULIA --project --startup-file=no -e '
+      uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci-beverin $JULIA --project --startup-file=no -e '
         using Pkg
         Pkg.instantiate()
         Pkg.test(; coverage=true, test_args=String.(split(get(ENV, "PS_TEST_FILES", ""))))'
     - |
-      JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci-beverin $JULIA --startup-file=no -e '
+      JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci-beverin $JULIA --startup-file=no -e '
         using Pkg
         Pkg.activate(; temp=true)
         Pkg.add("CoverageTools")

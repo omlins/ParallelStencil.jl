@@ -3,7 +3,9 @@ include:
 
 # Pkg.test runs on the allocated node in the uenv: the GPU backends (CUDA, KernelAbstractions) run on the GH200 GPUs and the CPU backends
 # (Threads, Polyester, KernelAbstractions) on the Grace CPU.
-# JULIA_DEPOT_PATH (dedicated CI depot) is set after `uenv run`, as the juliaup view overrides it. No core dumps are written on crashes (GBs).
+# JULIA_DEPOT_PATH is set after `uenv run`, as the juliaup view overrides it: a job-local depot in front of the dedicated CI depot, as jobs of
+# different pipelines can run at the same time and Julia keeps at most 10 precompile caches per package in the depot it writes to, evicting
+# the oldest, which can be the one another job is loading. No core dumps are written on crashes (GBs).
 .gh200:
   extends: .baremetal-runner-daint-gh200
   variables:
@@ -17,12 +19,12 @@ include:
   script:
     - ulimit -c 0
     - |
-      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci julia --project --startup-file=no -e '
+      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci julia --project --startup-file=no -e '
         using Pkg
         Pkg.instantiate()
         Pkg.test(; coverage=true, test_args=String.(split(get(ENV, "PS_TEST_FILES", ""))))'
     - |
-      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci julia --startup-file=no -e '
+      uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci julia --startup-file=no -e '
         using Pkg
         Pkg.activate(; temp=true)
         Pkg.add("CoverageTools")
