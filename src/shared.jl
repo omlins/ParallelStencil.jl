@@ -1,4 +1,4 @@
-import MacroTools: @capture, postwalk, splitdef, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
+import MacroTools: @capture, postwalk, splitdef, combinedef, splitarg # NOTE: inexpr_walk used instead of MacroTools.inexpr
 import .ParallelKernel: eval_arg, split_args, split_kwargs, extract_posargs_init, extract_kernel_args, insert_device_types, is_kernel, is_call, gensym_world, isgpu, iscpu, @isgpu, @iscpu, substitute, substitute_in_kernel, in_signature, inexpr_walk, adjust_signatures, handle_indices_and_literals, add_inbounds, cast, @ranges, @rangelengths, @return_value, @return_nothing, @firstindex, @lastindex, is_access, find_vars, dotted_expr_to_symbol, handle_padding, handle_inverses, increment_arg, quote_expr, get_compute_capability
 import .ParallelKernel: PKG_CUDA, PKG_AMDGPU, PKG_METAL, PKG_KERNELABSTRACTIONS, PKG_THREADS, PKG_POLYESTER, PKG_NONE, NUMBERTYPE_NONE, INBOUNDS_DEFAULT, PADDING_DEFAULT, SUPPORTED_NUMBERTYPES, SUPPORTED_PACKAGES, ERRMSG_UNSUPPORTED_PACKAGE, INT_CUDA, INT_AMDGPU, INT_METAL, INT_KERNELABSTRACTIONS, INT_POLYESTER, INT_THREADS, INDICES, INDICES_INN, INDICES_DIR, INDICES_DIR_FUNCTIONS_SYMS, PKNumber, RANGES_VARNAME, RANGES_TYPE, RANGELENGTH_XYZ_TYPE, RANGELENGTHS_VARNAMES, THREADIDS_VARNAMES, GENSYM_SEPARATOR, AD_SUPPORTED_ANNOTATIONS, ARRAYTYPES, FIELDTYPES, SCALARTYPES
 import .ParallelKernel: @require, @symbols, symbols, longnameof, @prettyexpand, @prettystring, prettystring, @gorgeousexpand, @gorgeousstring, gorgeousstring, interpolate, @get_hardware
@@ -43,7 +43,6 @@ const OPTRANGES_LENGTH_DEFAULT_OLD  = Inf
 const FULLRANGE_THRESHOLD            = 1
 const NOEXPR                         = :(begin end)
 const MOD_METADATA_PS                = gensym_world("__metadata_PS__", @__MODULE__) # # TODO: name mangling should be used here later, or if there is any sense to leave it like that then at check whether it's available must be done before creating it
-const META_FUNCTION_PREFIX           = string(gensym_world("META", @__MODULE__))
 
 
 ## FUNCTIONS TO DEAL WITH KERNEL DEFINITIONS

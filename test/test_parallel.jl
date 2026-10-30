@@ -297,7 +297,7 @@ eval(:(
                         @all(Pt) = @all(A) + 1.0
                         return
                     end)
-                    @test occursin("##META", s2)
+                    @test occursin("function step_db2!(::ParallelStencil.KernelMetadata, Pt::Field2B, A::Data.Number", s2)
                     @test occursin("onthefly", s2)
                 end;
                 @testset "rewrite with partial-update 2B field" begin
@@ -1631,6 +1631,7 @@ eval(:(
                 A = @zeros(4, 5, 6)
                 B = @ones(4, 5, 6)
                 D = @ones(4, 5, 6, 2)
+                @test hasmethod(metadata_probe!, Tuple{ParallelStencil.KernelMetadata, typeof(A), typeof(B), typeof(D)})
                 metadata = @metadata metadata_probe!(A, B, D)
                 metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                 @test metadata isa Module
@@ -1639,6 +1640,22 @@ eval(:(
                 @test metadata.memopt == false
                 @test metadata.nb_parallel_indices == 3
                 @test all(Array(A) .== 0)
+            end;
+            @testset "kernel not called by its name (issue #234)" begin
+                @parallel_indices (ix, iy, iz) function metadata_indirect_probe!(A, B)
+                    A[ix, iy, iz] = 2.0 * B[ix, iy, iz]
+                    return
+                end
+                A = @zeros(4, 5, 6)
+                B = @ones(4, 5, 6)
+                s = (kernel=metadata_indirect_probe!, A=A, B=B)
+                launch!(kernel, A, B) = @parallel kernel(A, B)
+                @test (@metadata s.kernel(A, B)).nb_parallel_indices == 3
+                @parallel s.kernel(s.A, s.B)
+                @test all(Array(A) .== 2.0)
+                A .= 0
+                launch!(metadata_indirect_probe!, A, B)
+                @test all(Array(A) .== 2.0)
             end;
             @static if $package != $PKG_KERNELABSTRACTIONS
                 @testset "memopt" begin
@@ -1649,6 +1666,7 @@ eval(:(
                     A = @zeros(4, 5, 6)
                     B = @ones(4, 5, 6)
                     D = @ones(4, 5, 6, 2)
+                    @test hasmethod(metadata_memopt_probe!, Tuple{ParallelStencil.KernelMetadata, typeof(A), typeof(B), typeof(D)})
                     metadata = @metadata metadata_memopt_probe!(A, B, D)
                     metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                     @test metadata isa Module

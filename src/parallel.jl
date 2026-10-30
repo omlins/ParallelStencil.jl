@@ -1,4 +1,4 @@
-import .ParallelKernel: get_name, set_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
+import .ParallelKernel: get_name, get_body, set_body!, add_return, remove_return, extract_kwargs, split_parallel_args, extract_tuple, substitute, literaltypes, push_to_signature!, add_loop, add_threadids, promote_maxsize
 
 # NOTE: @parallel and @parallel_indices and @parallel_async do not appear in the following as they are extended and therefore re-defined here in parallel.jl
 @doc replace(ParallelKernel.SYNCHRONIZE_DOC,        "@init_parallel_kernel" => "@init_parallel_stencil") macro synchronize(args...)        check_initialized(__module__); esc(:(ParallelStencil.ParallelKernel.@synchronize($(args...)))); end
@@ -411,15 +411,15 @@ function parallel_indices(source::LineNumberNode, caller::Module, args::Union{Sy
             memopt   = haskey(kwargs, :memopt) ? kwargs.memopt : get_memopt(caller)
             if memopt
                 quote
-                    $metadata_function
                     Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, posargs..., kernelarg; kwargs...))  #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+                    $metadata_function
                 end
             else
                 kwargs_expr = (:(inbounds=$inbounds), :(padding=$padding))
                 kernel = ParallelKernel.parallel_indices(caller, posargs..., kwargs_expr..., kernelarg; package=package)
                 quote
-                    $metadata_function
                     Core.@__doc__ $kernel
+                    $metadata_function
                 end
             end
         end
@@ -551,16 +551,16 @@ function parallel_kernel(metadata_module::Module, metadata_function::Expr, calle
     if memopt
         expanded_kernel = macroexpand(caller, kernel)
         quote
-            $metadata_function
             Core.@__doc__ $(parallel_indices_memopt(metadata_module, metadata_function, is_parallel_kernel, caller, package, get_indices_expr(ndims), expanded_kernel; kwargs...)) #TODO: the package and numbertype will have to be passed here further once supported as kwargs (currently removed from call: package, numbertype, )
+            $metadata_function
         end
     else
         if package == PKG_KERNELABSTRACTIONS
             kernel = :(ParallelStencil.ParallelKernel.@ka_kernel $kernel)
         end
         return quote
-            $metadata_function
             Core.@__doc__ $kernel
+            $metadata_function
         end # TODO: later could be here called parallel_indices instead of adding the threadids etc above.
     end
 end
@@ -853,27 +853,19 @@ function create_module(hostmodule::Module, modulename::Symbol; do_baremodule=tru
     end
 end
 
+# Kernel metadata is stored as an additional method of the kernel function itself, `kernel(::KernelMetadata, args...)`, returning the metadata module of the kernel method that `kernel(args...)` calls. It is thus found by dispatch, whatever the callee expression is (e.g., `f`, `Mod.f`, `s.f` or a function argument; see issue #234) and in whatever scope the kernel is defined. The metadata method must be defined after the kernel, as KernelAbstractions defines the kernel constructors only if the kernel name is not yet defined.
+struct KernelMetadata end
+
 function create_metadata_function(kernel::Expr, metadata_module::Module) # NOTE: unlike the creation of the module above, the creation of the matter data function has to happen every time: if we redefine the same function we to have to redefine the meta data...
-    metadata_function = deepcopy(kernel)
-    kernelname = get_name(kernel)
-    functionname = get_meta_function(kernelname)
-    metadata_function = set_name(metadata_function, functionname)
-    set_body!(metadata_function, quote
+    metadata_function = splitdef(deepcopy(kernel))
+    pushfirst!(metadata_function[:args], :(::ParallelStencil.KernelMetadata))
+    metadata_function[:body] = quote
         return $metadata_module
-    end)
-    return :(@inline $metadata_function)
+    end
+    return :(@inline $(combinedef(metadata_function)))
 end
 
-function create_metadata_call(configcall::Expr)
-    metadata_call = deepcopy(configcall)
-    kernelname = metadata_call.args[1]
-    if kernelname isa Expr && kernelname.head === :.
-        metadata_call.args[1] = Expr(:., kernelname.args[1], QuoteNode(get_meta_function(kernelname.args[2].value)))
-    else
-        metadata_call.args[1] = get_meta_function(kernelname)
-    end
-    return metadata_call
-end
+create_metadata_call(configcall::Expr) = :($(configcall.args[1])(ParallelStencil.KernelMetadata(), $(configcall.args[2:end]...)))
 
 function store_metadata(metadata_module::Module, caller::Module, nb_parallel_indices::Integer; memopt::Union{Nothing,Bool}=nothing, double_buffer_args::Union{Nothing,Tuple{Vararg{Int}}}=nothing, double_buffering_opt::Union{Nothing,Bool}=nothing)
     nonconst_metadata = get_nonconst_metadata(caller)
@@ -924,7 +916,6 @@ end
 
 get_kernelid(kernelname, file, line) = Symbol("$(kernelname)_$(file)_$(line)")
 get_kernelid(kernel::Expr, file, line) = Symbol("$(get_kernelid(get_name(kernel), file, line))_$(hash(string(kernel)))")
-get_meta_function(kernelname)        = Symbol("$(META_FUNCTION_PREFIX)$(GENSYM_SEPARATOR)$(kernelname)")
 
 
 ## FUNCTIONS TO DEAL WITH ON-THE-FLY ASSIGNMENTS
