@@ -297,7 +297,7 @@ eval(:(
                         @all(Pt) = @all(A) + 1.0
                         return
                     end)
-                    @test occursin("##META", s2)
+                    @test occursin("function step_db2!(::ParallelStencil.KernelMetadata, Pt::Field2B, A::Data.Number", s2)
                     @test occursin("onthefly", s2)
                 end;
                 @testset "rewrite with partial-update 2B field" begin
@@ -1631,6 +1631,7 @@ eval(:(
                 A = @zeros(4, 5, 6)
                 B = @ones(4, 5, 6)
                 D = @ones(4, 5, 6, 2)
+                @test hasmethod(metadata_probe!, Tuple{ParallelStencil.KernelMetadata, typeof(A), typeof(B), typeof(D)})
                 metadata = @metadata metadata_probe!(A, B, D)
                 metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                 @test metadata isa Module
@@ -1665,6 +1666,7 @@ eval(:(
                     A = @zeros(4, 5, 6)
                     B = @ones(4, 5, 6)
                     D = @ones(4, 5, 6, 2)
+                    @test hasmethod(metadata_memopt_probe!, Tuple{ParallelStencil.KernelMetadata, typeof(A), typeof(B), typeof(D)})
                     metadata = @metadata metadata_memopt_probe!(A, B, D)
                     metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                     @test metadata isa Module
