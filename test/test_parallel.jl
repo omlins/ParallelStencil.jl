@@ -357,12 +357,12 @@ eval(:(
                     @test occursin("isdefined", s)
                     @test occursin(".out", s)
                     @test occursin(".in", s)
-                    @test occursin("(in = Pt.out, out = Pt.in)", s)
+                    @test occursin("setglobal!", s)
                 end;
                 @testset "swap_double_buffers=false suppresses swap" begin
                     s = @prettystring(1, @parallel swap_double_buffers=false step_swap!(Pt, A))
                     @test !occursin("double_buffer_args", s)
-                    @test !occursin("(in = Pt.out, out = Pt.in)", s)
+                    @test !occursin("setglobal!", s)
                 end;
                 @testset "runtime: swap works end-to-end" begin
                     @parallel function step_rt!(Pt, V, A, factor)
