@@ -16,6 +16,9 @@ Overlap all `@parallel` calls in `block` by executing them asynchronously on sep
         @parallel kernel3!(array3)
     end
 
+!!! note "Implicit synchronization of arrays (CUDA, AMDGPU)"
+    CUDA.jl (from v6.3) and AMDGPU.jl order every use of an array on a stream after its last use on another stream. This implicit synchronization would serialize `@parallel` calls that use the same array (e.g. read the same input); it is therefore suspended for the arrays passed to the calls in `block` (after waiting for the work pending on them) and resumed at the end of the block. This relies on the `@parallel` calls of the block being independent of each other (no call writes data that another call accesses). Suspending it requires `CUDA.enable_synchronization!` or `AMDGPU.enable_synchronization!` (AMDGPU.jl versions that provide it); otherwise, such calls are executed one after the other. If the block throws an exception, the implicit synchronization of these arrays remains suspended; a program that continues after catching it should re-enable it (`CUDA.enable_synchronization!(A, true)` / `AMDGPU.enable_synchronization!(A, true)`).
+
 See also: [`@parallel`](@ref), [`@parallel_async`](@ref), [`@synchronize`](@ref)
 """
 @doc OVERLAP_DOC
@@ -51,11 +54,12 @@ function overlap_gpu(block::Expr)
         push!(async_calls, :(@parallel_async $(call.posargs...) stream=ParallelStencil.ParallelKernel.@get_stream($i) $(call.kwargs...) $(call.kernelcall)))
     end
     sync_calls = [:(ParallelStencil.ParallelKernel.@synchronize(ParallelStencil.ParallelKernel.@get_stream($i))) for i in 1:length(async_calls)]
-    quote
+    body = quote
         ParallelStencil.ParallelKernel.@synchronize() # NOTE: wait for pending work on the default stream (e.g. array initializations issued before the block), as the kernels are launched on other streams (see hide_communication_gpu for details).
         $(async_calls...)
         $(sync_calls...)
     end
+    return suspend_implicit_sync_in(body, implicit_sync_args(block)) # NOTE: see hide_communication.jl.
 end
 
 function collect_parallel_calls(block::Expr)

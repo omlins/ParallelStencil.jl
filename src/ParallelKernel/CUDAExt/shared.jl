@@ -31,6 +31,21 @@ let
 end
 
 
+## FUNCTIONS TO SUSPEND THE IMPLICIT SYNCHRONIZATION OF ARRAYS (see hide_communication.jl)
+
+ParallelStencil.ParallelKernel.collect_gpu_arrays!(arrays, x::CuArray) = push!(arrays, x)
+
+function ParallelStencil.ParallelKernel.implicit_sync_off!(A::CuArray)
+    if !isdefined(CUDA, :enable_synchronization!) || !hasfield(typeof(A.data[]), :synchronizing) return nothing end
+    state = A.data[].synchronizing # NOTE: CUDA.jl has no public function to query it.
+    CUDA.synchronize(A)            # NOTE: wait for the work pending on A on the stream that used it last, as the implicit synchronization would.
+    CUDA.enable_synchronization!(A, false)
+    return state
+end
+
+ParallelStencil.ParallelKernel.implicit_sync_set!(A::CuArray, state::Bool) = (CUDA.enable_synchronization!(A, state); return)
+
+
 ## FUNCTIONS TO QUERY DEVICE PROPERTIES
 
 function ParallelStencil.ParallelKernel.get_cuda_compute_capability(default::VersionNumber)
