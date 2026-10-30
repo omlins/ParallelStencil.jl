@@ -1056,24 +1056,35 @@ end
 
 substitute_symbol(expr, A::Symbol, new) = expr
 
-# Build the runtime swap expression for double-buffered arguments, emitted after the kernel launch and gated by `launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args)`; for each position in `metadata_var.double_buffer_args` the argument is swapped: `arg = (in=arg.out, out=arg.in)`.
+# Build the runtime swap expression for double-buffered arguments, emitted after the kernel launch and gated by `launch_val && swap_double_buffers && isdefined(metadata, :double_buffer_args)`; for each position in `metadata_var.double_buffer_args` the argument is rotated. The rotation helper and the gate on `metadata_var.double_buffer_args` are emitted once for all arguments; per argument, only the variable-specific rebind is emitted. The rotation is routed to the binding the kernel call reads: a closure write that reaches any local in the lexical chain when the name resolves there, otherwise the module global. The rotation itself is computed before the closure so that the read of the argument stays unscoped; an assignment inside the closure body would instead resolve the name locally for the whole body and break the module-global case. A verified identity check decides whether the closure write landed on the binding that the kernel call reads; if it did not, the fallback arm rotates the module global.
 function build_swap_expr(metadata_var::Symbol, args::Vector{Any}, launch_val::Bool, swap_double_buffers::Bool)
     if !launch_val || !swap_double_buffers
         return nothing  # swap disabled — no expression to emit
     end
-    # Generate conditional swaps for each argument position (1-based). Each swap is a direct `if` check (no `let` scope) to avoid soft-scope issues: the swap assignments (e.g. `Pt = (in=Pt.out, out=Pt.in)`) must modify the caller's variables, whether they are global or local. Using a `let` block or `global` keyword would break in local-scope contexts (functions, @testset).
+    rotation_fn = gensym("swap_db")
+    rotation_val = gensym("swap_db")
     conditional_swaps = Expr[]
     for (i, arg) in enumerate(args)
         if arg isa Symbol
-            swap = :($arg = (in = $(arg).out, out = $(arg).in))
-            check = :(isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args) && $i in $metadata_var.double_buffer_args)
+            check = :($i in $metadata_var.double_buffer_args)
+            swap = quote
+                $rotation_val = $rotation_fn($arg)
+                (() -> begin $arg = $rotation_val end)()
+                ($arg === $rotation_val) || Core.setglobal!(@__MODULE__, $(QuoteNode(arg)), $rotation_val)
+            end
             push!(conditional_swaps, :(if $check; $swap; end))
         end
     end
     if isempty(conditional_swaps)
         return nothing
     end
-    return quote $(conditional_swaps...) end
+    return quote
+        local $rotation_fn, $rotation_val
+        $rotation_fn = v -> (in = v.out, out = v.in)
+        if isdefined($metadata_var, :double_buffer_args) && !isempty($metadata_var.double_buffer_args)
+            $(conditional_swaps...)
+        end
+    end
 end
 
 # Check if a statement is an array assignment with LHS @all(A) for a given A. @all(A) is a macrocall: Expr(:macrocall, Symbol("@all"), LineNumberNode, A).
