@@ -5,7 +5,8 @@ include:
 # (Threads, Polyester, KernelAbstractions) on the Grace CPU.
 # JULIA_DEPOT_PATH is set after `uenv run`, as the juliaup view overrides it: a job-local depot in front of the dedicated CI depot, as jobs of
 # different pipelines can run at the same time and Julia keeps at most 10 precompile caches per package in the depot it writes to, evicting
-# the oldest, which can be the one another job is loading. No core dumps are written on crashes (GBs).
+# the oldest, which can be the one another job is loading. As Pkg only refreshes the registries of the first depot, the registry of the CI
+# depot is refreshed in a step of its own, one job at a time (flock). No core dumps are written on crashes (GBs).
 .gh200:
   extends: .baremetal-runner-daint-gh200
   variables:
@@ -18,6 +19,7 @@ include:
     PS_TEST_FILES: ''                  # Test files to run (default: all).
   script:
     - ulimit -c 0
+    - flock $SCRATCH/.julia-ps-ci/registry.lock uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci julia --startup-file=no -e 'using Pkg; Pkg.Registry.update()'
     - |
       uenv run $JULIA_UENV --view=juliaup -- env JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci julia --project --startup-file=no -e '
         using Pkg

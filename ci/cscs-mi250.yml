@@ -5,7 +5,8 @@ include:
 # the GPU backends (AMDGPU, KernelAbstractions) run on a MI250X GPU and the CPU backends (Threads, Polyester, KernelAbstractions) on the
 # EPYC CPU. JULIA_DEPOT_PATH: a job-local depot in front of a dedicated x86 CI depot, which the MI250 and MI300 jobs share and which jobs
 # of different pipelines use at the same time: Julia keeps at most 10 precompile caches per package in the depot it writes to, evicting
-# the oldest, which can be the one another job is loading. No core dumps are written on crashes (GBs).
+# the oldest, which can be the one another job is loading. As Pkg only refreshes the registries of the first depot, the registry of the CI
+# depot is refreshed in a step of its own, one job at a time (flock). No core dumps are written on crashes (GBs).
 .mi250:
   extends: .baremetal-runner-beverin-mi200
   variables:
@@ -21,6 +22,7 @@ include:
     PS_TEST_FILES: ''                  # Test files to run (default: all).
   script:
     - ulimit -c 0
+    - flock $SCRATCH/.julia-ps-ci-beverin/registry.lock env JULIA_DEPOT_PATH=$SCRATCH/.julia-ps-ci-beverin $JULIA --startup-file=no -e 'using Pkg; Pkg.Registry.update()'
     - |
       uenv run $UENV --view=default -- env JULIA_DEPOT_PATH=$CI_PROJECT_DIR/.julia:$SCRATCH/.julia-ps-ci-beverin $JULIA --project --startup-file=no -e '
         using Pkg
