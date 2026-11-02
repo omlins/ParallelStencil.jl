@@ -36,3 +36,8 @@ include:
 
 gh200:
   extends: .gh200
+
+gh200 - newest CUDA:
+  extends: .gh200
+  variables:
+    PS_TEST_AD: '0'                    # No Enzyme, which can hold CUDA.jl back to an older version: this job tests the newest CUDA.jl; the job gh200 tests automatic differentiation.
