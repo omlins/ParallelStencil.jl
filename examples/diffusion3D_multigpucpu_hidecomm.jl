@@ -60,7 +60,7 @@ for it = 1:nt
         gather!(T_nohalo, T_v)                                                            # Gather data on process 0 (could be interpolated/sampled first)
         if (me==0) heatmap(transpose(T_v[:,ny_v÷2,:]), aspect_ratio=1); frame(anim); end  # Visualize it on process 0.
     end
-    @hide_communication (16, 2, 2) begin
+    @hide_communication (32, 2, 2) begin
         @parallel diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
         update_halo!(T2);
     end

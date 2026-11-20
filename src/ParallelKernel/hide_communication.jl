@@ -27,12 +27,12 @@ Hide the communication behind the computation within the code `block`.
     - `computation_calls=1::`number of [`@parallel`](@ref) calls at the start of the code `block` that contain the computation to be hidden behind communication. Only set this argument if you are sure that it is safe to deviate from the standard behavior (`computation_calls=1`). Note that, in many scenarios (slightly) wrong results will be obtained when `computation_calls` in greater than `1`; it is only safe, generally speaking, if no point in the boundary region computations depends on any inner point computation (finite difference derivatives can, for example, constitute such a dependency leading to wrong results).
 
 # Examples
-    @hide_communication (16, 2, 2) begin
+    @hide_communication (32, 2, 2) begin
         @parallel diffusion3D_step!(Te2, Te, Ci, lam, dt, dx, dy, dz);
         update_halo!(Te2);
     end
 
-    @hide_communication (16, 2) begin
+    @hide_communication (32, 2) begin
         @parallel diffusion2D_step!(Te2, Te, Ci, lam, dt, dx, dy);
         update_halo!(Te2);
     end
@@ -57,7 +57,7 @@ Hide the communication behind the computation within the code `block`.
         A[ ix,  iy,end] = A[   ix,   iy,end-1]
         return
     end
-    @hide_communication (16, 2, 2) begin
+    @hide_communication (32, 2, 2) begin
         @parallel diffusion3D_step!(Te2, Te, Ci, lam, dt, dx, dy, dz);
         @parallel (1:size(Te,2), 1:size(Te,3)) bc_x(Te);
         @parallel (1:size(Te,1), 1:size(Te,3)) bc_y(Te);
@@ -65,7 +65,7 @@ Hide the communication behind the computation within the code `block`.
         update_halo!(Te2);
     end
 
-    @hide_communication (16, 2, 2) begin
+    @hide_communication (32, 2, 2) begin
         @parallel (1:size(Te,1), 1:size(Te,2), 1:size(Te,3)) diffusion3D_step!(Te2, Te, Ci, lam, dt, dx, dy, dz);
         @parallel (1:size(Te,2), 1:size(Te,3)) bc_x(Te);
         @parallel (1:size(Te,1), 1:size(Te,3)) bc_y(Te);
@@ -73,7 +73,7 @@ Hide the communication behind the computation within the code `block`.
         update_halo!(Te2);
     end
 
-    @hide_communication (16, 2, 2) computation_calls=2 begin
+    @hide_communication (32, 2, 2) computation_calls=2 begin
         @parallel computation1!(A2, A, B);
         @parallel computation2!(B, C);
         @parallel (1:size(A,2), 1:size(A,3)) bc_x(A);

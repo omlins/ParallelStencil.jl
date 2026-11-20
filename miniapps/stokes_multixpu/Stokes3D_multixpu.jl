@@ -154,7 +154,7 @@ end
         @parallel compute_P!(∇V, Pt, Vx, Vy, Vz, dτPt, dx, dy, dz)
         @parallel compute_τ!(∇V, τxx, τyy, τzz, τxy, τxz, τyz, Vx, Vy, Vz, Mus, dx, dy, dz)
         @parallel compute_dV!(Rx, Ry, Rz, dVxdτ, dVydτ, dVzdτ, Pt, Rog, τxx, τyy, τzz, τxy, τxz, τyz, dampX, dampY, dampZ, dx, dy, dz)
-        @hide_communication (16, 8, 2) begin # communication/computation overlap
+        @hide_communication (32, 3, 3) begin # communication/computation overlap
             @parallel compute_V!(Vx, Vy, Vz, dVxdτ, dVydτ, dVzdτ, dτVx, dτVy, dτVz)
             @parallel (1:size(Vy,2), 1:size(Vy,3)) bc_x!(Vy)
             @parallel (1:size(Vz,2), 1:size(Vz,3)) bc_x!(Vz)
