@@ -48,7 +48,7 @@ T2 .= T;                                                 # Assign also T2 to get
 dt   = min(dx^2,dy^2,dz^2)/lam/maximum(Ci)/8.1;          # Time step for 3D Heat diffusion
 for it = 1:nt
     if (it == 11) tic(); end                             # Start measuring time.
-    @hide_communication (16, 2, 2) begin
+    @hide_communication (32, 2, 2) begin
         @parallel diffusion3D_step!(T2, T, Ci, lam, dt, _dx, _dy, _dz);
         T2[  1,:,:] .= 1.0;
         T2[end,:,:] .= 1.0;

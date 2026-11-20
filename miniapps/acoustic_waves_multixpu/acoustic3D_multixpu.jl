@@ -60,7 +60,7 @@ end
     # Time loop
     for it = 1:nt
         if (it==11) tic() end
-        @hide_communication (16, 8, 4) begin # communication/computation overlap
+        @hide_communication (32, 3, 3) begin # communication/computation overlap
             @parallel compute_V!(Vx, Vy, Vz, P, dt, ρ, dx, dy, dz)
             update_halo!(Vx, Vy, Vz)
         end

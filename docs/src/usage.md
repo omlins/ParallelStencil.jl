@@ -148,11 +148,13 @@ ParallelStencil is seamlessly interoperable with [ImplicitGlobalGrid.jl](https:/
 
 Moreover, ParallelStencil enables hiding communication behind computation with a simple call to [`@hide_communication`](@ref). In the following example, the communication performed by `update_halo!` (from the package [ImplicitGlobalGrid.jl](https://github.com/eth-cscs/ImplicitGlobalGrid.jl)) is hidden behind the computations done by `@parallel diffusion3D_step!`:
 ```julia
-@hide_communication (16, 2, 2) begin
+@hide_communication (32, 2, 2) begin
     @parallel diffusion3D_step!(T2, T, Ci, lam, dt, dx, dy, dz);
     update_halo!(T2);
 end
 ```
+Note that the three integer arguments to `@hide_communication` are the widths of the boundary regions in x, y and z, which must include (at least) all the data that is accessed in the communication performed (in x-direction, typically the value 32 is recommended even if much less would be sufficient, to achieve good performance also for the boundary region computations).
+
 This enables close to ideal weak scaling of real-world applications on thousands of GPUs/CPUs [Omlin2020JuliaCon, Raess2020JuliaCon](@cite). Profiling a 3-D viscous Stokes flow application using the Nvidia visual profiler (nvvp) graphically exemplifies how the update velocities kernel is split up in boundary and inner domain computations and how the latter overlap with point-to-point MPI communication for halo exchange:
 
 ```@raw html
