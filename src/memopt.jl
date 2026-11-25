@@ -54,7 +54,7 @@ end
 #TODO: add input check and errors
 # TODO: create a run time check for requirement: 
 # In order to be able to read the data into shared memory in only two statements, the number of threads must be at least half of the size of the shared memory block plus halo; thus, the total number of threads in each dimension must equal the range length, as else there would be smaller thread blocks at the boundaries (threads overlapping the range are sent home). These smaller blocks would be likely not to match the criteria for a correct reading of the data to shared memory. In summary the following requirements must be matched: @gridDim().x*@blockDim().x - $rangelength_x == 0; @gridDim().y*@blockDim().y - $rangelength_y > 0
-function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, body::Expr; package::Symbol=get_package(caller))
+function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, indices::Union{Symbol,Expr}, optvars::Union{Expr,Symbol}, loopdim::Integer, loopsize::Integer, optranges::Union{Nothing, NamedTuple{t, <:NTuple{N,NTuple{3,UnitRange}} where N} where t}, optranges_length::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_front::Union{Nothing, NamedTuple{t, <:Any} where t}, optranges_drop_by_access_count::Union{Nothing, NamedTuple{t, <:Any} where t}, use_shmemhalos::Union{Nothing, NamedTuple{t, <:NTuple{N,Bool} where N} where t}, optimize_halo_read::Bool, useprivate::Bool, body::Expr; package::Symbol=get_package(caller))
     optvars        = Tuple(extract_tuple(optvars)) #TODO: make this function actually return directly a tuple rather than an array
     use_optvars    = (optvars != ())
     indices        = Tuple(extract_tuple(indices))
@@ -136,6 +136,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
                         end
                 end
 
+                privatevars, body = define_privatevars(caller, body, indices, readonlyvars, int_type; useprivate=useprivate)
+
                 body = quote
                                         $loopoffset = (@blockIdx().y-1)*$loopsize + $range_y_start-1
 $((:(               $reg           = 0.0
@@ -146,6 +148,11 @@ $((:(               $reg           = 0.0
 $((:(               $reg           = 0.0
         )
         for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
+    )...
+)
+$((:(               $reg           = 0.0
+        )
+        for A in keys(privatevars) for reg in values(privatevars[A])
     )...
 )
 $((wrap_loop(i, loopstart:0,
@@ -187,6 +194,13 @@ $((wrap_if(:($i > $(loopentry-1)),
                 ;unless=(loopentry<=1)
         )
         for A in optvars for (ox, regs) in regqueue_heads[A] for (oy, reg) in regs for loopentry = (loopentrys[A],)
+    )...
+)
+$((
+             :(
+                                                $reg       = (0<$ix+$(offsets[1])<=size($A,1) && 0<$iy+$(offsets[2])<=size($A,2)) ? $(regtarget(A, offsets, indices)) : $reg
+                )
+        for A in keys(privatevars) for (offsets, reg) in privatevars[A]
     )...
 )
                                                 $body
@@ -249,6 +263,8 @@ $((
             end
         end
 
+        privatevars, body = define_privatevars(caller, body, indices, readonlyvars, int_type; useprivate=useprivate)
+
         nb_indexing_vars = 1 + 14*length(keys(shmem_index_groups)) # TODO: a group must not be counted if none of the variables uses the shmem indices symbols.
         nb_cell_vars     = sum(values(nb_regs_heads)) + sum(values(nb_regs_tails))
 
@@ -287,6 +303,11 @@ $((:(               $reg           = 0.0                                        
 $((:(               $reg           = 0.0                                                # e.g. A_ixm1_iyp2_izp3 = 0.0
     )
     for A in optvars for regs in values(regqueue_heads[A]) for reg in values(regs)
+  )...
+)
+$((:(               $reg           = 0.0                                                # e.g. B_ix_iy_izm1 = 0.0
+    )
+    for A in keys(privatevars) for reg in values(privatevars[A])
   )...
 )
 # Pre-loop
@@ -433,6 +454,10 @@ $((wrap_if(:($i > $(loopentry-1)),
 )
 $((wrap_if(:($i > 0),
         quote
+            $((:(       $reg       = (0<$ix+$(offsets[1])<=size($A,1) && 0<$iy+$(offsets[2])<=size($A,2) && 0<$iz+$(offsets[3])<=size($A,3)) ? $(regtarget(A, offsets, indices)) : $reg
+                )
+                for A in keys(privatevars) for (offsets, reg) in privatevars[A]
+            )...)
                         $body
         end; 
         unless=(mainloopstart>=1)
@@ -595,7 +620,7 @@ $(( # NOTE: the if statement is not needed here as we only deal with registers
     else
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
-    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, shmem_optvars, use_any_shmem, loopdim, loopsize, optranges, use_shmemhalos, optranges_length_resolved, optranges_drop_front_resolved, optranges_drop_by_count_resolved, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
+    store_metadata(metadata_module, is_parallel_kernel, caller, offset_mins, offset_maxs, offsets, optvars, shmem_optvars, use_any_shmem, loopdim, loopsize, optranges, use_shmemhalos, useprivate, optranges_length_resolved, optranges_drop_front_resolved, optranges_drop_by_count_resolved, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     # @show QuoteNode(ParallelKernel.simplify_varnames!(ParallelKernel.remove_linenumbernodes!(deepcopy(body))))
     return body
 end
@@ -607,7 +632,8 @@ function memopt(metadata_module::Module, is_parallel_kernel::Bool, caller::Modul
     optranges          = nothing
     use_shmemhalos     = nothing
     optimize_halo_read = true
-    return memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, body; package=package)
+    useprivate         = false
+    return memopt(metadata_module, is_parallel_kernel, caller, indices, optvars, loopdim, loopsize, optranges, use_shmemhalos, optimize_halo_read, useprivate, body; package=package)
 end
 
 
@@ -879,6 +905,36 @@ function define_regqueue(offsets::Dict{Any, Any}, optranges::NTuple{3,UnitRange}
         @ArgumentError("memopt: only loopdim=3 is currently supported.")
     end
     return regqueue_head, regqueue_tail, offset_min, offset_max, nb_regs_head, nb_regs_tail
+end
+
+function define_privatevars(caller::Module, body::Expr, indices::NTuple{N,<:Union{Symbol,Expr}} where N, readonlyvars, int_type::Type{<:Integer}; useprivate::Bool)
+    privatevars = Dict(A => Dict{Any, Any}() for A in keys(readonlyvars))
+    if useprivate
+        postwalk(body) do ex
+            if is_stencil_access(ex, indices...)
+                @capture(ex, A_[indices_expr__]) || @ModuleInternalError("a stencil access could not be pattern matched.")
+                A = ParallelStencil.ParallelKernel.strip_parent(A)
+                if haskey(readonlyvars, A)
+                    offsets = ()
+                    for i = 1:length(indices)
+                        offset_expr = substitute(indices_expr[i], indices[i], 0)
+                        offset = int_type(eval_arg(caller, offset_expr)) # TODO: do this and cast later to enable unsigned integer (also dealing with negative rangers is required elsewhere): offset = eval_arg(caller, offset_expr)
+                        offsets = (offsets..., offset)
+                    end
+                    if !haskey(privatevars[A], offsets)
+                        privatevars[A][offsets] = gensym_world(varname(A, offsets), @__MODULE__)
+                    end
+                end
+            end
+            return ex
+        end
+        for A in keys(privatevars)
+            for offsets in keys(privatevars[A])
+                body = substitute(body, regtarget(A, offsets, indices), privatevars[A][offsets])
+            end
+        end
+    end
+    return privatevars, body
 end
 
 function define_helper_variables(offset_mins::Dict{<:Any, NTuple{3,Integer}}, offset_maxs::Dict{<:Any, NTuple{3,Integer}}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_shmemhalos_arg, loopdim::Integer)
@@ -1265,7 +1321,7 @@ function wrap_loop(index::Symbol, range::UnitRange, block::Expr; unroll=false)
     end
 end
 
-function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{<:Any, <:Tuple},     offset_maxs::Dict{<:Any, <:Tuple}, offsets::Dict{<:Any, <:Dict}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, shmem_optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos, optranges_length::NamedTuple, optranges_drop_front::NamedTuple, optranges_drop_by_access_count::NamedTuple, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
+function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, caller::Module, offset_mins::Dict{<:Any, <:Tuple},     offset_maxs::Dict{<:Any, <:Tuple}, offsets::Dict{<:Any, <:Dict}, optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, shmem_optvars::Tuple{Vararg{<:Union{Symbol,Expr}}}, use_any_shmem::Bool, loopdim::Integer, loopsize::Integer, optranges::Dict{Any, Any}, use_shmemhalos, useprivate::Bool, optranges_length::NamedTuple, optranges_drop_front::NamedTuple, optranges_drop_by_access_count::NamedTuple, explicit_length_syms, explicit_drop_front_syms, explicit_drop_by_count_syms)
     memopt            = true
     nonconst_metadata = get_nonconst_metadata(caller)
     stencilranges     = NamedTuple(dotted_expr_to_symbol(A) => begin
@@ -1315,6 +1371,7 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             optranges          = $optranges_meta
             use_any_shmem      = $use_any_shmem
             use_shmemhalos     = $use_shmemhalos
+            useprivate         = $useprivate
             offset_mins        = $offset_mins_meta
             offset_maxs        = $offset_maxs_meta
             optranges_length               = $optranges_length_meta
@@ -1343,6 +1400,7 @@ function store_metadata(metadata_module::Module, is_parallel_kernel::Bool, calle
             const optranges          = $optranges_meta
             const use_any_shmem      = $use_any_shmem
             const use_shmemhalos     = $use_shmemhalos
+            const useprivate         = $useprivate
             const offset_mins        = $offset_mins_meta
             const offset_maxs        = $offset_maxs_meta
             const optranges_length               = $optranges_length_meta
