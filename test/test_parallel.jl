@@ -1671,7 +1671,7 @@ eval(:(
                     metadata_symbols = sort(setdiff(names(metadata; all=true), names(metadata)))
                     @test metadata isa Module
                     @test length(names(metadata)) == 1
-                    @test metadata_symbols == [:explicit_optranges_drop_by_count_syms, :explicit_optranges_drop_front_syms, :explicit_optranges_length_syms, :is_parallel_kernel, :loopdim, :loopsize, :loopsizes, :memopt, :nb_parallel_indices, :nonconst_metadata, :offset_maxs, :offset_mins, :offsets, :optranges, :optranges_drop_by_access_count, :optranges_drop_front, :optranges_length, :optranges_z, :optvars, :shmem_dim1, :shmem_dim2, :shmem_optvars, :shmem_spans, :stencilranges, :use_any_shmem, :use_shmemhalos]
+                    @test metadata_symbols == [:explicit_optranges_drop_by_count_syms, :explicit_optranges_drop_front_syms, :explicit_optranges_length_syms, :is_parallel_kernel, :loopdim, :loopsize, :loopsizes, :memopt, :nb_parallel_indices, :nonconst_metadata, :offset_maxs, :offset_mins, :offsets, :optranges, :optranges_drop_by_access_count, :optranges_drop_front, :optranges_length, :optranges_z, :optvars, :shmem_dim1, :shmem_dim2, :shmem_optvars, :shmem_spans, :stencilranges, :use_any_shmem, :use_shmemhalos, :useprivate]
                     @test metadata.is_parallel_kernel == false
                     @test metadata.loopdim == 3
                     @test metadata.loopsize == 3
@@ -1746,6 +1746,56 @@ eval(:(
                     @test metadata_2d.use_shmemhalos[:B] == false
                     @test ParallelStencil.compute_memopt_shmem(Val(metadata_2d.shmem_optvars), Val(metadata_2d.use_shmemhalos), Val(metadata_2d.shmem_spans), Val(metadata_2d.shmem_dim1), Val(metadata_2d.shmem_dim2), (8, 4, 1), $FloatDefault) == 0
                     @test all(Array(A) .== 0)
+                    @test metadata.useprivate == false
+                    @test metadata_z.useprivate == false
+                    @test metadata_full.useprivate == false
+                    @parallel_indices (ix, iy, iz) memopt=true useprivate=true loopsize=3 optvars=B optranges=(B=(0:0,0:0,-1:1),) function metadata_memopt_useprivate_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix, iy, iz-1] + B[ix, iy, iz] + B[ix, iy, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_useprivate = @metadata metadata_memopt_useprivate_probe!(A, B, D)
+                    @test metadata_useprivate.useprivate == true
+                    @parallel_indices (ix, iy, iz) memopt=true useprivate=true loopsize=3 function metadata_memopt_useprivate_auto_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix, iy, iz-1] + B[ix, iy, iz] + B[ix, iy, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_useprivate_auto = @metadata metadata_memopt_useprivate_auto_probe!(A, B, D)
+                    @test metadata_useprivate_auto.useprivate == true
+                    @test metadata_useprivate_auto.optvars == metadata_full.optvars
+                    @test metadata_useprivate_auto.stencilranges == metadata_full.stencilranges
+                    @test metadata_useprivate_auto.offsets == metadata_full.offsets
+                    @parallel_indices (ix, iy, iz) memopt=true useprivate=true loopsize=3 optvars=() function metadata_memopt_useprivate_zloop_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix, iy, iz-1] + B[ix, iy, iz] + B[ix, iy, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_useprivate_zloop = @metadata metadata_memopt_useprivate_zloop_probe!(A, B, D)
+                    @test metadata_useprivate_zloop.useprivate == true
+                    @test metadata_useprivate_zloop.optvars == ()
+                    @parallel_indices (ix, iy, iz) memopt=true useprivate=true loopsize=3 optranges_length=(B=2,) function metadata_memopt_useprivate_window_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix, iy, iz-1] + B[ix, iy, iz] + B[ix, iy, iz+1] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_useprivate_window = @metadata metadata_memopt_useprivate_window_probe!(A, B, D)
+                    @test metadata_useprivate_window.useprivate == true
+                    @test metadata_useprivate_window.optranges_length == (B = 2,)
+                    @parallel_indices (ix, iy, iz) memopt=true useprivate=true loopsize=3 optvars=B optranges=(B=(-1:1,0:0,-1:1),) function metadata_memopt_useprivate_shmem_probe!(A, B, D)
+                        A[ix, iy, iz] = B[ix-1,iy,iz] + B[ix,iy,iz-1] + B[ix,iy,iz] + B[ix,iy,iz+1] + B[ix+1,iy,iz] + D[ix, iy, iz, 1]
+                        return
+                    end
+                    metadata_useprivate_shmem = @metadata metadata_memopt_useprivate_shmem_probe!(A, B, D)
+                    @test metadata_useprivate_shmem.useprivate == true
+                    @test metadata_useprivate_shmem.shmem_optvars == (:B,)
+                    @test metadata_useprivate_shmem.use_any_shmem == true
+                    @parallel_indices (ix, iy) ndims=2 memopt=true useprivate=true loopdim=2 loopsize=5 optvars=B optranges=(B=(0:0,-1:1,0:0),) function metadata_memopt_useprivate_2d_probe!(A, B)
+                        if (1 < iy < size(A, 2))
+                            A[ix, iy] = B[ix, iy - 1] + B[ix, iy] + B[ix, iy + 1]
+                        end
+                        return
+                    end
+                    metadata_useprivate_2d = @metadata metadata_memopt_useprivate_2d_probe!(A2, B2)
+                    @test metadata_useprivate_2d.useprivate == true
+                    @test metadata_useprivate_2d.stencilranges == metadata_2d.stencilranges
+                    @test metadata_2d.useprivate == false
                 end;
                 # The test checks that without `optvars=` no `MethodError: no method matching define_shmem_exprs(::Dict{Any, Any}, ::Int64)` is raised at declaration time.
                 @parallel_indices (ix, iy, iz) memopt=true loopsize=3 function _mixed_optvars_no_shmem_bug_probe!(A, BV, B)
